@@ -43,6 +43,28 @@ Tested against real hardware on firmware **v0.6.0-rc.10**:
 - The device's own `keymap.json` persists lighting as exactly those two
   surfaces per layer, with no per-key colour field.
 
+Everything tried, and what it showed:
+
+| avenue | result |
+|---|---|
+| `lights.preview` (`backlight`/`underglow`) | **works** — two independent surfaces, effects honoured |
+| `v.oai.rgbcfg`, every per-key encoding | registered, accepts anything, **no visible effect** |
+| `v.oai.thstatus`, 8 payload shapes | registered, accepts anything, **no visible effect** |
+| `v.oai.thstatus` + top six keys bound to `KV_OAI_AG00..AG05` | firmware **accepts and persists** the OAI keycodes; still **nothing lights** |
+| `v.oai.hid`, `v.oai.rad` | `Method not found` — so handler sets really do differ by variant |
+| device `keymap.json` | lighting persisted as exactly two surfaces per layer |
+| Input app 0.17.3 **and** 0.18.0-rc.8 | identical `wl-device-kit` 0.1.28, `lights.preview` only, no `v.oai.*` |
+| public docs / forum | no API; an unanswered feedback post asks exactly this |
+
+The LEDs are individually addressable in hardware — the Codex Micro shows five
+per-key agent states (idle, thinking, complete, needs input, error) from the
+same firmware image. On the Creator Micro 2 that path is gated off by board
+identity, which the firmware reads from eFuse (or `/fs/board_info.json`, which
+does not exist on this device). The remaining untried lever is writing that file
+to declare a different vendor/variant; it is deliberately not attempted here,
+because the correct integers are unknown and a wrong pair makes the pad identify
+as hardware it is not.
+
 The probe tools are kept so this can be re-checked on future firmware:
 
 ```bash
