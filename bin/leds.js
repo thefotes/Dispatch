@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 "use strict";
-// Long-running bridge: Herdr agent status -> Creator Micro 2 underglow.
+// Long-running bridge: Herdr agent status -> Creator Micro 2 lighting.
 //
-// `lights.preview` addresses two whole-device surfaces - `backlight` (under the
-// keys) and `underglow` - with one colour each. There is no per-key addressing
-// available to the host: the firmware also registers `v.oai.rgbcfg`, whose
-// vocabulary includes `keys`/`ambient` sections, but on the Creator Micro 2
-// variant that handler is inert (it answers {"ok":1} and changes nothing, as
-// confirmed on firmware v0.6.0-rc.10). The device's own keymap.json likewise
-// persists lighting as exactly those two surfaces.
+// Each agent gets its own key, plus an aggregate on the underglow.
 //
-// So the light carries an aggregate "does anything need me?" signal across all
-// agents: worst state wins.
+// Keys are addressed through the vendor thread API (`v.oai.thstatus`), where a
+// thread id is a key index, 0-based and row-major over the pad's [2,4,4,3]
+// matrix. Agent slot N takes key N, so the six agent keys are ids 0..5 - the
+// same physical keys that send F13..F18.
+//
+// The underglow keeps the worst-state-wins aggregate, because that is the part
+// you can read from across the room without counting keys.
 //
 // Liveness comes from three places, so a missed event can never leave the
 // light stale:
@@ -24,7 +23,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { WLDevice, PermissionError } = require("../lib/wl-device.js");
 const { EventStream, listAgents } = require("../lib/herdr-client.js");
-const { DEFAULTS, aggregate, lightingFor, mergeConfig } = require("../lib/status.js");
+const { DEFAULTS, aggregate, lightingFor, threadsFor, mergeConfig } = require("../lib/status.js");
+const { sendThreadsLighting, sendLightingConfig, allLightsOff } = require("../lib/oai.js");
+
+const OFF_SIDE = { effect: "off", brightness: 0, speed: 0.5, magic: 1, color: 0 };
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
@@ -46,7 +48,7 @@ class Bridge {
     this.device = null;
     this.lifecycle = null;
     this.statusStreams = new Map(); // pane_id -> EventStream
-    this.lastState = undefined;
+    this.lastFingerprint = undefined;
     this.debounce = null;
     this.stopped = false;
   }
@@ -74,7 +76,7 @@ class Bridge {
     dev.onClose = () => {
       log("device disconnected");
       this.device = null;
-      this.lastState = undefined;
+      this.lastFingerprint = undefined;
       this.reopenLater();
     };
     let version;
@@ -96,7 +98,7 @@ class Bridge {
       this.openDevice()
         .then(() => {
           log("device back");
-          this.lastState = undefined;
+          this.lastFingerprint = undefined;
           return this.refresh();
         })
         .catch((err) => {
@@ -174,24 +176,31 @@ class Bridge {
     }
     this.reconcileStatusStreams(agents);
     const state = aggregate(agents, this.cfg);
-    if (state === this.lastState) return;
-    this.lastState = state;
-    await this.apply(state, agents);
+    const threads = threadsFor(agents, this.cfg);
+    // Compare the whole rendered picture, not just the aggregate, so a change
+    // on one agent still repaints even when the worst state is unchanged.
+    const fingerprint = JSON.stringify([state, threads]);
+    if (fingerprint === this.lastFingerprint) return;
+    this.lastFingerprint = fingerprint;
+    await this.apply(state, threads, agents);
   }
 
-  async apply(state, agents) {
+  async apply(state, threads, agents) {
     if (!this.device) return;
-    const side = lightingFor(state, this.cfg);
-    const payload = { underglow: side };
-    if (this.cfg.drive_backlight) payload.backlight = side;
     try {
-      await this.device.setLighting(payload);
+      // Per-agent keys first, then the aggregate underglow.
+      await sendThreadsLighting(this.device, threads);
+      const side = lightingFor(state, this.cfg);
+      await sendLightingConfig(this.device, {
+        keys: this.cfg.drive_backlight && side ? side : OFF_SIDE,
+        ambient: side ?? OFF_SIDE,
+      });
       const summary =
-        agents.map((a) => `${a.agent}:${a.agent_status}`).join(" ") || "none";
-      log(`${state ?? "no agents"} -> ${side ? side.color : "off"}  [${summary}]`);
+        agents.map((a, i) => `${i + 1}:${a.agent_status}`).join(" ") || "none";
+      log(`${state ?? "no agents"} | keys[${summary}]`);
     } catch (err) {
-      log("lights.preview failed:", err.message);
-      this.lastState = undefined; // retry on the next tick
+      log("lighting failed:", err.message);
+      this.lastFingerprint = undefined; // repaint on the next tick
     }
   }
 
@@ -202,7 +211,7 @@ class Bridge {
     for (const s of this.statusStreams.values()) s.stop();
     if (this.device) {
       try {
-        await this.device.setLighting({ underglow: null });
+        await allLightsOff(this.device);
       } catch {
         /* best effort */
       }
