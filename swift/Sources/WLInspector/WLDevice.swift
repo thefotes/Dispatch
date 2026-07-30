@@ -62,7 +62,17 @@ final class WLDevice {
             case .notConnected:
                 return "Not connected."
             case .writeFailed(let r):
-                return String(format: "IOHIDDeviceSetReport failed (0x%08X)", UInt32(bitPattern: r))
+                let code = UInt32(bitPattern: r)
+                let name: String
+                switch code {
+                case 0xE00002CD: name = " — kIOReturnNotOpen, the device handle is no longer open"
+                case 0xE00002C0: name = " — kIOReturnNoDevice"
+                case 0xE00002C5: name = " — kIOReturnExclusiveAccess"
+                case 0xE00002C1: name = " — kIOReturnNotPrivileged"
+                case 0xE00002C7: name = " — kIOReturnUnsupported, wrong report id or interface"
+                default: name = ""
+                }
+                return String(format: "IOHIDDeviceSetReport failed (0x%08X)", code) + name
             case .timeout(let m):
                 return "Timed out waiting for \(m)."
             }
@@ -78,6 +88,7 @@ final class WLDevice {
     var onDisconnect: ((String) -> Void)?
 
     private(set) var info: Info?
+    private var manager: IOHIDManager?
     private var device: IOHIDDevice?
     private var inputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: reportSize)
     private var rpcAccumulator = ""
@@ -94,7 +105,11 @@ final class WLDevice {
     func connect() throws {
         disconnect(reason: nil)
 
+        // Must be held for the lifetime of the connection: releasing the
+        // manager tears down the devices it opened, and every later SetReport
+        // then fails with kIOReturnNotOpen.
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+        self.manager = manager
         // Match on vendor only: over Bluetooth the pad presents a single
         // IOHIDDevice whose *primary* usage is keyboard, with the vendor
         // collection alongside it in DeviceUsagePairs.
@@ -150,6 +165,10 @@ final class WLDevice {
         IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeNone))
         device = nil
+        if let mgr = manager {
+            IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+            manager = nil
+        }
         info = nil
         rpcAccumulator = ""
         debugAccumulator = ""

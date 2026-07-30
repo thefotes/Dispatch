@@ -75,17 +75,18 @@ a wrong payload looks exactly like a right one:
   "ambient": { "e": 1, "b": 1, "s": 0.5, "m": 1, "c": 51283 } }
 ```
 
-## Picking the right interface
+## Two IOKit traps
 
-Over Bluetooth the pad is a single `IOHIDDevice` whose *primary* usage is
-keyboard, with the vendor collection listed alongside it in
-`DeviceUsagePairs`. Over USB each interface is its own `IOHIDDevice`, so
-matching on vendor id and taking the first hit lands on the keyboard, and every
-report-id-6 write is silently dropped.
+**Hold the manager.** `IOHIDManagerCreate` must be retained for the lifetime of
+the connection. If it goes out of scope, the devices it opened are torn down
+with it and every later `IOHIDDeviceSetReport` fails with
+`kIOReturnNotOpen` (`0xE00002CD`) — while `IOHIDDeviceOpen` still returned
+success, so nothing looks wrong at connect time.
 
-The app selects the device that actually carries usage page `0xFF00`, by
-primary usage first and `DeviceUsagePairs` second, and logs which one it chose
-on connect.
+**Find the vendor collection.** On both USB and Bluetooth this pad presents a
+single `IOHIDDevice` whose *primary* usage is keyboard, with the vendor
+collection listed in `DeviceUsagePairs`. Match on usage page `0xFF00` there,
+not on primary usage. The app logs which interface it chose on connect.
 
 ## Notes
 
