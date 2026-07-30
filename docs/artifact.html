@@ -1,4 +1,4 @@
-<title>Creator Micro 2: chasing per-key RGB</title>
+<title>Creator Micro 2: per-key RGB, solved</title>
 <style>
   :root {
     --paper:      #F6F7F9;
@@ -300,106 +300,132 @@
   a { color: var(--accent); text-underline-offset: 2px; }
   a:focus-visible, :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 </style>
-
 <div class="wrap">
 
   <header>
-    <p class="eyebrow">Hardware investigation &middot; negative result</p>
-    <h1>Six agents, six keys, one colour</h1>
+    <p class="eyebrow">Hardware investigation &middot; solved</p>
+    <h1>Six agents, six keys</h1>
     <p class="standfirst">
       The plan was to give each running coding agent its own key on a Work Louder
-      Creator&nbsp;Micro&nbsp;2, lit with that agent's live status. The keys are individually
-      addressable in hardware. The firmware contains the code that does it. Neither
-      fact turned out to be enough.
+      Creator&nbsp;Micro&nbsp;2, lit with that agent's live status. It took a wrong
+      conclusion, a firmware update, twelve experiments and a second SDK hidden inside a
+      different application &mdash; but it works.
     </p>
 
     <dl class="facts">
       <div class="fact"><dt>Device</dt><dd>Creator Micro 2 Pro</dd></div>
       <div class="fact"><dt>USB IDs</dt><dd>303A:8298</dd></div>
       <div class="fact"><dt>Transport</dt><dd>Bluetooth LE</dd></div>
-      <div class="fact"><dt>Firmware</dt><dd>v0.4.0 &rarr; v0.6.0-rc.10</dd></div>
-      <div class="fact"><dt>Input app</dt><dd>0.17.3, 0.18.0-rc.8</dd></div>
+      <div class="fact"><dt>Firmware</dt><dd>v0.6.0-rc.10</dd></div>
+      <div class="fact"><dt>Per-key RGB</dt><dd style="color:var(--ok)">Working</dd></div>
     </dl>
   </header>
 
   <section>
-    <h2>What we were building</h2>
+    <h2>The answer</h2>
     <p class="lede">
-      Several coding agents run in parallel in a terminal workspace. Each is either
-      working, blocked waiting on input, idle, or done. The pad was going to be the
-      physical dashboard for them.
+      Individual keys are addressed through a vendor RPC that the Work Louder Input app
+      never calls. It lives in <code>@worklouder/device-kit-oai</code> &mdash; a second,
+      separate SDK that ships inside the <em>Codex desktop app</em>, not the configurator.
     </p>
+    <pre><span class="c">// per-key: params are a bare ARRAY, one entry per key</span>
+{
+  "method": "v.oai.thstatus",
+  "params": [
+    { "id": 0, "c": 16755200, "b": 1, "e": 1, "s": 0.5 },   <span class="c">// key 0, amber, solid</span>
+    { "id": 1, "c": 16723501, "b": 1, "e": 4, "s": 0.5 },   <span class="c">// key 1, red, breathing</span>
+    { "id": 2, "b": 0, "e": 0 }                             <span class="c">// key 2, off</span>
+  ]
+}</pre>
+    <div class="scroller" style="margin-top:.4rem">
+      <table>
+        <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td class="what"><code>id</code></td><td class="what">Key index &mdash; <strong>0-based, row-major</strong> over the pad's <code>[2, 4, 4, 3]</code> matrix.</td></tr>
+          <tr><td class="what"><code>c</code></td><td class="what">Packed RGB integer.</td></tr>
+          <tr><td class="what"><code>b</code></td><td class="what">Brightness, 0&ndash;1.</td></tr>
+          <tr><td class="what"><code>e</code></td><td class="what">Effect <strong>as a number</strong>: 0 off, 1 solid, 2 snake, 3 rainbow, 4 breath, 5 gradient, 6 shallow&nbsp;breath.</td></tr>
+          <tr><td class="what"><code>s</code></td><td class="what">Speed, 0&ndash;1.</td></tr>
+          <tr><td class="what"><code>sk</code> / <code>sa</code></td><td class="what">1/0 &mdash; mirror this entry onto the whole keys / ambient zone. Optional; colours apply without them.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Why it stayed hidden</h2>
+    <p>
+      Two details, and both fail <em>silently</em> &mdash; the firmware answers
+      <code>{"ok":1}</code> to any payload you send it, including deliberately malformed
+      ones. A wrong guess is indistinguishable from a right one except by looking at the
+      LEDs.
+    </p>
+    <div class="verdict">
+      <div class="vcard">
+        <span class="k">Field names</span>
+        <span class="v">c &nbsp; b &nbsp; e &nbsp; s &nbsp; m</span>
+        <span class="n">Abbreviated on the wire &mdash; not the full <code>color</code>, <code>brightness</code>, <code>effect</code> that the documented <code>lights.preview</code> call uses.</span>
+      </div>
+      <div class="vcard">
+        <span class="k">Effect type</span>
+        <span class="v">1</span>
+        <span class="n">An integer, not the effect <em>string</em> the same firmware accepts on <code>lights.preview</code>. Two calls, two conventions.</span>
+      </div>
+    </div>
+    <p>
+      Every earlier attempt sent full field names and string effects. The handler parsed
+      what it recognised, ignored the rest, and cheerfully reported success.
+    </p>
+  </section>
+
+  <section>
+    <h2>What it does now</h2>
     <div class="pad-figure">
-      <div class="pad" role="img" aria-label="Creator Micro 2 key layout: rows of 2, 4, 4 and 3 keys. The top six keys are highlighted as the intended agent keys.">
+      <div class="pad" role="img" aria-label="Creator Micro 2 key layout. The top six keys show per-agent status colours: amber for working, red for blocked, green for idle.">
         <div class="pad-row">
           <div class="knob"></div>
-          <div class="key target">F13</div>
-          <div class="key target">F14</div>
+          <div class="key" style="border-color:var(--inert);color:var(--inert);background:color-mix(in srgb, var(--inert) 15%, transparent);font-weight:600">1</div>
+          <div class="key" style="border-color:var(--absent);color:var(--absent);background:color-mix(in srgb, var(--absent) 15%, transparent);font-weight:600">2</div>
           <div class="knob"></div>
         </div>
         <div class="pad-row">
-          <div class="key target">F15</div>
-          <div class="key target">F16</div>
-          <div class="key target">F17</div>
-          <div class="key target">F18</div>
+          <div class="key" style="border-color:var(--ok);color:var(--ok);background:color-mix(in srgb, var(--ok) 15%, transparent);font-weight:600">3</div>
+          <div class="key" style="border-color:var(--ok);color:var(--ok);background:color-mix(in srgb, var(--ok) 15%, transparent);font-weight:600">4</div>
+          <div class="key">5</div>
+          <div class="key">6</div>
         </div>
         <div class="pad-row">
-          <div class="key">F19</div>
-          <div class="key">F20</div>
-          <div class="key">F21</div>
-          <div class="key">F22</div>
+          <div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div>
         </div>
         <div class="pad-row">
           <div class="knob sm"></div>
-          <div class="key wide">F23</div>
-          <div class="key">F24</div>
+          <div class="key wide"></div>
+          <div class="key"></div>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:.9rem">
         <p class="pad-caption">
-          The firmware describes this pad as a <code>[2, 4, 4, 3]</code> matrix.
-          The highlighted six were to become agents&nbsp;1&ndash;6.
+          Agent&nbsp;slot&nbsp;N takes key&nbsp;N, so the key you <em>look at</em> is the key
+          you <em>press</em> to jump to that session.
         </p>
         <p class="pad-caption">
-          Press a key &rarr; jump to that agent's session.<br>
-          Key colour &rarr; that agent's live status.
+          <span class="chip inert">Working</span><br>
+          <span class="chip absent">Blocked &mdash; breathing</span><br>
+          <span class="chip ok">Idle</span>
+        </p>
+        <p class="pad-caption">
+          The underglow keeps a worst-state-wins aggregate, readable from across the room
+          without counting keys.
         </p>
       </div>
     </div>
-    <p>
-      Half of it works perfectly. The pad sends F13&ndash;F24, the host binds them, and
-      pressing a key jumps straight to the right session. It was only ever the
-      lighting half that was in question.
-    </p>
   </section>
 
   <section>
-    <h2>What the host can actually drive</h2>
-    <p>
-      The device speaks JSON-RPC 2.0 over raw HID. Exactly one lighting call reaches
-      it, and it addresses two <em>whole-device</em> surfaces &mdash; not keys:
-    </p>
-    <pre><span class="c">// works: two surfaces, one colour each, effects honoured</span>
-{
-  "method": "lights.preview",
-  "params": {
-    "backlight": { "effect": "solid", "brightness": 1, "color": 16711680 },
-    "underglow": { "effect": "breath", "brightness": 1, "color": 255 }
-  }
-}</pre>
-    <p>
-      So the shipped result is one aggregate colour across both surfaces: red breathing
-      when any agent needs you, amber while any is working, green when everything is
-      idle. That answers <em>&ldquo;does anything need me?&rdquo;</em> at a glance, which is most
-      of the value. It just isn't per-agent.
-    </p>
-  </section>
-
-  <section>
-    <h2>Everything we tried</h2>
+    <h2>The route there</h2>
     <div class="legend">
       <span class="chip ok">Works</span>
-      <span class="desc">visible, repeatable effect on the device</span>
+      <span class="desc">visible, repeatable effect</span>
       <span class="chip inert">Inert</span>
       <span class="desc">accepted with <code>{"ok":1}</code>, nothing happens</span>
       <span class="chip absent">Absent</span>
@@ -408,7 +434,7 @@
 
     <div class="scroller">
       <table>
-        <caption>Each row was verified against the physical device, not inferred from the response.</caption>
+        <caption>Every row verified against the physical device, not inferred from the response.</caption>
         <thead>
           <tr><th>#</th><th>Attempt</th><th>Result</th><th>What it told us</th></tr>
         </thead>
@@ -417,61 +443,43 @@
             <td class="num">1</td>
             <td class="what"><code>lights.preview</code> with <code>backlight</code> / <code>underglow</code></td>
             <td class="res"><span class="chip ok">Works</span></td>
-            <td class="what">Two independent surfaces. Effects animate. This is the whole available API.</td>
+            <td class="what">Two zone surfaces. The only documented lighting call, and for a long time the only one we could make do anything.</td>
           </tr>
           <tr>
             <td class="num">2</td>
-            <td class="what"><code>lights.preview</code> with <code>keys</code> / <code>ambient</code> sections</td>
+            <td class="what"><code>v.oai.rgbcfg</code> and <code>v.oai.thstatus</code> with full field names and string effects</td>
             <td class="res"><span class="chip inert">Inert</span></td>
-            <td class="what">Those section names exist in the firmware's string pool but do nothing here.</td>
+            <td class="what">Silently ignored. This is the attempt that produced a confident and <em>wrong</em> conclusion.</td>
           </tr>
           <tr>
             <td class="num">3</td>
-            <td class="what"><code>v.oai.rgbcfg</code> &mdash; six per-key encodings: bare colour array, <code>keys.color</code>, <code>keys.colors</code>, <code>keys.leds</code>, <code>[{index,color}]</code>, <code>[{i,c}]</code></td>
+            <td class="what">Bound the top six keys to <code>KV_OAI_AG00..AG05</code> via <code>keymap.json</code></td>
             <td class="res"><span class="chip inert">Inert</span></td>
-            <td class="what">Every shape returned <code>{"ok":1}</code> &mdash; including deliberately malformed ones. The reply carries no information.</td>
+            <td class="what">Firmware accepted and persisted the keycodes. Still nothing lit &mdash; because the payload was still wrong. A red herring: per-key works fine with the stock keymap.</td>
           </tr>
           <tr>
             <td class="num">4</td>
-            <td class="what"><code>v.oai.thstatus</code> &mdash; eight payload shapes: per-slot arrays, indexed objects, <code>act</code>, <code>ag</code> maps, scalars</td>
-            <td class="res"><span class="chip inert">Inert</span></td>
-            <td class="what">Same. Registered, accepts anything, changes nothing.</td>
+            <td class="what">Firmware debug channel while probing</td>
+            <td class="res"><span class="chip absent">Absent</span></td>
+            <td class="what">Silent. No parse trace, so no way to learn the schema from the device itself.</td>
           </tr>
           <tr>
             <td class="num">5</td>
-            <td class="what">Bound the top six keys to <code>KV_OAI_AG00..AG05</code> by writing <code>keymap.json</code>, then drove <code>thstatus</code> again</td>
-            <td class="res"><span class="chip inert">Inert</span></td>
-            <td class="what"><strong>The decisive test.</strong> Firmware accepted and persisted the OAI keycodes &mdash; and still lit nothing.</td>
+            <td class="what">Input app 0.17.3 and 0.18.0-rc.8</td>
+            <td class="res"><span class="chip absent">Absent</span></td>
+            <td class="what">Both ship <code>wl-device-kit</code> 0.1.28, whose lighting surface is <code>lights.preview</code> alone. The configurator genuinely cannot do this.</td>
           </tr>
           <tr>
             <td class="num">6</td>
-            <td class="what">Same as 5, with the key backlight pre-lit in case the bridge needs a live surface to paint onto</td>
-            <td class="res"><span class="chip inert">Inert</span></td>
-            <td class="what">Rules out &ldquo;the surface was switched off&rdquo; as the explanation.</td>
+            <td class="what">Read <code>@worklouder/device-kit-oai</code> out of the Codex desktop app</td>
+            <td class="res"><span class="chip ok">Works</span></td>
+            <td class="what"><strong>The answer.</strong> A separate SDK, shipped with full TypeScript declarations, including <code>sendThreadsLighting()</code> and the exact wire minimisation.</td>
           </tr>
           <tr>
             <td class="num">7</td>
-            <td class="what"><code>v.oai.hid</code>, <code>v.oai.rad</code></td>
-            <td class="res"><span class="chip absent">Absent</span></td>
-            <td class="what"><code>Method not found</code> &mdash; on the same device where <code>rgbcfg</code> and <code>thstatus</code> answer. Handler sets differ by variant.</td>
-          </tr>
-          <tr>
-            <td class="num">8</td>
-            <td class="what">Read the device's own <code>keymap.json</code></td>
-            <td class="res"><span class="chip absent">Absent</span></td>
-            <td class="what">Lighting is persisted as exactly two surfaces per layer. No per-key colour field exists in the schema.</td>
-          </tr>
-          <tr>
-            <td class="num">9</td>
-            <td class="what">Firmware debug channel (HID channel&nbsp;1) while calling all of the above</td>
-            <td class="res"><span class="chip absent">Absent</span></td>
-            <td class="what">Silent. No parse trace, so no way to learn the schema from the device.</td>
-          </tr>
-          <tr>
-            <td class="num">10</td>
-            <td class="what">Input app 0.17.3 <em>and</em> 0.18.0-rc.8</td>
-            <td class="res"><span class="chip absent">Absent</span></td>
-            <td class="what">Both ship <code>wl-device-kit</code> 0.1.28. Its entire lighting surface is <code>lights.preview</code>. No <code>v.oai.*</code> at all.</td>
+            <td class="what">Twelve lighting experiments against the real pad</td>
+            <td class="res"><span class="chip ok">Works</span></td>
+            <td class="what">One thread lit with the rest off lights exactly one key. Walking a lit thread through ids 0&ndash;12 moves one key across the pad. Ids 1&ndash;6 light keys 1&ndash;6 and leave key 0 dark, confirming 0-based indexing.</td>
           </tr>
         </tbody>
       </table>
@@ -479,114 +487,69 @@
   </section>
 
   <section>
-    <h2>What the gating looks like</h2>
+    <h2>Two things that will bite you</h2>
+    <h3>Thread state overrides the zones</h3>
     <p>
-      The per-key capability is <em>present but switched off</em>, and one asymmetry gives
-      it away. On the same device, in the same session:
-    </p>
-    <div class="verdict">
-      <div class="vcard">
-        <span class="k">v.oai.rgbcfg</span>
-        <span class="v" style="color:var(--inert)">{"ok":1}</span>
-        <span class="n">Registered. Accepts any payload. Does nothing.</span>
-      </div>
-      <div class="vcard">
-        <span class="k">v.oai.thstatus</span>
-        <span class="v" style="color:var(--inert)">{"ok":1}</span>
-        <span class="n">Registered. Accepts any payload. Does nothing.</span>
-      </div>
-      <div class="vcard">
-        <span class="k">v.oai.hid</span>
-        <span class="v" style="color:var(--absent)">Method not found</span>
-        <span class="n">Not registered on this variant at all.</span>
-      </div>
-    </div>
-    <p>
-      A device that registers <em>some</em> of a feature's handlers and not others is a device
-      running a build that decides, at boot, which variant it is. Board identity comes
-      from eFuse. The stubs answer politely; the real implementations aren't there.
-    </p>
-    <p>
-      Everything else corroborates it. The Codex Micro drives five per-key agent states
-      &mdash; idle, thinking, complete, needs input, error &mdash; from this same firmware
-      family, and its own keycode table (<code>KV_OAI_AG00</code>&hellip;<code>AG19</code>) is present in
-      the image on our device too. Meanwhile press coverage of the Codex Micro notes the
-      Agent Keys only work with the ChatGPT desktop app acting as the bridge. This is a
-      closed integration, not an unfinished one.
-    </p>
-  </section>
-
-  <section>
-    <h2>What we didn't try, and why</h2>
-    <div class="callout">
-      <h3>Rewriting the pad's board identity</h3>
-      <p>
-        The firmware reads its vendor and variant from eFuse &mdash; but it prefers
-        <code>/fs/board_info.json</code> when that file exists, logging
-        <em>&ldquo;not found, falling back to eFuse&rdquo;</em> when it doesn't. That file is absent on
-        this device, and the filesystem is writable over the same HID channel we were
-        already using. Writing one to declare the OAI vendor and variant is the one
-        remaining lever that could plausibly flip the real handlers on.
-      </p>
-      <p>
-        We stopped there deliberately. The correct integers are undocumented, and there
-        is no safe way to discover them &mdash; only disassembling Xtensa firmware or
-        brute-forcing values on a live device. A wrong pair makes the pad claim to be
-        hardware it isn't, which plausibly affects BLE pairing, the USB product ID, and
-        how the configurator treats it. That is a real bricking risk on someone's daily
-        driver, spent on a speculative payoff that might still require the ChatGPT
-        desktop bridge to do anything.
-      </p>
-      <p>
-        It is reversible in principle &mdash; delete the file, fall back to eFuse. &ldquo;In
-        principle&rdquo; is doing a lot of work in that sentence, and the recovery path runs
-        through a device that may no longer enumerate the way you expect.
-      </p>
-    </div>
-  </section>
-
-  <section>
-    <h2>Two things worth knowing if you attempt this</h2>
-    <p>
-      Neither is documented anywhere, and both cost real time to find.
+      Clearing <code>keys</code> and <code>ambient</code> does <em>not</em> turn the pad off
+      if any thread is still set &mdash; thread colour paints over zone colour. A cleanup
+      routine that only clears the zones leaves the pad glowing, which is exactly what
+      happened here. Clear both.
     </p>
     <h3>Open the HID device shared, not seized</h3>
     <p>
       hidapi seizes by default. This pad puts its vendor collection on the same
       <code>IOHIDDevice</code> as its keyboard collection, and macOS refuses to let anything
-      seize a keyboard &mdash; so the open fails with <code>0xE00002C1</code>, which reads exactly
-      like a missing Input Monitoring grant and isn't. Pass <code>nonExclusive</code>. As a bonus,
-      you then coexist with the vendor's own app instead of fighting it for the device.
+      seize a keyboard &mdash; so the open fails with <code>0xE00002C1</code>, which reads
+      exactly like a missing Input Monitoring grant and isn't. Pass
+      <code>nonExclusive</code>. You then coexist with the vendor's own apps rather than
+      fighting them for the device.
     </p>
-    <h3>The framing</h3>
-    <pre><span class="c">// 64-byte reports, usage page 0xFF00 / usage 1</span>
+    <pre><span class="c">// framing: 64-byte reports, usage page 0xFF00 / usage 1</span>
 byte 0      report id, always 0x06
 byte 1      channel: 1 = firmware debug log, 2 = JSON-RPC
 byte 2      payload length in this report, max 61
 bytes 3..   UTF-8 fragment of the JSON message
 
-<span class="c">// colours are 0xRRGGBB integers; brightness/speed/magic are 0..1 floats
-// call ids must be &lt; 1000, or firmware ignores the request</span></pre>
+<span class="c">// call ids must be &lt; 1000, or firmware ignores the request
+// v.oai.hid and v.oai.rad are device-to-host NOTIFICATIONS, not methods:
+//   key events {k, act, ag} and joystick position {a, d}</span></pre>
   </section>
 
   <section>
-    <h2>Where it landed</h2>
-    <p class="lede">
-      Six keys that jump to six agents, and one status colour across both lighting
-      surfaces instead of six individual ones.
-    </p>
-    <p>
-      The honest summary is that the hardware can do what we wanted and the firmware
-      knows how, but the path from a host application to an individual LED is closed on
-      this variant. Not missing &mdash; closed. A documented report format, however
-      minimal and unsupported, would be enough to open it.
-    </p>
+    <h2>The thing we nearly did instead</h2>
+    <div class="callout">
+      <h3>Rewriting the pad's board identity</h3>
+      <p>
+        Before finding the real answer, the evidence pointed hard at variant gating: some
+        <code>v.oai.*</code> handlers answered while others returned
+        <code>Method not found</code>, which looked like one firmware image shipping
+        different handler sets per board. The next step would have been writing
+        <code>/fs/board_info.json</code> to declare a different vendor and variant, since
+        the firmware prefers that file over eFuse.
+      </p>
+      <p>
+        We declined, on the grounds that the correct integers were undocumented, a wrong
+        pair would make the pad claim to be hardware it isn't, and the recovery path runs
+        through a device that may no longer enumerate as expected. That call turned out to
+        be right for a better reason than the one we had: <strong>the gating theory was
+        wrong.</strong> <code>v.oai.hid</code> and <code>v.oai.rad</code> aren't missing
+        handlers at all &mdash; they're notification channels the device pushes to the
+        host, and were never callable. The capability was never gated. It was just
+        undocumented.
+      </p>
+      <p>
+        Which is the useful lesson: a tidy theory built on a misread error message will
+        happily survive a lot of evidence. Reading the vendor's own client was worth more
+        than every inference drawn from the outside.
+      </p>
+    </div>
   </section>
 
   <footer>
     All testing was done against our own device for interoperability, using publicly
-    downloadable firmware images and the shipped configurator. No firmware was modified.
-    The device keymap was backed up before any write and verified restored afterwards.
+    downloadable firmware images and the shipped desktop applications. No firmware was
+    modified. The device keymap was backed up before any write and verified restored
+    afterwards.
   </footer>
 
 </div>
