@@ -45,12 +45,25 @@ means clearing threads *and* zones (see `bin/lights-off.js`).
 Also useful: `v.oai.hid` and `v.oai.rad` are device-to-host **notifications**, not
 callable methods - key events (`{k, act, ag}`) and joystick position (`{a, d}`).
 
+### The keymap is not optional
+
+A key can only be lit if it is bound to a `KV_OAI_AG*` keycode **on the active
+layer**. Parking the codes on a spare layer does nothing. Nothing reports the
+mismatch: `v.oai.thstatus` still answers `{"ok":1}` for a key it cannot light,
+so a wrong keymap is indistinguishable from a working one from the host side.
+
+The trade-off is real: **an AG-bound key stops being an input.** It sends no
+keystroke, and on this variant it pushes no `v.oai.hid` notification either. A
+key is a status light or an input, not both.
+
+This plugin binds the top six keys (rows 1-2) and leaves rows 3-4 alone, so
+those still send `KC_F19`..`KC_F24` if you want them for shortcuts.
+
 ### What did not work
 
 For the record, since these cost time: `lights.preview` with `keys`/`ambient`
-sections; any full-field-name payload to `v.oai.rgbcfg`; binding keys to
-`KV_OAI_AG00..AG05` (accepted and persisted, but irrelevant - per-key works with
-the stock keymap); and both Input app versions, which ship only
+sections; any full-field-name payload to `v.oai.rgbcfg`; AG keycodes on a
+non-active layer; and both Input app versions, which ship only
 `lights.preview`.
 
 ## Requirements
@@ -119,26 +132,37 @@ Keys you omit keep their defaults. `priority` reorders which state wins.
 
 ## The six keys
 
-Map the pad's top six keys to **F13-F18** in Work Louder's Input app, then bind
-them in `~/.config/herdr/config.toml`:
+The bridge binds them on startup (`manage_keymap: true`). To do it by hand:
 
-```toml
-[[keys.command]]
-key = "f13"
-type = "plugin_action"
-command = "worklouder.micro.focus1"
-description = "focus agent 1"
-
-# ... f14 -> focus2, through f18 -> focus6
+```bash
+node bin/apply-ag-keymap.js     # bind the six agent keys for lighting
+node bin/restore-keymap.js      # put your original keymap back
 ```
 
 Slots are ordered by workspace, then tab, then pane, so a key keeps pointing at
-the same agent as long as the set of agents does not change. Check the current
-mapping with:
+the same agent as long as the set of agents does not change:
 
 ```bash
 herdr agent list
 ```
+
+### Jumping to an agent
+
+The six lit keys **cannot** also send keystrokes — see the trade-off above — so
+there are no key bindings for them. If you want to jump from the pad, use rows
+3-4, which still send `KC_F19`..`KC_F24`, bound to the plugin actions in
+`~/.config/herdr/config.toml`:
+
+```toml
+[[keys.command]]
+key = "f19"
+type = "plugin_action"
+command = "worklouder.micro.focus1"
+description = "focus agent 1"
+```
+
+Or drive it from the keyboard with Herdr's own `next_agent` / `previous_agent`
+bindings. The six `focus1`..`focus6` actions stay available either way.
 
 ## Known conflict
 

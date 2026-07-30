@@ -25,6 +25,7 @@ const { WLDevice, PermissionError } = require("../lib/wl-device.js");
 const { EventStream, listAgents } = require("../lib/herdr-client.js");
 const { DEFAULTS, aggregate, lightingFor, threadsFor, mergeConfig } = require("../lib/status.js");
 const { sendThreadsLighting, sendLightingConfig, allLightsOff } = require("../lib/oai.js");
+const { applyAgentKeymap, readKeymap, isAgentKeymapApplied } = require("../lib/keymap.js");
 
 const OFF_SIDE = { effect: "off", brightness: 0, speed: 0.5, magic: 1, color: 0 };
 
@@ -89,6 +90,29 @@ class Bridge {
       `device: ${dev.info.product} (${dev.model})` +
         (version ? ` firmware ${JSON.stringify(version)}` : ""),
     );
+
+    // Per-key lighting only works on keys bound to KV_OAI_AG* on the active
+    // layer, and nothing reports the mismatch: thstatus still answers
+    // {"ok":1} for a key it cannot light. So check, rather than assume.
+    if (this.cfg.manage_keymap) {
+      try {
+        const { changed } = await applyAgentKeymap(dev);
+        log(changed ? "bound the six agent keys to KV_OAI_AG00..AG05" : "agent keymap already in place");
+      } catch (err) {
+        log(`could not apply the agent keymap: ${err.message}`);
+        log("per-key colours will not work until the six keys are bound to KV_OAI_AG00..AG05");
+      }
+    } else {
+      try {
+        const { config } = await readKeymap(dev);
+        if (!isAgentKeymapApplied(config)) {
+          log("WARNING: the six agent keys are not bound to KV_OAI_AG00..AG05,");
+          log("so per-key colours will silently do nothing. Run: node bin/apply-ag-keymap.js");
+        }
+      } catch {
+        /* a keymap read failure is not worth aborting over */
+      }
+    }
   }
 
   reopenLater() {
