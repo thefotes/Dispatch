@@ -1,33 +1,28 @@
 #!/usr/bin/env node
 "use strict";
-// Visual test: is `keys` in v.oai.rgbcfg a per-key array, or just the name of
-// the key-backlight surface?
+// Visual test. Everything else is exhausted: the firmware returns {"ok":1} to
+// any payload (including malformed ones), emits no debug log over HID, and its
+// persisted keymap.json stores lighting as exactly two surfaces
+// (backlight/underglow) with one colour each. So only the LEDs can tell us
+// whether `keys` is per-key addressable or just the key-backlight surface.
 //
-// The firmware answers {"ok":1} to anything, including {}, so the wire response
-// proves nothing. Only the device can answer this. Each step holds long enough
-// to look at the pad.
+// Watch the pad. Each step announces what to look for and holds 5 seconds.
 
 const { WLDevice } = require("../lib/wl-device.js");
 
-const RED = 0xff0000, GREEN = 0x00ff00, BLUE = 0x0000ff;
-const MAGENTA = 0xff00ff, CYAN = 0x00ffff, YELLOW = 0xffff00, WHITE = 0xffffff;
+const RED = 0xff0000, GREEN = 0x00ff00, BLUE = 0x0000ff, YELLOW = 0xffff00;
+const MAGENTA = 0xff00ff, CYAN = 0x00ffff, WHITE = 0xffffff;
+const ALT = [RED, GREEN, BLUE, YELLOW, MAGENTA, CYAN, WHITE, RED, GREEN, BLUE, YELLOW, MAGENTA, CYAN];
 
-const surface = (color) => ({
-  effect: "solid",
-  brightness: 1,
-  speed: 0.5,
-  magic: 1,
-  color,
+const surface = (color, effect = "solid") => ({
+  effect, brightness: 1, speed: 0.5, magic: 1, color,
 });
-
-// 13 keys: rows of 2, 4, 4, 3.
-const RAINBOW = [RED, GREEN, BLUE, YELLOW, MAGENTA, CYAN, WHITE, RED, GREEN, BLUE, YELLOW, MAGENTA, CYAN];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function step(dev, n, what, look, method, params, hold = 5000) {
   console.log(`\n[${n}] ${what}`);
-  console.log(`    LOOK FOR: ${look}`);
+  console.log(`    LOOK: ${look}`);
   try {
     await dev.call(method, params);
   } catch (err) {
@@ -40,49 +35,63 @@ async function step(dev, n, what, look, method, params, hold = 5000) {
 async function main() {
   const dev = WLDevice.open();
   if (!dev) {
-    console.error("No Work Louder device on the HID bus. Press a key to wake it.");
+    console.error("No device on the HID bus. Press a key to wake it, then re-run.");
     process.exit(1);
   }
-  console.log(`device: ${dev.info.product}`);
-  console.log("Watch the pad. Each step holds for 5 seconds.");
+  const v = await dev.call("sys.version").catch(() => ({}));
+  console.log(`device: ${dev.info.product}   firmware: ${JSON.stringify(v)}`);
+  console.log("Watch the pad. 11 steps, 5 seconds each (~1 minute).");
 
-  await step(dev, 1, "keys=RED, ambient=BLUE", "keys red, underglow blue?", "v.oai.rgbcfg", {
-    keys: surface(RED),
-    ambient: surface(BLUE),
-  });
+  // --- Part A: are `keys` and `ambient` two distinct surfaces? ---
+  console.log("\n########## PART A: are keys and ambient different lights? ##########");
 
-  await step(dev, 2, "keys=BLUE, ambient=RED", "did they swap?", "v.oai.rgbcfg", {
-    keys: surface(BLUE),
-    ambient: surface(RED),
-  });
+  await step(dev, "A1", "keys=RED  ambient=BLUE", "which light is red, which is blue?",
+    "v.oai.rgbcfg", { keys: surface(RED), ambient: surface(BLUE) });
 
-  console.log("\n--- per-key attempts: do individual keys differ, or all one colour? ---");
+  await step(dev, "A2", "keys=BLUE  ambient=RED", "did the two lights SWAP?",
+    "v.oai.rgbcfg", { keys: surface(BLUE), ambient: surface(RED) });
 
-  await step(dev, 3, "keys = bare array of 13 colours", "MULTIPLE different key colours?", "v.oai.rgbcfg", {
-    keys: RAINBOW,
-  });
+  await step(dev, "A3", "keys=GREEN  ambient=off", "is ONLY the key backlight lit (green)?",
+    "v.oai.rgbcfg", { keys: surface(GREEN), ambient: surface(0, "off") });
 
-  await step(dev, 4, "keys.colors = array of 13", "MULTIPLE different key colours?", "v.oai.rgbcfg", {
-    keys: { colors: RAINBOW },
-  });
+  await step(dev, "A4", "keys=off  ambient=GREEN", "is ONLY the underglow lit (green)?",
+    "v.oai.rgbcfg", { keys: surface(0, "off"), ambient: surface(GREEN) });
 
-  await step(dev, 5, "keys.leds = [{index,color}]", "MULTIPLE different key colours?", "v.oai.rgbcfg", {
-    keys: { leds: RAINBOW.map((color, index) => ({ index, color })) },
-  });
+  // --- Part B: per-key addressing ---
+  console.log("\n########## PART B: can individual keys differ? ##########");
+  console.log("For every step below the question is the same:");
+  console.log("  do keys show DIFFERENT colours from each other, or all ONE colour?");
 
-  await step(dev, 6, "keys = [{index,color}]", "MULTIPLE different key colours?", "v.oai.rgbcfg", {
-    keys: RAINBOW.map((color, index) => ({ index, color })),
-  });
+  await step(dev, "B1", "keys = bare array of 13 colours", "different colours per key?",
+    "v.oai.rgbcfg", { keys: ALT });
 
-  await step(dev, 7, "keys.keys = [{i,c}]", "MULTIPLE different key colours?", "v.oai.rgbcfg", {
-    keys: { keys: RAINBOW.map((c, i) => ({ i, c })) },
-  });
+  await step(dev, "B2", "keys.color = array of 13", "different colours per key?",
+    "v.oai.rgbcfg", { keys: { effect: "solid", brightness: 1, speed: 0.5, magic: 1, color: ALT } });
+
+  await step(dev, "B3", "keys.colors = array of 13", "different colours per key?",
+    "v.oai.rgbcfg", { keys: { colors: ALT } });
+
+  await step(dev, "B4", "keys.leds = [{index,color}]", "different colours per key?",
+    "v.oai.rgbcfg", { keys: { leds: ALT.map((color, index) => ({ index, color })) } });
+
+  // --- Part C: thstatus ---
+  console.log("\n########## PART C: does thstatus do anything visible? ##########");
+
+  await step(dev, "C1", "thstatus = 1", "ANY change: animation, key colours, underglow?",
+    "v.oai.thstatus", { status: 1 });
+
+  await step(dev, "C2", "thstatus per-slot array", "ANY change, especially the top 6 keys?",
+    "v.oai.thstatus", { status: [1, 2, 3, 0, 1, 2] });
+
+  await step(dev, "C3", "thstatus act=1", "ANY change?",
+    "v.oai.thstatus", { act: 1 });
 
   console.log("\nrestoring (all off)");
   await dev.call("v.oai.rgbcfg", {
-    keys: { effect: "off", brightness: 0, speed: 0.5, magic: 1, color: 0 },
-    ambient: { effect: "off", brightness: 0, speed: 0.5, magic: 1, color: 0 },
-  });
+    keys: surface(0, "off"),
+    ambient: surface(0, "off"),
+  }).catch(() => {});
+  await dev.call("v.oai.thstatus", { status: 0 }).catch(() => {});
   dev.close();
   console.log("done");
   process.exit(0);
