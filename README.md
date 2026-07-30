@@ -7,36 +7,52 @@ to your running coding agents:
   anything needs you
 - the top six keys jump straight to agents 1-6 in Herdr
 
-## Status of per-key colours
+## Per-key colours: investigated, not available
 
-The stock Input app only ever calls one lighting method, `lights.preview`,
-which addresses two **whole-device** surfaces (`backlight`, `underglow`) with a
-single colour each. There is no per-key addressing in anything the app does.
+Short version: **the host cannot address individual keys on a Creator Micro 2.**
+The pad exposes exactly two controllable lighting surfaces. This was worth
+chasing hard, because the hardware really does have per-key LEDs and the
+firmware really does contain an agent-status bridge — neither is reachable.
 
-However, the Creator Micro hardware genuinely has per-key LEDs (QMK's v1 board
-declares an `rgb_matrix` of 12 positioned per-key LEDs plus 8 underglow), and
-strings in the cm-v2 firmware (v0.6.0-rc.8) show handlers the app never calls:
+What the hardware has: QMK's v1 Creator Micro board declares an `rgb_matrix`
+of 12 positioned per-key LEDs plus 8 underglow. The LEDs exist.
 
-| method | evidence |
+What the firmware contains, found by pulling `cm-v2-fw-releases` and reading
+its strings:
+
+| method | notes |
 |---|---|
-| `v.oai.rgbcfg` | registered next to `lights.preview` in `wl_lights_controller`; the surrounding key vocabulary is `effect/brightness/speed/magic/color` plus sections `backlight/underglow/`**`keys`**/**`ambient`** |
-| `v.oai.thstatus` | `"OAI BRIDGE: init, v.oai.thstatus registered on all variants"` (`src/oai/wl_oai_bridge.cpp`) |
-| `v.oai.hid`, `v.oai.rad` | same bridge |
+| `lights.preview` | sections `backlight` + `underglow`, one `{effect,brightness,speed,magic,color}` each |
+| `v.oai.rgbcfg` | same vocabulary plus sections **`keys`** and **`ambient`** |
+| `v.oai.thstatus` | `"OAI BRIDGE: init, ... registered on all variants"` (`src/oai/wl_oai_bridge.cpp`), alongside `syncKeysLighting` / `syncAmbientLighting` |
+| `v.oai.hid`, `v.oai.rad` | not registered on this variant |
 
-`oai` is OpenAI: this is the Codex Micro's agent-status integration, and the
-same firmware image ships to the Creator Micro 2. The OAI default profile even
-maps the **top six keys** to `KV_OAI_AG00`..`KV_OAI_AG05`.
+`oai` is OpenAI — this is the Codex Micro's integration, shipped in the same
+image. Its default profile maps the top six keys to `KV_OAI_AG00`..`AG05`
+(`AG` is *action group*, not *agent*).
 
-Whether `keys` is a genuinely addressable array or just the OAI name for the
-key backlight surface is not decidable from the binary. The firmware answers
-unknown methods with a JSON-RPC `Method not found`, so:
+Tested against real hardware on firmware **v0.6.0-rc.10**:
+
+- `v.oai.rgbcfg` is registered but **inert** on the Creator Micro 2 — it
+  answers `{"ok":1}` to every payload, including malformed ones, and changes
+  nothing visible under any of the per-key encodings tried.
+- `v.oai.thstatus` behaves the same way. `v.oai.hid` / `v.oai.rad` return
+  `Method not found`.
+- `lights.preview` with `backlight`/`underglow` **works**: the two surfaces are
+  independent and `effect` is honoured (rainbow animates).
+- The device's own `keymap.json` persists lighting as exactly those two
+  surfaces per layer, with no per-key colour field.
+
+The probe tools are kept so this can be re-checked on future firmware:
 
 ```bash
-npm run probe
+npm run probe          # which methods exist, and what they answer
+node bin/lighttest.js  # visual: does lights.preview reach the pad
+node bin/keytest.js    # visual: can individual keys ever differ
 ```
 
-will say definitively. If per-key addressing works, `bin/leds.js` can be
-extended to light one key per agent instead of one aggregate colour.
+If a later firmware makes `v.oai.rgbcfg` live, `bin/leds.js` can be extended to
+light one key per agent instead of one aggregate colour.
 
 ## Requirements
 
@@ -56,7 +72,8 @@ herdr plugin link /path/to/herdr-worklouder-micro
 
 ## The status light
 
-`bin/leds.js` is a long-running bridge. It watches Herdr and pushes a colour:
+`bin/leds.js` is a long-running bridge. It watches Herdr and pushes a colour to
+both the key backlight and the underglow:
 
 | condition | colour |
 |---|---|
@@ -65,8 +82,9 @@ herdr plugin link /path/to/herdr-worklouder-micro
 | else agents running but idle | green |
 | no agents | off |
 
-Worst state wins, because with one light the useful question is "does anything
-need me?".
+Worst state wins, because with one colour the useful question is "does anything
+need me?". Set `drive_backlight: false` to leave the key backlight alone and
+use only the underglow.
 
 Run it in a pane to watch it work:
 

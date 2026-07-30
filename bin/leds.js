@@ -2,15 +2,16 @@
 "use strict";
 // Long-running bridge: Herdr agent status -> Creator Micro 2 underglow.
 //
-// `lights.preview` is the only lighting call the stock Input app uses, and it
-// addresses two whole-device surfaces rather than individual keys. So the light
-// carries an aggregate "does anything need me?" signal across all agents:
-// worst state wins.
+// `lights.preview` addresses two whole-device surfaces - `backlight` (under the
+// keys) and `underglow` - with one colour each. There is no per-key addressing
+// available to the host: the firmware also registers `v.oai.rgbcfg`, whose
+// vocabulary includes `keys`/`ambient` sections, but on the Creator Micro 2
+// variant that handler is inert (it answers {"ok":1} and changes nothing, as
+// confirmed on firmware v0.6.0-rc.10). The device's own keymap.json likewise
+// persists lighting as exactly those two surfaces.
 //
-// The firmware also registers `v.oai.rgbcfg`, whose vocabulary includes `keys`
-// and `ambient` sections - potentially real per-key addressing. Run
-// `node bin/probe.js` against a reachable device to find out; if per-key works,
-// this bridge can be extended to light one key per agent.
+// So the light carries an aggregate "does anything need me?" signal across all
+// agents: worst state wins.
 //
 // Liveness comes from three places, so a missed event can never leave the
 // light stale:
