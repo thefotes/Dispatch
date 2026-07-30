@@ -7,6 +7,7 @@ struct LogEntry: Identifiable {
         case rx = "RX"
         case notify = "NOTIFY"
         case device = "DEVICE"
+        case raw = "RAW"
         case info = "INFO"
         case error = "ERROR"
 
@@ -16,6 +17,7 @@ struct LogEntry: Identifiable {
             case .rx: return .secondary
             case .notify: return .purple
             case .device: return .teal
+            case .raw: return .orange
             case .info: return .secondary
             case .error: return .red
             }
@@ -66,7 +68,7 @@ final class AppModel: ObservableObject {
 
     // Log
     @Published private(set) var entries: [LogEntry] = []
-    @Published var visibleKinds: Set<LogEntry.Kind> = Set(LogEntry.Kind.allCases)
+    @Published var visibleKinds: Set<LogEntry.Kind> = Set(LogEntry.Kind.allCases).subtracting([.raw])
     @Published var autoScroll = true
     @Published var prettyPrint = false
 
@@ -91,6 +93,12 @@ final class AppModel: ObservableObject {
         }
         device.onWriteError = { [weak self] method, message in
             self?.log(.error, "send failed: \(method)", message)
+        }
+        device.onRawReport = { [weak self] reportID, bytes in
+            guard let self else { return }
+            let hex = bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+            let ascii = String(bytes.map { $0 >= 32 && $0 < 127 ? Character(UnicodeScalar($0)) : "." })
+            self.log(.raw, "input report id=\(reportID) len=\(bytes.count)", "\(hex)\n\(ascii)")
         }
         device.onDeviceLog = { [weak self] line in
             self?.log(.device, "firmware log", line)

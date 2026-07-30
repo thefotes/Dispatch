@@ -85,6 +85,10 @@ final class WLDevice {
     var onNotification: ((String, Any?) -> Void)?     // method, params
     var onDeviceLog: ((String) -> Void)?
     var onWriteError: ((String, String) -> Void)?
+    /// Every input report, before framing. Reports that do not match the
+    /// channel framing are otherwise dropped, which hides any other traffic
+    /// the device emits - key presses included.
+    var onRawReport: ((UInt32, [UInt8]) -> Void)?
     var onDisconnect: ((String) -> Void)?
 
     private(set) var info: Info?
@@ -144,11 +148,11 @@ final class WLDevice {
         )
 
         let context = Unmanaged.passUnretained(self).toOpaque()
-        IOHIDDeviceRegisterInputReportCallback(dev, inputBuffer, WLDevice.reportSize, { ctx, _, _, _, _, report, length in
+        IOHIDDeviceRegisterInputReportCallback(dev, inputBuffer, WLDevice.reportSize, { ctx, _, _, _, reportID, report, length in
             guard let ctx, length > 0 else { return }
             let me = Unmanaged<WLDevice>.fromOpaque(ctx).takeUnretainedValue()
             let bytes = Array(UnsafeBufferPointer(start: report, count: Int(length)))
-            DispatchQueue.main.async { me.handleReport(bytes) }
+            DispatchQueue.main.async { me.handleReport(bytes, reportID: reportID) }
         }, context)
 
         IOHIDDeviceRegisterRemovalCallback(dev, { ctx, _, _ in
@@ -236,7 +240,8 @@ final class WLDevice {
 
     // MARK: - Receive
 
-    private func handleReport(_ bytes: [UInt8]) {
+    private func handleReport(_ bytes: [UInt8], reportID: UInt32) {
+        onRawReport?(reportID, bytes)
         // The input callback delivers the report id out-of-band, so the
         // payload normally starts at index 0 — but be tolerant of stacks that
         // include it, and try the shifted alignment too.

@@ -199,6 +199,7 @@ struct RawCallView: View {
         ("Key 1 breathing amber", OAI.methodThreads, "[{\"id\":1,\"c\":16752640,\"b\":1,\"e\":4,\"s\":0.5}]"),
         ("Zones: keys off, ambient green", OAI.methodRGBConfig,
          "{\"keys\":{\"e\":0,\"b\":0,\"s\":0.5,\"m\":1,\"c\":0},\"ambient\":{\"e\":1,\"b\":1,\"s\":0.5,\"m\":1,\"c\":51283}}"),
+        ("Announce host app", "host.focused_app", "{\"name\":\"WLInspector\",\"bundle_id\":\"cc.worklouder.inspector\"}"),
         ("Device status", "device.status", ""),
         ("Firmware version", "sys.version", ""),
         ("List files", "fs.list", "{\"checksum\":false,\"rec\":true}"),
