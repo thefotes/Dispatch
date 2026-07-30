@@ -22,9 +22,9 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { WLDevice, PermissionError } = require("../lib/wl-device.js");
-const { EventStream, listAgents } = require("../lib/herdr-client.js");
+const { EventStream, listAgents, focusAgent } = require("../lib/herdr-client.js");
 const { DEFAULTS, aggregate, lightingFor, threadsFor, mergeConfig } = require("../lib/status.js");
-const { sendThreadsLighting, sendLightingConfig, allLightsOff } = require("../lib/oai.js");
+const { sendThreadsLighting, sendLightingConfig, allLightsOff, onNotify } = require("../lib/oai.js");
 const { applyAgentKeymap, readKeymap, isAgentKeymapApplied } = require("../lib/keymap.js");
 
 const OFF_SIDE = { effect: "off", brightness: 0, speed: 0.5, magic: 1, color: 0 };
@@ -50,6 +50,7 @@ class Bridge {
     this.lifecycle = null;
     this.statusStreams = new Map(); // pane_id -> EventStream
     this.lastFingerprint = undefined;
+    this.agents = [];
     this.debounce = null;
     this.stopped = false;
   }
@@ -91,6 +92,16 @@ class Bridge {
         (version ? ` firmware ${JSON.stringify(version)}` : ""),
     );
 
+    // An AG key sends no keystroke; it reports itself over HID instead, as
+    // {"m":"v.oai.hid","p":{"k":"AG01","act":1}}. So the key that shows an
+    // agent's status is also the key that jumps to it.
+    onNotify(dev, {
+      onKey: (k) => {
+        if (!k.pressed || k.index === null) return;
+        this.focusSlot(k.index);
+      },
+    });
+
     // Per-key lighting only works on keys bound to KV_OAI_AG* on the active
     // layer, and nothing reports the mismatch: thstatus still answers
     // {"ok":1} for a key it cannot light. So check, rather than assume.
@@ -112,6 +123,21 @@ class Bridge {
       } catch {
         /* a keymap read failure is not worth aborting over */
       }
+    }
+  }
+
+  // Key index N is agent slot N, the same mapping the lighting uses.
+  async focusSlot(index) {
+    const agent = this.agents[index];
+    if (!agent) {
+      log(`key ${index} pressed, but no agent in that slot`);
+      return;
+    }
+    try {
+      await focusAgent(agent.terminal_id || agent.pane_id);
+      log(`key ${index} -> focused ${agent.agent} (${agent.agent_status}) ${agent.pane_id}`);
+    } catch (err) {
+      log(`key ${index} focus failed: ${err.message}`);
     }
   }
 
@@ -198,6 +224,7 @@ class Bridge {
       log("agent.list failed:", err.message);
       return;
     }
+    this.agents = agents;
     this.reconcileStatusStreams(agents);
     const state = aggregate(agents, this.cfg);
     const threads = threadsFor(agents, this.cfg);

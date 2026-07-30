@@ -148,21 +148,18 @@ herdr agent list
 
 ### Jumping to an agent
 
-The six lit keys **cannot** also send keystrokes — see the trade-off above — so
-there are no key bindings for them. If you want to jump from the pad, use rows
-3-4, which still send `KC_F19`..`KC_F24`, bound to the plugin actions in
-`~/.config/herdr/config.toml`:
+An AG key sends no keystroke, but it does report itself over HID:
 
-```toml
-[[keys.command]]
-key = "f19"
-type = "plugin_action"
-command = "worklouder.micro.focus1"
-description = "focus agent 1"
+```json
+{"m": "v.oai.hid", "p": {"k": "AG01", "act": 1}}
 ```
 
-Or drive it from the keyboard with Herdr's own `next_agent` / `previous_agent`
-bindings. The six `focus1`..`focus6` actions stay available either way.
+`act` is 1 on press, 0 on release, and `k` carries the key index. The bridge
+listens for these, so **the key showing an agent's status is the key that jumps
+to it** — no keybindings, no F-keys.
+
+Watch out for the envelope: notifications use `m`/`p`, while responses use the
+full `method`. Match only on `method` and every key event vanishes silently.
 
 ## Known conflict
 

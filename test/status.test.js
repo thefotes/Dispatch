@@ -111,3 +111,57 @@ test("per-key colours honour config overrides", () => {
   assert.strictEqual(t.color, "#123456");
   assert.strictEqual(t.brightness, 0.3);
 });
+
+// ---- device notification envelope ----
+// Captured from a real key press. Note the envelope is abbreviated: the device
+// sends {"m": method, "p": params} for notifications, while responses use the
+// full "method". Matching only on "method" silently drops every key event.
+
+const { WLDevice } = require("../lib/wl-device.js");
+const { onNotify, agIndex } = require("../lib/oai.js");
+
+function fakeDevice() {
+  const dev = Object.create(WLDevice.prototype);
+  dev.pending = new Map();
+  dev.accum = "";
+  dev.onNotify = null;
+  dev.onDebug = null;
+  return dev;
+}
+
+test("a key press notification is decoded, not dropped", () => {
+  const dev = fakeDevice();
+  const seen = [];
+  onNotify(dev, { onKey: (k) => seen.push(k) });
+  dev._feedRpc('{"m":"v.oai.hid","p":{"k":"AG01","act":1}}\r\n');
+  assert.strictEqual(seen.length, 1);
+  assert.strictEqual(seen[0].key, "AG01");
+  assert.strictEqual(seen[0].index, 1, "AG01 is key index 1");
+  assert.strictEqual(seen[0].pressed, true);
+});
+
+test("press and release are distinguishable", () => {
+  const dev = fakeDevice();
+  const seen = [];
+  onNotify(dev, { onKey: (k) => seen.push(k) });
+  dev._feedRpc('{"m":"v.oai.hid","p":{"k":"AG02","act":1}}');
+  dev._feedRpc('{"m":"v.oai.hid","p":{"k":"AG02","act":0}}');
+  assert.deepStrictEqual(seen.map((k) => k.pressed), [true, false]);
+});
+
+test("a response is not mistaken for a notification", () => {
+  const dev = fakeDevice();
+  let notified = 0;
+  onNotify(dev, { onKey: () => notified++ });
+  dev.pending.set("332", { resolve() {}, reject() {}, timer: setTimeout(() => {}, 0) });
+  dev._feedRpc('{"result":{"ok":1},"id":332,"method":"v.oai.thstatus"}\r\n');
+  assert.strictEqual(notified, 0, "responses carry a full 'method' and an id");
+});
+
+test("AG names map to key indices", () => {
+  assert.strictEqual(agIndex("AG00"), 0);
+  assert.strictEqual(agIndex("AG05"), 5);
+  assert.strictEqual(agIndex("AG12"), 12);
+  assert.strictEqual(agIndex("KC_F13"), null);
+  assert.strictEqual(agIndex(undefined), null);
+});
