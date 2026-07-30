@@ -320,9 +320,10 @@ final class AppModel: ObservableObject {
         switch method {
         case OAI.notifyHID:
             let key = dict["k"].map { "\($0)" } ?? "?"
-            let act = dict["act"].map { " act=\($0)" } ?? ""
+            let edge = (dict["act"] as? Int) == 1 ? "PRESS" : "release"
+            let index = OAI.agIndex(dict["k"] as? String).map { " key index \($0)" } ?? ""
             let agent = dict["ag"].map { " agent=\($0)" } ?? ""
-            return "key=\(key)\(act)\(agent)   \(encode(params))"
+            return "\(key) \(edge)\(index)\(agent)   \(encode(params))"
         case OAI.notifyJoystick:
             let angle = dict["a"].map { "\($0)" } ?? "?"
             let distance = dict["d"].map { "\($0)" } ?? "?"

@@ -88,6 +88,13 @@ enum OAI {
         static let dark = Zone(effect: .off, brightness: 0, speed: 0.5, magic: 1, color: 0)
     }
 
+    /// An AG key reports itself by name, "AG00".."AG19"; the number is the key
+    /// index, the same one used as a thread id for lighting.
+    static func agIndex(_ name: String?) -> Int? {
+        guard let name, name.hasPrefix("AG") else { return nil }
+        return Int(name.dropFirst(2))
+    }
+
     static func threadsParams(_ threads: [Thread]) -> [[String: Any]] {
         threads.map(\.wire)
     }

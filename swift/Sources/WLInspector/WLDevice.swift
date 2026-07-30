@@ -288,9 +288,12 @@ final class WLDevice {
                 let result = decoded["result"]
                 onResponse?(id, result, error)
                 if let waiting = pending.removeValue(forKey: id) { waiting(result, error) }
-            } else if let method = decoded["method"] as? String {
-                // Device-pushed notification: v.oai.hid, v.oai.rad.
-                onNotification?(method, decoded["params"])
+            } else if let method = (decoded["m"] as? String) ?? (decoded["method"] as? String) {
+                // Device-pushed notification. Note the envelope is abbreviated
+                // here - {"m": method, "p": params} - while responses use the
+                // full "method". Matching only on "method" drops every one.
+                let params = decoded["m"] != nil ? decoded["p"] : decoded["params"]
+                onNotification?(method, params)
             }
         }
     }
