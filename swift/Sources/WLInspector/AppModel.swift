@@ -89,6 +89,9 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             self.log(.notify, method, self.describeNotification(method, params))
         }
+        device.onWriteError = { [weak self] method, message in
+            self?.log(.error, "send failed: \(method)", message)
+        }
         device.onDeviceLog = { [weak self] line in
             self?.log(.device, "firmware log", line)
         }
@@ -114,8 +117,11 @@ final class AppModel: ObservableObject {
             connected = true
             lastError = nil
             deviceName = device.info?.product ?? "—"
-            let transport = device.info?.transport ?? "?"
-            log(.info, "connected", "\(deviceName)  ·  \(transport)  ·  pid 0x\(String(device.info?.productID ?? 0, radix: 16, uppercase: true))")
+            if let i = device.info {
+                let usage = String(format: "0x%04X", i.usagePage)
+                log(.info, "connected",
+                    "\(i.product)  ·  \(i.transport)  ·  pid 0x\(String(i.productID, radix: 16, uppercase: true))  ·  primary usage page \(usage)  ·  \(i.interfaceCount) interface(s) matched")
+            }
             refreshStatus()
         } catch {
             connected = false
@@ -130,12 +136,15 @@ final class AppModel: ObservableObject {
     }
 
     func refreshStatus() {
-        device.call("sys.version", params: nil) { [weak self] result, _ in
-            guard let self, let dict = result as? [String: Any], let v = dict["version"] as? String else { return }
-            self.firmware = v
+        device.call("sys.version", params: nil) { [weak self] result, error in
+            guard let self else { return }
+            if let error { self.log(.error, "sys.version failed", error); return }
+            if let dict = result as? [String: Any], let v = dict["version"] as? String { self.firmware = v }
         }
-        device.call("device.status", params: nil) { [weak self] result, _ in
-            guard let self, let dict = result as? [String: Any] else { return }
+        device.call("device.status", params: nil) { [weak self] result, error in
+            guard let self else { return }
+            if let error { self.log(.error, "device.status failed", error); return }
+            guard let dict = result as? [String: Any] else { return }
             if let pct = dict["battery"] as? Int {
                 let charging = (dict["is_charging"] as? Bool) == true
                 self.battery = "\(pct)%\(charging ? " ⚡" : "")"

@@ -33,10 +33,16 @@ final class WLDevice {
         var productID: Int
         var transport: String
         var serial: String
+        var usagePage: Int
+        var interfaceCount: Int
     }
+
+    static let vendorUsagePage = 0xFF00
+    static let vendorUsage = 0x01
 
     enum Failure: LocalizedError {
         case notFound
+        case noVendorCollection
         case openFailed(IOReturn)
         case notConnected
         case writeFailed(IOReturn)
@@ -46,6 +52,8 @@ final class WLDevice {
             switch self {
             case .notFound:
                 return "No Work Louder device on the HID bus. If it is a Bluetooth pad it may have gone to sleep — press a key to wake it."
+            case .noVendorCollection:
+                return "Found the device, but not its vendor collection (usage page 0xFF00). Nothing to talk to."
             case .openFailed(let r):
                 if r == kIOReturnNotPrivileged || UInt32(bitPattern: r) == 0xE00002C1 {
                     return "Open refused (0xE00002C1). Grant Input Monitoring to the process running this app, under System Settings → Privacy & Security → Input Monitoring."
@@ -66,6 +74,7 @@ final class WLDevice {
     var onResponse: ((Int, Any?, String?) -> Void)?   // id, result, errorMessage
     var onNotification: ((String, Any?) -> Void)?     // method, params
     var onDeviceLog: ((String) -> Void)?
+    var onWriteError: ((String, String) -> Void)?
     var onDisconnect: ((String) -> Void)?
 
     private(set) var info: Info?
@@ -92,8 +101,18 @@ final class WLDevice {
         IOHIDManagerSetDeviceMatching(manager, [kIOHIDVendorIDKey: WLDevice.vendorID] as CFDictionary)
         IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
 
-        guard let set = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>, let dev = set.first else {
+        guard let set = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>, !set.isEmpty else {
             throw Failure.notFound
+        }
+        // Over Bluetooth the pad is a single IOHIDDevice whose primary usage is
+        // keyboard, with the vendor collection alongside it in DeviceUsagePairs.
+        // Over USB each interface is its own IOHIDDevice, so picking the first
+        // match lands on the keyboard and every report id 6 write is dropped.
+        // Select the one that actually carries the vendor collection.
+        guard let dev = set.first(where: { primaryUsagePage($0) == WLDevice.vendorUsagePage })
+            ?? set.first(where: { hasVendorCollection($0) })
+        else {
+            throw Failure.noVendorCollection
         }
 
         let result = IOHIDDeviceOpen(dev, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -104,7 +123,9 @@ final class WLDevice {
             product: string(dev, kIOHIDProductKey) ?? "Work Louder device",
             productID: number(dev, kIOHIDProductIDKey) ?? 0,
             transport: string(dev, kIOHIDTransportKey) ?? "?",
-            serial: string(dev, kIOHIDSerialNumberKey) ?? ""
+            serial: string(dev, kIOHIDSerialNumberKey) ?? "",
+            usagePage: primaryUsagePage(dev) ?? 0,
+            interfaceCount: set.count
         )
 
         let context = Unmanaged.passUnretained(self).toOpaque()
@@ -172,7 +193,11 @@ final class WLDevice {
                 IOHIDDeviceSetReport(dev, kIOHIDReportTypeOutput, CFIndex(WLDevice.reportID), buf.baseAddress!, buf.count)
             }
             guard rc == kIOReturnSuccess else {
-                completion?(nil, Failure.writeFailed(rc).errorDescription)
+                // Surface the failure rather than dropping it: a silent write
+                // error is indistinguishable from a device that ignores you.
+                let message = Failure.writeFailed(rc).errorDescription ?? "write failed"
+                onWriteError?(method, message)
+                completion?(nil, message)
                 return nil
             }
             offset += n
@@ -288,5 +313,18 @@ final class WLDevice {
 
     private func number(_ dev: IOHIDDevice, _ key: String) -> Int? {
         IOHIDDeviceGetProperty(dev, key as CFString) as? Int
+    }
+
+    private func primaryUsagePage(_ dev: IOHIDDevice) -> Int? {
+        number(dev, kIOHIDPrimaryUsagePageKey)
+    }
+
+    /// True when this IOHIDDevice exposes the vendor collection, either as its
+    /// primary usage or as one of its DeviceUsagePairs.
+    private func hasVendorCollection(_ dev: IOHIDDevice) -> Bool {
+        if primaryUsagePage(dev) == WLDevice.vendorUsagePage { return true }
+        guard let pairs = IOHIDDeviceGetProperty(dev, kIOHIDDeviceUsagePairsKey as CFString) as? [[String: Any]]
+        else { return false }
+        return pairs.contains { ($0[kIOHIDDeviceUsagePageKey] as? Int) == WLDevice.vendorUsagePage }
     }
 }

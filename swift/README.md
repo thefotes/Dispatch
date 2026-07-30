@@ -75,6 +75,18 @@ a wrong payload looks exactly like a right one:
   "ambient": { "e": 1, "b": 1, "s": 0.5, "m": 1, "c": 51283 } }
 ```
 
+## Picking the right interface
+
+Over Bluetooth the pad is a single `IOHIDDevice` whose *primary* usage is
+keyboard, with the vendor collection listed alongside it in
+`DeviceUsagePairs`. Over USB each interface is its own `IOHIDDevice`, so
+matching on vendor id and taking the first hit lands on the keyboard, and every
+report-id-6 write is silently dropped.
+
+The app selects the device that actually carries usage page `0xFF00`, by
+primary usage first and `DeviceUsagePairs` second, and logs which one it chose
+on connect.
+
 ## Notes
 
 The device is opened **non-exclusively**. Its vendor collection shares an
