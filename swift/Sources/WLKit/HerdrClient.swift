@@ -70,12 +70,6 @@ public struct HerdrAgent: Equatable, Sendable {
         self.focused = focused
     }
 
-    /// Key index N maps positionally to agent N, so this ordering is what makes
-    /// a physical key keep pointing at the same agent. It must match
-    /// `sortAgents` in lib/herdr-client.js exactly.
-    var sortKey: String {
-        "\(workspaceID ?? "") \(tabID ?? "") \(paneID ?? "")"
-    }
 }
 
 public struct HerdrTab: Equatable, Sendable {
@@ -184,10 +178,15 @@ public enum HerdrClient {
         }
     }
 
+    /// Agents in the server's own order — workspace, then tab, then pane —
+    /// which is exactly how Herdr's agent panel lists them in grouped mode.
+    /// Slot N is element N, so the pad reads like the sidebar. Do not re-sort:
+    /// an earlier version ordered by ID strings here, and IDs do not sort the
+    /// way the sidebar displays.
     public static func listAgents() async throws -> [HerdrAgent] {
         let result = try await request("agent.list")
         let raw = result["agents"] as? [[String: Any]] ?? []
-        return raw.map(HerdrAgent.init(json:)).sorted { $0.sortKey < $1.sortKey }
+        return raw.map(HerdrAgent.init(json:))
     }
 
     /// The agent whose pane has focus in Herdr, if any. Fetched fresh rather

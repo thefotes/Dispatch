@@ -66,9 +66,10 @@ public enum StatusMapper {
         return "unknown"
     }
 
-    /// One thread entry per agent key: agent slot N takes key N, unused keys go
-    /// dark. Always returns exactly `Pad.agentKeyIDs.count` entries, so a
-    /// vanished agent actively clears its key rather than leaving it stale.
+    /// One thread entry per agent key: agent slot N takes `Pad.agentKeyIDs[N]`
+    /// — reading order on the pad — and unused keys go dark. Always returns
+    /// exactly `Pad.agentKeyIDs.count` entries, so a vanished agent actively
+    /// clears its key rather than leaving it stale.
     public static func threads(
         for agents: [HerdrAgent],
         _ cfg: BridgeConfig = BridgeConfig()

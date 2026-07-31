@@ -18,9 +18,11 @@ final class LiveHerdrTests: XCTestCase {
         try XCTSkipUnless(serverRunning(), "no herdr server")
         let agents = try await HerdrClient.listAgents()
         print("agents: \(agents.map { "\($0.shortName):\($0.status)" })")
-        // Sorted, and the sort must be stable and total.
-        let keys = agents.map(\.sortKey)
-        XCTAssertEqual(keys, keys.sorted(), "agents must come back in sortKey order")
+        // Server order is the display order, so the one thing to check is that
+        // each agent is addressable — a nil target cannot take a key press.
+        let targets = agents.compactMap(\.focusTarget)
+        XCTAssertEqual(targets.count, agents.count, "every agent has a focus target")
+        XCTAssertEqual(Set(targets).count, targets.count, "targets are unique")
     }
 
     func testSecondRequestOnAFreshConnectionWorks() async throws {

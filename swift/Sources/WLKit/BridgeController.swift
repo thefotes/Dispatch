@@ -375,8 +375,8 @@ public final class BridgeController: ObservableObject {
             Task { await cycleTabs() }
         } else if index == Pad.landKeyID {
             onLandKey?()
-        } else if Pad.agentKeyIDs.contains(index) {
-            Task { await focusSlot(index) }
+        } else if let slot = Pad.agentSlot(for: index) {
+            Task { await focusSlot(slot) }
         }
     }
 
@@ -404,8 +404,9 @@ public final class BridgeController: ObservableObject {
         await forceRepaint()
     }
 
-    /// Key index N is agent slot N — the same mapping the lighting uses, which
-    /// is what makes the key you look at the key you press.
+    /// Slot N is the Nth key in reading order (`Pad.agentKeyIDs[N]`) — the
+    /// same mapping the lighting uses, which is what makes the key you look at
+    /// the key you press.
     public func focusSlot(_ index: Int) async {
         guard index >= 0, index < agents.count else { return }
         guard let target = agents[index].focusTarget else { return }

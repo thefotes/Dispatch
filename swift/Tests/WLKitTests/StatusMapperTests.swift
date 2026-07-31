@@ -42,12 +42,14 @@ final class StatusMapperTests: XCTestCase {
 
     // MARK: - Per-key
 
-    func testEachAgentGetsItsOwnKeyInSlotOrder() {
+    func testEachAgentGetsItsOwnKeyInReadingOrder() {
         let threads = StatusMapper.threads(for: [
             agent("working"), agent("blocked"), agent("idle"),
         ])
         XCTAssertEqual(threads.count, 6, "one entry per agent key")
-        XCTAssertEqual(threads.map(\.id), [0, 1, 2, 3, 4, 5], "ids are 0-based key indices")
+        // The pad's top row is wired right to left, so reading order starts
+        // at key 1: the first agent lights the top-LEFT key.
+        XCTAssertEqual(threads.map(\.id), [1, 0, 2, 3, 4, 5], "keys in reading order")
         XCTAssertEqual(threads[0].color, 0xFFA000)
         XCTAssertEqual(threads[1].color, 0xFF2D2D)
         XCTAssertEqual(threads[2].color, 0x00C853)
@@ -107,13 +109,14 @@ final class StatusMapperTests: XCTestCase {
         XCTAssertEqual(hexString(0xFF2D2D), "#FF2D2D")
     }
 
-    func testAgentSortMatchesTheNodeOrdering() {
-        let a = HerdrAgent(status: "idle", paneID: "w1:p1", tabID: "w1:t1", workspaceID: "w1")
-        let b = HerdrAgent(status: "idle", paneID: "w1:p2", tabID: "w1:t2", workspaceID: "w1")
-        let c = HerdrAgent(status: "idle", paneID: "w2:p1", tabID: "w2:t1", workspaceID: "w2")
-        let expected = [a, b, c].sorted { $0.sortKey < $1.sortKey }.map(\.paneID)
-        XCTAssertEqual([c, a, b].sorted { $0.sortKey < $1.sortKey }.map(\.paneID), expected)
-        XCTAssertEqual([b, c, a].sorted { $0.sortKey < $1.sortKey }.map(\.paneID), expected)
+    /// Slots follow the pad's reading order, so a slot must always resolve to
+    /// the key that lights it and back.
+    func testAgentSlotAndKeyAreInverses() {
+        for (slot, key) in Pad.agentKeyIDs.enumerated() {
+            XCTAssertEqual(Pad.agentSlot(for: key), slot)
+        }
+        XCTAssertNil(Pad.agentSlot(for: Pad.stackKeyID))
+        XCTAssertNil(Pad.agentSlot(for: Pad.landKeyID))
     }
 
     // MARK: - AG key names

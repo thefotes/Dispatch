@@ -87,7 +87,7 @@ struct MenuPanelView: View {
 
     private var padSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(Pad.rows.enumerated()), id: \.offset) { _, row in
+            ForEach(Array(Pad.displayRows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 6) {
                     ForEach(row, id: \.self) { key in keyView(key) }
                     Spacer(minLength: 0)
@@ -103,11 +103,10 @@ struct MenuPanelView: View {
         let isStackKey = index == Pad.stackKeyID
         let isTabCycleKey = index == Pad.tabCycleKeyID
         let isLandKey = index == Pad.landKeyID
-        // Only agent keys index into the agent list; the stack key sits at 6,
-        // which is a perfectly valid agent index and would be the wrong agent.
-        let agent = Pad.agentKeyIDs.contains(index) && index < bridge.agents.count
-            ? bridge.agents[index]
-            : nil
+        // Key index and agent slot are different orderings — the top row is
+        // wired right to left — so the slot lookup goes through the pad map.
+        let slot = Pad.agentSlot(for: index)
+        let agent = slot.flatMap { $0 < bridge.agents.count ? bridge.agents[$0] : nil }
 
         return Button {
             if isStackKey {
@@ -116,8 +115,8 @@ struct MenuPanelView: View {
                 Task { await bridge.cycleTabs() }
             } else if isLandKey {
                 LandPanelController.shared.handleLandKey()
-            } else if agent != nil {
-                Task { await bridge.focusSlot(index) }
+            } else if let slot, agent != nil {
+                Task { await bridge.focusSlot(slot) }
             }
         } label: {
             RoundedRectangle(cornerRadius: 5)
@@ -164,7 +163,7 @@ struct MenuPanelView: View {
                     } label: {
                         HStack(spacing: 9) {
                             Circle()
-                                .fill(bridge.keyColors[index] ?? Color.secondary.opacity(0.3))
+                                .fill(bridge.keyColors[Pad.agentKeyIDs[index]] ?? Color.secondary.opacity(0.3))
                                 .frame(width: 9, height: 9)
                             Text("\(index)")
                                 .font(.system(.caption, design: .monospaced))

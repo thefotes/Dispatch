@@ -151,8 +151,24 @@ public enum Pad {
     /// The firmware's keycode table goes to AG19, so clear the whole id space
     /// when turning everything off, not just the visible keys.
     public static let maxThreadID = 19
-    /// Key N shows agent N's status and jumps to it.
-    public static let agentKeyIDs = [0, 1, 2, 3, 4, 5]
+    /// Agent slot N lights and answers to `agentKeyIDs[N]`, in READING order:
+    /// left to right, top to bottom as you look at the pad. The firmware's top
+    /// row is wired right to left — key 0 is the top-RIGHT key — so reading
+    /// order starts 1, 0. The other rows run left to right in index order.
+    public static let agentKeyIDs = [1, 0, 2, 3, 4, 5]
+    /// The rows as you look at the pad, for on-screen mirrors. `rows` stays in
+    /// firmware order because the keymap file is addressed that way.
+    public static let displayRows: [[Int]] = [
+        [1, 0],
+        [2, 3, 4, 5],
+        [6, 7, 8, 9],
+        [10, 11, 12],
+    ]
+
+    /// The agent slot a key answers for, or nil for non-agent keys.
+    public static func agentSlot(for key: Int) -> Int? {
+        agentKeyIDs.firstIndex(of: key)
+    }
     /// Toggles the GitButler stack for the focused agent's directory. First key
     /// of row 3, so the agent block above it stays whole.
     public static let stackKeyID = 6
