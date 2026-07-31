@@ -36,6 +36,9 @@ public struct BridgeConfig: Sendable {
     /// Same reasoning for the tab-cycle key, in a colour of its own so the two
     /// action keys read as different things.
     public var tabCycleColor: Int = 0x00BFA5
+    /// The land key pushes to the target, so it gets a colour with some weight
+    /// to it — distinct from blocked-red, which means "look", not "beware".
+    public var landColor: Int = 0xE91E63
     public var brightness: Double = 1
     public var speed: Double = 0.5
     /// Leave the key-backlight ZONE alone: keys are painted per-agent instead,
@@ -110,6 +113,21 @@ public enum StatusMapper {
             color: cfg.tabCycleColor,
             brightness: cfg.brightness * 0.3,
             effect: .solid,
+            speed: cfg.speed
+        )
+    }
+
+    /// The land key's thread — the stack key's pattern: dim while idle so a
+    /// bound key never reads as broken, breathing while its window is up.
+    public static func landThread(
+        open: Bool,
+        _ cfg: BridgeConfig = BridgeConfig()
+    ) -> OAI.Thread {
+        OAI.Thread(
+            id: Pad.landKeyID,
+            color: cfg.landColor,
+            brightness: open ? cfg.brightness : cfg.brightness * 0.3,
+            effect: open ? .breath : .solid,
             speed: cfg.speed
         )
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Runs `but status` for a directory.
+/// Runs `but` commands for a directory.
 ///
 /// The awkward part is finding `but` at all. A menu-bar app launched by
 /// launchd inherits launchd's `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`), not the
@@ -19,6 +19,7 @@ public enum GitButler {
     public enum Failure: LocalizedError {
         case binaryNotFound
         case launchFailed(String)
+        case commandFailed(String)
 
         public var errorDescription: String? {
             switch self {
@@ -26,6 +27,8 @@ public enum GitButler {
                 return "Could not find the `but` binary. Set WL_BUT_PATH to its full path."
             case .launchFailed(let reason):
                 return "Could not run `but`: \(reason)"
+            case .commandFailed(let detail):
+                return detail
             }
         }
     }
@@ -91,11 +94,64 @@ public enum GitButler {
     // MARK: - Running
 
     public static func status(in directory: String, timeout: TimeInterval = 15) async throws -> StatusOutput {
+        try await run(["status"], in: directory, timeout: timeout)
+    }
+
+    /// `but land --yes <branch>`. A land can push to a real remote, so it gets
+    /// a network-sized timeout.
+    public static func land(
+        _ branch: String,
+        in directory: String,
+        timeout: TimeInterval = 120
+    ) async throws -> StatusOutput {
+        try await run(["land", "--yes", branch], in: directory, timeout: timeout)
+    }
+
+    /// Applied branches in landing order: bottom-most first within each stack,
+    /// branches already integrated into the target skipped.
+    public static func landPlan(in directory: String, timeout: TimeInterval = 15) async throws -> [String] {
+        let output = try await run(
+            ["status", "--json"], in: directory, color: false, timeout: timeout
+        )
+        guard output.succeeded else {
+            throw Failure.commandFailed(
+                output.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        }
+        return try parseLandPlan(Data(output.text.utf8))
+    }
+
+    static func parseLandPlan(_ data: Data) throws -> [String] {
+        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let stacks = json["stacks"] as? [[String: Any]]
+        else { throw Failure.commandFailed("`but status --json` returned something unexpected.") }
+
+        return stacks.flatMap { stack -> [String] in
+            let branches = stack["branches"] as? [[String: Any]] ?? []
+            // Status lists branches top first; landing goes bottom up.
+            return branches.reversed().compactMap { branch -> String? in
+                guard let name = branch["name"] as? String, !name.isEmpty,
+                      (branch["branchStatus"] as? String) != "integrated"
+                else { return nil }
+                return name
+            }
+        }
+    }
+
+    public static func run(
+        _ arguments: [String],
+        in directory: String,
+        color: Bool = true,
+        timeout: TimeInterval = 15
+    ) async throws -> StatusOutput {
         guard let binary = locateBinary() else { throw Failure.binaryNotFound }
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let output = try run(binary, in: directory, timeout: timeout)
+                    let output = try launch(
+                        binary, arguments: arguments, in: directory,
+                        color: color, timeout: timeout
+                    )
                     continuation.resume(returning: output)
                 } catch {
                     continuation.resume(throwing: error)
@@ -104,20 +160,25 @@ public enum GitButler {
         }
     }
 
-    private static func run(
+    private static func launch(
         _ binary: String,
+        arguments: [String],
         in directory: String,
+        color: Bool,
         timeout: TimeInterval
     ) throws -> StatusOutput {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binary)
-        process.arguments = ["status"]
+        process.arguments = arguments
         process.currentDirectoryURL = URL(fileURLWithPath: directory)
 
         var environment = ProcessInfo.processInfo.environment
         // `but` drops colour when stdout is not a terminal, and colour is most
-        // of what makes the stack readable.
-        environment["CLICOLOR_FORCE"] = "1"
+        // of what makes the stack readable. JSON goes the other way: forced
+        // colour has no business inside machine-readable output.
+        if color {
+            environment["CLICOLOR_FORCE"] = "1"
+        }
         environment["TERM"] = "xterm-256color"
         environment["PATH"] = [
             (binary as NSString).deletingLastPathComponent,

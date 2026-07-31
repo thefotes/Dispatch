@@ -20,13 +20,25 @@ struct MicroManagerApp: App {
             MenuPanelView()
                 .environmentObject(bridge)
                 .task {
-                    // The stack key opens a window, which the bridge knows
-                    // nothing about, so the two are joined here.
+                    // The stack and land keys open windows, which the bridge
+                    // knows nothing about, so the two are joined here.
                     let stack = StackPanelController.shared
                     stack.onVisibilityChange = { [weak bridge] open in
                         Task { await bridge?.setStackPanelOpen(open) }
                     }
                     bridge.onStackKey = { stack.toggle() }
+
+                    let land = LandPanelController.shared
+                    land.onVisibilityChange = { [weak bridge] open in
+                        Task { await bridge?.setLandPanelOpen(open) }
+                    }
+                    bridge.onLandKey = { land.handleLandKey() }
+                    // While a land confirmation is up, every key that is not
+                    // the land key means "cancel", nothing else.
+                    bridge.onKeyIntercept = { index in
+                        guard index != Pad.landKeyID else { return false }
+                        return land.handleOtherKey()
+                    }
 
                     // Come back up in whatever state it was left in, so a
                     // login-item launch resumes rather than sitting idle.

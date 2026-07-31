@@ -39,12 +39,20 @@ public final class BridgeController: ObservableObject {
     /// Whether the GitButler stack is on screen. Only the key light cares —
     /// the panel itself lives in the app layer.
     @Published public private(set) var stackPanelOpen = false
+    /// Same for the land window.
+    @Published public private(set) var landPanelOpen = false
 
     public var config: BridgeConfig
 
     /// Called when the stack key is pressed. The bridge owns the key, the app
     /// owns the window, so this is where the two meet.
     public var onStackKey: (() -> Void)?
+    /// Called when the land key is pressed; same split as `onStackKey`.
+    public var onLandKey: (() -> Void)?
+    /// Consulted before any key does its normal job. Returning true consumes
+    /// the press — this is how a pending land confirmation turns every other
+    /// key into "cancel" without those keys also doing their usual work.
+    public var onKeyIntercept: ((Int) -> Bool)?
 
     // MARK: - Internals
 
@@ -294,7 +302,8 @@ public final class BridgeController: ObservableObject {
         let state = StatusMapper.aggregate(fetched, config)
         let threads = StatusMapper.threads(for: fetched, config)
             + [StatusMapper.stackThread(open: stackPanelOpen, config),
-               StatusMapper.tabCycleThread(config)]
+               StatusMapper.tabCycleThread(config),
+               StatusMapper.landThread(open: landPanelOpen, config)]
 
         // Fingerprint the whole rendered picture, not just the aggregate, so
         // one agent changing still repaints when the worst state has not.
@@ -359,10 +368,13 @@ public final class BridgeController: ObservableObject {
     /// Every bound key arrives here. Which key does what is the one place that
     /// has to agree with `Pad`, so keep the dispatch in a single switch.
     public func handleKeyPress(_ index: Int) {
+        if onKeyIntercept?(index) == true { return }
         if index == Pad.stackKeyID {
             onStackKey?()
         } else if index == Pad.tabCycleKeyID {
             Task { await cycleTabs() }
+        } else if index == Pad.landKeyID {
+            onLandKey?()
         } else if Pad.agentKeyIDs.contains(index) {
             Task { await focusSlot(index) }
         }
@@ -382,6 +394,13 @@ public final class BridgeController: ObservableObject {
     public func setStackPanelOpen(_ open: Bool) async {
         guard stackPanelOpen != open else { return }
         stackPanelOpen = open
+        await forceRepaint()
+    }
+
+    /// Repaints the land key. Same contract as `setStackPanelOpen`.
+    public func setLandPanelOpen(_ open: Bool) async {
+        guard landPanelOpen != open else { return }
+        landPanelOpen = open
         await forceRepaint()
     }
 

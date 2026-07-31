@@ -12,11 +12,13 @@ import Foundation
 /// where the inner string is the real config.
 public enum KeymapManager {
 
-    /// Indexed by key: key N is bound to `agCodes[N]`.
+    /// Indexed by key: key N is bound to `agCodes[N]`. AG08 is listed only to
+    /// keep the indexing straight — key 8 is not managed and never bound.
     public static let agCodes = [
         "KV_OAI_AG00", "KV_OAI_AG01", "KV_OAI_AG02",
         "KV_OAI_AG03", "KV_OAI_AG04", "KV_OAI_AG05",
-        "KV_OAI_AG06", "KV_OAI_AG07",
+        "KV_OAI_AG06", "KV_OAI_AG07", "KV_OAI_AG08",
+        "KV_OAI_AG09",
     ]
 
     /// The keycode each managed key must carry, addressed by its position in

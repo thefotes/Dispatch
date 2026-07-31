@@ -159,9 +159,13 @@ public enum Pad {
     /// Cycles the tabs of the focused tab's workspace in Herdr. Second key of
     /// row 3, next to the stack key.
     public static let tabCycleKeyID = 7
+    /// Lands the focused agent's stack onto the target, bottom branch first.
+    /// Last key of row 3 — the far corner of the managed block, which suits a
+    /// key that pushes.
+    public static let landKeyID = 9
     /// The keys bound to `KV_OAI_AG*`, and so the only ones that can be lit.
     /// Everything else keeps whatever keycode is already on it.
-    public static let boundKeyIDs = agentKeyIDs + [stackKeyID, tabCycleKeyID]
+    public static let boundKeyIDs = agentKeyIDs + [stackKeyID, tabCycleKeyID, landKeyID]
 
     public static func row(of key: Int) -> Int? {
         rows.firstIndex { $0.contains(key) }

@@ -102,6 +102,7 @@ struct MenuPanelView: View {
         let isBound = Pad.boundKeyIDs.contains(index)
         let isStackKey = index == Pad.stackKeyID
         let isTabCycleKey = index == Pad.tabCycleKeyID
+        let isLandKey = index == Pad.landKeyID
         // Only agent keys index into the agent list; the stack key sits at 6,
         // which is a perfectly valid agent index and would be the wrong agent.
         let agent = Pad.agentKeyIDs.contains(index) && index < bridge.agents.count
@@ -113,6 +114,8 @@ struct MenuPanelView: View {
                 StackPanelController.shared.toggle()
             } else if isTabCycleKey {
                 Task { await bridge.cycleTabs() }
+            } else if isLandKey {
+                LandPanelController.shared.handleLandKey()
             } else if agent != nil {
                 Task { await bridge.focusSlot(index) }
             }
@@ -126,13 +129,21 @@ struct MenuPanelView: View {
                 )
         }
         .buttonStyle(.plain)
-        .disabled(agent == nil && !isStackKey && !isTabCycleKey)
-        .help(helpText(index, agent: agent, isStackKey: isStackKey, isTabCycleKey: isTabCycleKey))
+        .disabled(agent == nil && !isStackKey && !isTabCycleKey && !isLandKey)
+        .help(helpText(index, agent: agent, isStackKey: isStackKey,
+                       isTabCycleKey: isTabCycleKey, isLandKey: isLandKey))
     }
 
-    private func helpText(_ index: Int, agent: HerdrAgent?, isStackKey: Bool, isTabCycleKey: Bool) -> String {
+    private func helpText(
+        _ index: Int,
+        agent: HerdrAgent?,
+        isStackKey: Bool,
+        isTabCycleKey: Bool,
+        isLandKey: Bool
+    ) -> String {
         if isStackKey { return "GitButler stack for the focused agent" }
         if isTabCycleKey { return "Cycle tabs in the focused Herdr window" }
+        if isLandKey { return "Land the focused agent's branches onto the target" }
         if let agent { return "\(agent.shortName) — \(agent.status)" }
         return "Key \(index)"
     }
