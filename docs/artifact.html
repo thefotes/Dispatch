@@ -1,0 +1,592 @@
+<title>Creator Micro 2: chasing per-key RGB</title>
+<style>
+  :root {
+    --paper:      #F6F7F9;
+    --raised:     #FFFFFF;
+    --ink:        #14161C;
+    --muted:      #626A79;
+    --rule:       #DDE1E8;
+    --accent:     #C97A00;
+    --ok:         #00873A;
+    --inert:      #C97A00;
+    --absent:     #C92A2A;
+    --shadow:     0 1px 2px rgba(20,22,28,.05), 0 8px 24px rgba(20,22,28,.05);
+
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+
+    --measure: 66ch;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:  #0D0F13;
+      --raised: #14171D;
+      --ink:    #E7E9EE;
+      --muted:  #8A93A3;
+      --rule:   #262B34;
+      --accent: #FFA824;
+      --ok:     #35D07F;
+      --inert:  #FFA824;
+      --absent: #FF6B6B;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:  #0D0F13;
+    --raised: #14171D;
+    --ink:    #E7E9EE;
+    --muted:  #8A93A3;
+    --rule:   #262B34;
+    --accent: #FFA824;
+    --ok:     #35D07F;
+    --inert:  #FFA824;
+    --absent: #FF6B6B;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+  }
+  :root[data-theme="light"] {
+    --paper:  #F6F7F9;
+    --raised: #FFFFFF;
+    --ink:    #14161C;
+    --muted:  #626A79;
+    --rule:   #DDE1E8;
+    --accent: #C97A00;
+    --ok:     #00873A;
+    --inert:  #C97A00;
+    --absent: #C92A2A;
+    --shadow: 0 1px 2px rgba(20,22,28,.05), 0 8px 24px rgba(20,22,28,.05);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1.1rem, 4vw, 2.5rem) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.25rem;
+  }
+
+  /* ---------- header ---------- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 1rem;
+  }
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(1.9rem, 4.6vw, 3rem);
+    font-weight: 600;
+    letter-spacing: -.02em;
+    line-height: 1.1;
+    text-wrap: balance;
+    margin: 0 0 .9rem;
+  }
+  .standfirst {
+    max-width: var(--measure);
+    font-size: 1.12rem;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .facts {
+    margin-top: 2rem;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    padding: 1.1rem 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem 1.75rem;
+  }
+  .fact dt {
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 .2rem;
+  }
+  .fact dd {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: .88rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- sections ---------- */
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+  h2 {
+    font-family: var(--mono);
+    font-size: 1.28rem;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin: 0;
+    padding-bottom: .55rem;
+    border-bottom: 2px solid var(--ink);
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--mono);
+    font-size: .95rem;
+    font-weight: 600;
+    margin: .5rem 0 0;
+  }
+  p { max-width: var(--measure); margin: 0; }
+  .lede { font-size: 1.05rem; }
+  strong { font-weight: 650; }
+  code {
+    font-family: var(--mono);
+    font-size: .875em;
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: .08em .34em;
+  }
+
+  ul { max-width: var(--measure); margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: .5rem; }
+
+  /* ---------- result chips ---------- */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .chip::before {
+    content: "";
+    width: .58rem; height: .58rem;
+    border-radius: 50%;
+    background: currentColor;
+    flex: none;
+  }
+  .chip.ok     { color: var(--ok); }
+  .chip.inert  { color: var(--inert); }
+  .chip.absent { color: var(--absent); }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 1.25rem;
+    padding: .85rem 1rem;
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+  }
+  .legend span.desc { font-size: .82rem; color: var(--muted); }
+
+  /* ---------- table ---------- */
+  .scroller { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--raised); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; min-width: 660px; }
+  caption { text-align: left; font-size: .85rem; color: var(--muted); padding: 0 0 .7rem; }
+  th, td { text-align: left; padding: .78rem .95rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th {
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; width: 2.5rem; }
+  td.what { font-size: .93rem; }
+  td.what code { background: transparent; border: none; padding: 0; }
+  td.res { white-space: nowrap; }
+
+  /* ---------- pad diagram ---------- */
+  .pad-figure { display: flex; flex-wrap: wrap; gap: 2rem; align-items: flex-start; }
+  .pad {
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 1rem;
+    display: flex; flex-direction: column; gap: .42rem;
+    box-shadow: var(--shadow);
+    flex: none;
+  }
+  .pad-row { display: flex; gap: .42rem; }
+  .key {
+    width: 3.15rem; height: 2.5rem;
+    border-radius: 5px;
+    border: 1px solid var(--rule);
+    display: grid; place-items: center;
+    font-family: var(--mono);
+    font-size: .74rem;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+  }
+  .key.target {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 13%, transparent);
+    font-weight: 600;
+  }
+  .key.wide { width: 6.72rem; }
+  .knob { width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 1px solid var(--rule); background: color-mix(in srgb, var(--ink) 4%, transparent); flex: none; }
+  .knob.sm { width: 1.6rem; height: 1.6rem; align-self: center; }
+  .pad-caption { max-width: 30ch; font-size: .9rem; color: var(--muted); }
+
+  /* ---------- callout ---------- */
+  .callout {
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 1.1rem 1.25rem;
+    display: flex; flex-direction: column; gap: .7rem;
+    box-shadow: var(--shadow);
+  }
+  .callout h3 { margin: 0; color: var(--accent); }
+  .callout p { max-width: none; font-size: .95rem; }
+
+  /* ---------- code block ---------- */
+  pre {
+    margin: 0;
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 1rem 1.15rem;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: .82rem;
+    line-height: 1.7;
+    box-shadow: var(--shadow);
+  }
+  pre .c { color: var(--muted); }
+
+  /* ---------- verdict ---------- */
+  .verdict {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 1rem;
+  }
+  .vcard {
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+    display: flex; flex-direction: column; gap: .45rem;
+    box-shadow: var(--shadow);
+  }
+  .vcard .k { font-family: var(--mono); font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .vcard .v { font-family: var(--mono); font-size: 1.02rem; font-weight: 600; }
+  .vcard .n { font-size: .87rem; color: var(--muted); }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 1.25rem;
+    font-size: .85rem;
+    color: var(--muted);
+    max-width: var(--measure);
+  }
+
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible, :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Hardware investigation &middot; negative result</p>
+    <h1>Six agents, six keys, one colour</h1>
+    <p class="standfirst">
+      The plan was to give each running coding agent its own key on a Work Louder
+      Creator&nbsp;Micro&nbsp;2, lit with that agent's live status. The keys are individually
+      addressable in hardware. The firmware contains the code that does it. Neither
+      fact turned out to be enough.
+    </p>
+
+    <dl class="facts">
+      <div class="fact"><dt>Device</dt><dd>Creator Micro 2 Pro</dd></div>
+      <div class="fact"><dt>USB IDs</dt><dd>303A:8298</dd></div>
+      <div class="fact"><dt>Transport</dt><dd>Bluetooth LE</dd></div>
+      <div class="fact"><dt>Firmware</dt><dd>v0.4.0 &rarr; v0.6.0-rc.10</dd></div>
+      <div class="fact"><dt>Input app</dt><dd>0.17.3, 0.18.0-rc.8</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <h2>What we were building</h2>
+    <p class="lede">
+      Several coding agents run in parallel in a terminal workspace. Each is either
+      working, blocked waiting on input, idle, or done. The pad was going to be the
+      physical dashboard for them.
+    </p>
+    <div class="pad-figure">
+      <div class="pad" role="img" aria-label="Creator Micro 2 key layout: rows of 2, 4, 4 and 3 keys. The top six keys are highlighted as the intended agent keys.">
+        <div class="pad-row">
+          <div class="knob"></div>
+          <div class="key target">F13</div>
+          <div class="key target">F14</div>
+          <div class="knob"></div>
+        </div>
+        <div class="pad-row">
+          <div class="key target">F15</div>
+          <div class="key target">F16</div>
+          <div class="key target">F17</div>
+          <div class="key target">F18</div>
+        </div>
+        <div class="pad-row">
+          <div class="key">F19</div>
+          <div class="key">F20</div>
+          <div class="key">F21</div>
+          <div class="key">F22</div>
+        </div>
+        <div class="pad-row">
+          <div class="knob sm"></div>
+          <div class="key wide">F23</div>
+          <div class="key">F24</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.9rem">
+        <p class="pad-caption">
+          The firmware describes this pad as a <code>[2, 4, 4, 3]</code> matrix.
+          The highlighted six were to become agents&nbsp;1&ndash;6.
+        </p>
+        <p class="pad-caption">
+          Press a key &rarr; jump to that agent's session.<br>
+          Key colour &rarr; that agent's live status.
+        </p>
+      </div>
+    </div>
+    <p>
+      Half of it works perfectly. The pad sends F13&ndash;F24, the host binds them, and
+      pressing a key jumps straight to the right session. It was only ever the
+      lighting half that was in question.
+    </p>
+  </section>
+
+  <section>
+    <h2>What the host can actually drive</h2>
+    <p>
+      The device speaks JSON-RPC 2.0 over raw HID. Exactly one lighting call reaches
+      it, and it addresses two <em>whole-device</em> surfaces &mdash; not keys:
+    </p>
+    <pre><span class="c">// works: two surfaces, one colour each, effects honoured</span>
+{
+  "method": "lights.preview",
+  "params": {
+    "backlight": { "effect": "solid", "brightness": 1, "color": 16711680 },
+    "underglow": { "effect": "breath", "brightness": 1, "color": 255 }
+  }
+}</pre>
+    <p>
+      So the shipped result is one aggregate colour across both surfaces: red breathing
+      when any agent needs you, amber while any is working, green when everything is
+      idle. That answers <em>&ldquo;does anything need me?&rdquo;</em> at a glance, which is most
+      of the value. It just isn't per-agent.
+    </p>
+  </section>
+
+  <section>
+    <h2>Everything we tried</h2>
+    <div class="legend">
+      <span class="chip ok">Works</span>
+      <span class="desc">visible, repeatable effect on the device</span>
+      <span class="chip inert">Inert</span>
+      <span class="desc">accepted with <code>{"ok":1}</code>, nothing happens</span>
+      <span class="chip absent">Absent</span>
+      <span class="desc">handler not registered</span>
+    </div>
+
+    <div class="scroller">
+      <table>
+        <caption>Each row was verified against the physical device, not inferred from the response.</caption>
+        <thead>
+          <tr><th>#</th><th>Attempt</th><th>Result</th><th>What it told us</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">1</td>
+            <td class="what"><code>lights.preview</code> with <code>backlight</code> / <code>underglow</code></td>
+            <td class="res"><span class="chip ok">Works</span></td>
+            <td class="what">Two independent surfaces. Effects animate. This is the whole available API.</td>
+          </tr>
+          <tr>
+            <td class="num">2</td>
+            <td class="what"><code>lights.preview</code> with <code>keys</code> / <code>ambient</code> sections</td>
+            <td class="res"><span class="chip inert">Inert</span></td>
+            <td class="what">Those section names exist in the firmware's string pool but do nothing here.</td>
+          </tr>
+          <tr>
+            <td class="num">3</td>
+            <td class="what"><code>v.oai.rgbcfg</code> &mdash; six per-key encodings: bare colour array, <code>keys.color</code>, <code>keys.colors</code>, <code>keys.leds</code>, <code>[{index,color}]</code>, <code>[{i,c}]</code></td>
+            <td class="res"><span class="chip inert">Inert</span></td>
+            <td class="what">Every shape returned <code>{"ok":1}</code> &mdash; including deliberately malformed ones. The reply carries no information.</td>
+          </tr>
+          <tr>
+            <td class="num">4</td>
+            <td class="what"><code>v.oai.thstatus</code> &mdash; eight payload shapes: per-slot arrays, indexed objects, <code>act</code>, <code>ag</code> maps, scalars</td>
+            <td class="res"><span class="chip inert">Inert</span></td>
+            <td class="what">Same. Registered, accepts anything, changes nothing.</td>
+          </tr>
+          <tr>
+            <td class="num">5</td>
+            <td class="what">Bound the top six keys to <code>KV_OAI_AG00..AG05</code> by writing <code>keymap.json</code>, then drove <code>thstatus</code> again</td>
+            <td class="res"><span class="chip inert">Inert</span></td>
+            <td class="what"><strong>The decisive test.</strong> Firmware accepted and persisted the OAI keycodes &mdash; and still lit nothing.</td>
+          </tr>
+          <tr>
+            <td class="num">6</td>
+            <td class="what">Same as 5, with the key backlight pre-lit in case the bridge needs a live surface to paint onto</td>
+            <td class="res"><span class="chip inert">Inert</span></td>
+            <td class="what">Rules out &ldquo;the surface was switched off&rdquo; as the explanation.</td>
+          </tr>
+          <tr>
+            <td class="num">7</td>
+            <td class="what"><code>v.oai.hid</code>, <code>v.oai.rad</code></td>
+            <td class="res"><span class="chip absent">Absent</span></td>
+            <td class="what"><code>Method not found</code> &mdash; on the same device where <code>rgbcfg</code> and <code>thstatus</code> answer. Handler sets differ by variant.</td>
+          </tr>
+          <tr>
+            <td class="num">8</td>
+            <td class="what">Read the device's own <code>keymap.json</code></td>
+            <td class="res"><span class="chip absent">Absent</span></td>
+            <td class="what">Lighting is persisted as exactly two surfaces per layer. No per-key colour field exists in the schema.</td>
+          </tr>
+          <tr>
+            <td class="num">9</td>
+            <td class="what">Firmware debug channel (HID channel&nbsp;1) while calling all of the above</td>
+            <td class="res"><span class="chip absent">Absent</span></td>
+            <td class="what">Silent. No parse trace, so no way to learn the schema from the device.</td>
+          </tr>
+          <tr>
+            <td class="num">10</td>
+            <td class="what">Input app 0.17.3 <em>and</em> 0.18.0-rc.8</td>
+            <td class="res"><span class="chip absent">Absent</span></td>
+            <td class="what">Both ship <code>wl-device-kit</code> 0.1.28. Its entire lighting surface is <code>lights.preview</code>. No <code>v.oai.*</code> at all.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>What the gating looks like</h2>
+    <p>
+      The per-key capability is <em>present but switched off</em>, and one asymmetry gives
+      it away. On the same device, in the same session:
+    </p>
+    <div class="verdict">
+      <div class="vcard">
+        <span class="k">v.oai.rgbcfg</span>
+        <span class="v" style="color:var(--inert)">{"ok":1}</span>
+        <span class="n">Registered. Accepts any payload. Does nothing.</span>
+      </div>
+      <div class="vcard">
+        <span class="k">v.oai.thstatus</span>
+        <span class="v" style="color:var(--inert)">{"ok":1}</span>
+        <span class="n">Registered. Accepts any payload. Does nothing.</span>
+      </div>
+      <div class="vcard">
+        <span class="k">v.oai.hid</span>
+        <span class="v" style="color:var(--absent)">Method not found</span>
+        <span class="n">Not registered on this variant at all.</span>
+      </div>
+    </div>
+    <p>
+      A device that registers <em>some</em> of a feature's handlers and not others is a device
+      running a build that decides, at boot, which variant it is. Board identity comes
+      from eFuse. The stubs answer politely; the real implementations aren't there.
+    </p>
+    <p>
+      Everything else corroborates it. The Codex Micro drives five per-key agent states
+      &mdash; idle, thinking, complete, needs input, error &mdash; from this same firmware
+      family, and its own keycode table (<code>KV_OAI_AG00</code>&hellip;<code>AG19</code>) is present in
+      the image on our device too. Meanwhile press coverage of the Codex Micro notes the
+      Agent Keys only work with the ChatGPT desktop app acting as the bridge. This is a
+      closed integration, not an unfinished one.
+    </p>
+  </section>
+
+  <section>
+    <h2>What we didn't try, and why</h2>
+    <div class="callout">
+      <h3>Rewriting the pad's board identity</h3>
+      <p>
+        The firmware reads its vendor and variant from eFuse &mdash; but it prefers
+        <code>/fs/board_info.json</code> when that file exists, logging
+        <em>&ldquo;not found, falling back to eFuse&rdquo;</em> when it doesn't. That file is absent on
+        this device, and the filesystem is writable over the same HID channel we were
+        already using. Writing one to declare the OAI vendor and variant is the one
+        remaining lever that could plausibly flip the real handlers on.
+      </p>
+      <p>
+        We stopped there deliberately. The correct integers are undocumented, and there
+        is no safe way to discover them &mdash; only disassembling Xtensa firmware or
+        brute-forcing values on a live device. A wrong pair makes the pad claim to be
+        hardware it isn't, which plausibly affects BLE pairing, the USB product ID, and
+        how the configurator treats it. That is a real bricking risk on someone's daily
+        driver, spent on a speculative payoff that might still require the ChatGPT
+        desktop bridge to do anything.
+      </p>
+      <p>
+        It is reversible in principle &mdash; delete the file, fall back to eFuse. &ldquo;In
+        principle&rdquo; is doing a lot of work in that sentence, and the recovery path runs
+        through a device that may no longer enumerate the way you expect.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Two things worth knowing if you attempt this</h2>
+    <p>
+      Neither is documented anywhere, and both cost real time to find.
+    </p>
+    <h3>Open the HID device shared, not seized</h3>
+    <p>
+      hidapi seizes by default. This pad puts its vendor collection on the same
+      <code>IOHIDDevice</code> as its keyboard collection, and macOS refuses to let anything
+      seize a keyboard &mdash; so the open fails with <code>0xE00002C1</code>, which reads exactly
+      like a missing Input Monitoring grant and isn't. Pass <code>nonExclusive</code>. As a bonus,
+      you then coexist with the vendor's own app instead of fighting it for the device.
+    </p>
+    <h3>The framing</h3>
+    <pre><span class="c">// 64-byte reports, usage page 0xFF00 / usage 1</span>
+byte 0      report id, always 0x06
+byte 1      channel: 1 = firmware debug log, 2 = JSON-RPC
+byte 2      payload length in this report, max 61
+bytes 3..   UTF-8 fragment of the JSON message
+
+<span class="c">// colours are 0xRRGGBB integers; brightness/speed/magic are 0..1 floats
+// call ids must be &lt; 1000, or firmware ignores the request</span></pre>
+  </section>
+
+  <section>
+    <h2>Where it landed</h2>
+    <p class="lede">
+      Six keys that jump to six agents, and one status colour across both lighting
+      surfaces instead of six individual ones.
+    </p>
+    <p>
+      The honest summary is that the hardware can do what we wanted and the firmware
+      knows how, but the path from a host application to an individual LED is closed on
+      this variant. Not missing &mdash; closed. A documented report format, however
+      minimal and unsupported, would be enough to open it.
+    </p>
+  </section>
+
+  <footer>
+    All testing was done against our own device for interoperability, using publicly
+    downloadable firmware images and the shipped configurator. No firmware was modified.
+    The device keymap was backed up before any write and verified restored afterwards.
+  </footer>
+
+</div>
