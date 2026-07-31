@@ -25,7 +25,7 @@ final class StackPanelController: NSObject {
     private var pendingRender: Payload?
     private var loadGeneration = 0
 
-    private static let width: CGFloat = 760
+    private static let width: CGFloat = 930
     private static let initialHeight: CGFloat = 240
     private static let minimumHeight: CGFloat = 140
 
@@ -291,7 +291,7 @@ extension StackPanelController {
         margin: 0;
         background: #14161c;
         color: #c3c8d4;
-        font: 13px/1.55 ui-monospace, "SF Mono", Menlo, monospace;
+        font: 16px/1.55 ui-monospace, "SF Mono", Menlo, monospace;
         overflow: hidden;
       }
       /* A full-height column: the window is sized to the stack, but when the
@@ -304,12 +304,12 @@ extension StackPanelController {
         padding: 12px 18px 10px;
         border-bottom: 1px solid #262a35;
       }
-      #title { font-size: 13px; font-weight: 600; color: #eef1f7; }
-      #subtitle { font-size: 11px; color: #6b7280; overflow: hidden;
+      #title { font-size: 16px; font-weight: 600; color: #eef1f7; }
+      #subtitle { font-size: 13px; color: #6b7280; overflow: hidden;
                   text-overflow: ellipsis; white-space: nowrap; }
       #close {
         margin-left: auto; flex: none; cursor: default;
-        color: #6b7280; font-size: 15px; line-height: 1; padding: 2px 4px;
+        color: #6b7280; font-size: 18px; line-height: 1; padding: 2px 4px;
       }
       #close:hover { color: #eef1f7; }
       main { flex: 1 1 auto; min-height: 0; padding: 12px 18px; overflow-y: auto; }
@@ -324,7 +324,7 @@ extension StackPanelController {
         flex: none;
         padding: 9px 18px 11px;
         border-top: 1px solid #262a35;
-        font-size: 11px; color: #545b69;
+        font-size: 13px; color: #545b69;
       }
       ::-webkit-scrollbar { width: 9px; height: 9px; }
       ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 5px; }
