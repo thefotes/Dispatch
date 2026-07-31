@@ -16,7 +16,7 @@ public enum KeymapManager {
     public static let agCodes = [
         "KV_OAI_AG00", "KV_OAI_AG01", "KV_OAI_AG02",
         "KV_OAI_AG03", "KV_OAI_AG04", "KV_OAI_AG05",
-        "KV_OAI_AG06",
+        "KV_OAI_AG06", "KV_OAI_AG07",
     ]
 
     /// The keycode each managed key must carry, addressed by its position in

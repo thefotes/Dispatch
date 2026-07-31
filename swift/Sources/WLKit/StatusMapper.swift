@@ -33,6 +33,9 @@ public struct BridgeConfig: Sendable {
     /// The stack key is not an agent, so it gets a colour of its own rather
     /// than borrowing one of the status colours.
     public var stackColor: Int = 0x7C4DFF
+    /// Same reasoning for the tab-cycle key, in a colour of its own so the two
+    /// action keys read as different things.
+    public var tabCycleColor: Int = 0x00BFA5
     public var brightness: Double = 1
     public var speed: Double = 0.5
     /// Leave the key-backlight ZONE alone: keys are painted per-agent instead,
@@ -95,6 +98,18 @@ public enum StatusMapper {
             color: cfg.stackColor,
             brightness: open ? cfg.brightness : cfg.brightness * 0.3,
             effect: open ? .breath : .solid,
+            speed: cfg.speed
+        )
+    }
+
+    /// The tab-cycle key's thread. Dimly lit whenever the bridge runs, for the
+    /// same reason as the stack key: a bound-but-dark key reads as broken.
+    public static func tabCycleThread(_ cfg: BridgeConfig = BridgeConfig()) -> OAI.Thread {
+        OAI.Thread(
+            id: Pad.tabCycleKeyID,
+            color: cfg.tabCycleColor,
+            brightness: cfg.brightness * 0.3,
+            effect: .solid,
             speed: cfg.speed
         )
     }

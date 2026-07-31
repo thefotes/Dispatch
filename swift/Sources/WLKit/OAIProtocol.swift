@@ -156,9 +156,12 @@ public enum Pad {
     /// Toggles the GitButler stack for the focused agent's directory. First key
     /// of row 3, so the agent block above it stays whole.
     public static let stackKeyID = 6
+    /// Cycles the tabs of the focused tab's workspace in Herdr. Second key of
+    /// row 3, next to the stack key.
+    public static let tabCycleKeyID = 7
     /// The keys bound to `KV_OAI_AG*`, and so the only ones that can be lit.
     /// Everything else keeps whatever keycode is already on it.
-    public static let boundKeyIDs = agentKeyIDs + [stackKeyID]
+    public static let boundKeyIDs = agentKeyIDs + [stackKeyID, tabCycleKeyID]
 
     public static func row(of key: Int) -> Int? {
         rows.firstIndex { $0.contains(key) }

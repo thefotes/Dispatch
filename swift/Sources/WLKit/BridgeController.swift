@@ -293,7 +293,8 @@ public final class BridgeController: ObservableObject {
 
         let state = StatusMapper.aggregate(fetched, config)
         let threads = StatusMapper.threads(for: fetched, config)
-            + [StatusMapper.stackThread(open: stackPanelOpen, config)]
+            + [StatusMapper.stackThread(open: stackPanelOpen, config),
+               StatusMapper.tabCycleThread(config)]
 
         // Fingerprint the whole rendered picture, not just the aggregate, so
         // one agent changing still repaints when the worst state has not.
@@ -360,8 +361,19 @@ public final class BridgeController: ObservableObject {
     public func handleKeyPress(_ index: Int) {
         if index == Pad.stackKeyID {
             onStackKey?()
+        } else if index == Pad.tabCycleKeyID {
+            Task { await cycleTabs() }
         } else if Pad.agentKeyIDs.contains(index) {
             Task { await focusSlot(index) }
+        }
+    }
+
+    /// Advances the focused workspace to its next tab, wrapping.
+    public func cycleTabs() async {
+        do {
+            try await HerdrClient.cycleTabs()
+        } catch {
+            lastError = error.localizedDescription
         }
     }
 

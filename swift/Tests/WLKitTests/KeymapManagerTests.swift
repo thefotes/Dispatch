@@ -39,19 +39,20 @@ final class KeymapManagerTests: XCTestCase {
         let keymap = try XCTUnwrap(KeymapManager.activeLayerKeymap(next))
         XCTAssertEqual(keymap[0], ["KV_OAI_AG00", "KV_OAI_AG01"])
         XCTAssertEqual(keymap[1], ["KV_OAI_AG02", "KV_OAI_AG03", "KV_OAI_AG04", "KV_OAI_AG05"])
-        // The stack key is key 6 — row 2, column 0.
+        // The stack key is key 6 — row 2, column 0; tab cycle is beside it.
         XCTAssertEqual(keymap[2][0], "KV_OAI_AG06")
+        XCTAssertEqual(keymap[2][1], "KV_OAI_AG07")
     }
 
-    /// The stack key shares a row with three keys this app has no business
-    /// touching, so binding it must not take the rest of the row with it.
+    /// The stack and tab-cycle keys share a row with two keys this app has no
+    /// business touching, so binding them must not take the rest of the row.
     func testApplyingLeavesTheRestOfTheKeymapAlone() throws {
         let config = try backupKeymap()
         let next = try KeymapManager.withAgentKeymap(config)
 
         let original = try XCTUnwrap(KeymapManager.activeLayerKeymap(config))
         let keymap = try XCTUnwrap(KeymapManager.activeLayerKeymap(next))
-        XCTAssertEqual(Array(keymap[2].dropFirst()), Array(original[2].dropFirst()))
+        XCTAssertEqual(Array(keymap[2].dropFirst(2)), Array(original[2].dropFirst(2)))
         XCTAssertEqual(keymap[3], original[3])
     }
 

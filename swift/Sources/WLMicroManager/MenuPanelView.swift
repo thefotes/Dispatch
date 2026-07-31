@@ -101,6 +101,7 @@ struct MenuPanelView: View {
         let color = bridge.keyColors[index]
         let isBound = Pad.boundKeyIDs.contains(index)
         let isStackKey = index == Pad.stackKeyID
+        let isTabCycleKey = index == Pad.tabCycleKeyID
         // Only agent keys index into the agent list; the stack key sits at 6,
         // which is a perfectly valid agent index and would be the wrong agent.
         let agent = Pad.agentKeyIDs.contains(index) && index < bridge.agents.count
@@ -110,6 +111,8 @@ struct MenuPanelView: View {
         return Button {
             if isStackKey {
                 StackPanelController.shared.toggle()
+            } else if isTabCycleKey {
+                Task { await bridge.cycleTabs() }
             } else if agent != nil {
                 Task { await bridge.focusSlot(index) }
             }
@@ -123,12 +126,13 @@ struct MenuPanelView: View {
                 )
         }
         .buttonStyle(.plain)
-        .disabled(agent == nil && !isStackKey)
-        .help(helpText(index, agent: agent, isStackKey: isStackKey))
+        .disabled(agent == nil && !isStackKey && !isTabCycleKey)
+        .help(helpText(index, agent: agent, isStackKey: isStackKey, isTabCycleKey: isTabCycleKey))
     }
 
-    private func helpText(_ index: Int, agent: HerdrAgent?, isStackKey: Bool) -> String {
+    private func helpText(_ index: Int, agent: HerdrAgent?, isStackKey: Bool, isTabCycleKey: Bool) -> String {
         if isStackKey { return "GitButler stack for the focused agent" }
+        if isTabCycleKey { return "Cycle tabs in the focused Herdr window" }
         if let agent { return "\(agent.shortName) — \(agent.status)" }
         return "Key \(index)"
     }

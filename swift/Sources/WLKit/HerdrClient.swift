@@ -78,6 +78,29 @@ public struct HerdrAgent: Equatable, Sendable {
     }
 }
 
+public struct HerdrTab: Equatable, Sendable {
+    public var tabID: String
+    public var workspaceID: String
+    /// Display position within the workspace, which is the order tabs cycle in.
+    public var number: Int
+    public var focused: Bool
+
+    init(json: [String: Any]) {
+        tabID = json["tab_id"] as? String ?? ""
+        workspaceID = json["workspace_id"] as? String ?? ""
+        number = json["number"] as? Int ?? 0
+        focused = json["focused"] as? Bool ?? false
+    }
+
+    /// For tests.
+    public init(tabID: String, workspaceID: String = "ws", number: Int, focused: Bool = false) {
+        self.tabID = tabID
+        self.workspaceID = workspaceID
+        self.number = number
+        self.focused = focused
+    }
+}
+
 public enum HerdrError: LocalizedError {
     case cannotConnect(String, String)
     case timeout(String)
@@ -176,6 +199,39 @@ public enum HerdrClient {
 
     public static func focusAgent(_ target: String) async throws {
         _ = try await request("agent.focus", params: ["target": target])
+    }
+
+    public static func listTabs(workspaceID: String? = nil) async throws -> [HerdrTab] {
+        var params: [String: Any] = [:]
+        if let workspaceID { params["workspace_id"] = workspaceID }
+        let result = try await request("tab.list", params: params)
+        let raw = result["tabs"] as? [[String: Any]] ?? []
+        return raw.map(HerdrTab.init(json:))
+    }
+
+    public static func focusTab(_ tabID: String) async throws {
+        _ = try await request("tab.focus", params: ["tab_id": tabID])
+    }
+
+    /// Focuses the tab after the focused one in its workspace, wrapping at the
+    /// end. Tabs in other workspaces are left alone: cycling is a
+    /// within-window gesture, not a window switcher.
+    public static func cycleTabs() async throws {
+        guard let next = nextTab(in: try await listTabs()) else { return }
+        try await focusTab(next.tabID)
+    }
+
+    /// The tab `cycleTabs` would focus, or nil when there is nothing to do —
+    /// no focused tab, or a workspace with a single tab.
+    public static func nextTab(in tabs: [HerdrTab]) -> HerdrTab? {
+        guard let focused = tabs.first(where: \.focused) else { return nil }
+        let siblings = tabs
+            .filter { $0.workspaceID == focused.workspaceID }
+            .sorted { $0.number < $1.number }
+        guard siblings.count > 1,
+              let index = siblings.firstIndex(of: focused)
+        else { return nil }
+        return siblings[(index + 1) % siblings.count]
     }
 
     private static let counter = Counter()
