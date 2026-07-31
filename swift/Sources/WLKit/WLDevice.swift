@@ -47,6 +47,7 @@ public final class WLDevice {
         case notConnected
         case writeFailed(IOReturn)
         case timeout(String)
+        case rpc(String, String)
 
         public var errorDescription: String? {
             switch self {
@@ -75,6 +76,8 @@ public final class WLDevice {
                 return String(format: "IOHIDDeviceSetReport failed (0x%08X)", code) + name
             case .timeout(let m):
                 return "Timed out waiting for \(m)."
+            case .rpc(let method, let message):
+                return "\(method): \(message)"
             }
         }
     }
