@@ -40,12 +40,12 @@ public enum AnsiHTML {
         }
     }
 
-    /// xterm's first 16 entries, warmed slightly for a dark panel.
+    /// xterm's first 16 entries, darkened to stay readable on a light panel.
     static let palette = [
-        "#3b3f4a", "#f8646a", "#43d18c", "#e5b567",
-        "#5fa9f8", "#c792ea", "#4dd0e1", "#c3c8d4",
-        "#5c6270", "#ff8b90", "#6ee7a8", "#f5cd7f",
-        "#8cc2ff", "#dcb3ff", "#7de3f0", "#eef1f7",
+        "#3d434f", "#c93a44", "#18985a", "#a87d1c",
+        "#2b6fd4", "#8f50c9", "#0d8fa3", "#3a4150",
+        "#8a919e", "#e0525e", "#2fa96b", "#bd9430",
+        "#4a8ae8", "#a873dd", "#2aa2b8", "#1a1f28",
     ]
 
     public static func render(_ text: String) -> String {

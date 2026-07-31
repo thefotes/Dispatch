@@ -25,7 +25,7 @@ final class StackPanelController: NSObject {
     private var pendingRender: Payload?
     private var loadGeneration = 0
 
-    private static let width: CGFloat = 930
+    private static let width: CGFloat = 1160
     private static let initialHeight: CGFloat = 240
     private static let minimumHeight: CGFloat = 140
 
@@ -186,7 +186,7 @@ final class StackPanelController: NSObject {
 
         let webView = WKWebView(frame: contentRect, configuration: configuration)
         webView.navigationDelegate = bridge
-        webView.underPageBackgroundColor = NSColor.black
+        webView.underPageBackgroundColor = NSColor.white
         webView.autoresizingMask = [.width, .height]
         self.webView = webView
         self.messageBridge = bridge
@@ -197,7 +197,7 @@ final class StackPanelController: NSObject {
         container.wantsLayer = true
         container.layer?.cornerRadius = 12
         container.layer?.masksToBounds = true
-        container.layer?.backgroundColor = NSColor.black.cgColor
+        container.layer?.backgroundColor = NSColor.white.cgColor
         container.addSubview(webView)
         panel.contentView = container
 
@@ -285,13 +285,14 @@ extension StackPanelController {
     <head>
     <meta charset="utf-8">
     <style>
-      :root { color-scheme: dark; }
+      :root { color-scheme: light; }
       * { box-sizing: border-box; }
       html, body {
         margin: 0;
-        background: #14161c;
-        color: #c3c8d4;
-        font: 16px/1.55 ui-monospace, "SF Mono", Menlo, monospace;
+        background: #ffffff;
+        color: #3a4150;
+        font: 20px/1.55 "JetBrains Mono", "JetBrainsMono Nerd Font",
+              ui-monospace, "SF Mono", Menlo, monospace;
         overflow: hidden;
       }
       /* A full-height column: the window is sized to the stack, but when the
@@ -302,20 +303,20 @@ extension StackPanelController {
         flex: none;
         display: flex; align-items: baseline; gap: 10px;
         padding: 12px 18px 10px;
-        border-bottom: 1px solid #262a35;
+        border-bottom: 1px solid #e4e7ec;
       }
-      #title { font-size: 16px; font-weight: 600; color: #eef1f7; }
-      #subtitle { font-size: 13px; color: #6b7280; overflow: hidden;
+      #title { font-size: 20px; font-weight: 600; color: #1a1f28; }
+      #subtitle { font-size: 16px; color: #8a919e; overflow: hidden;
                   text-overflow: ellipsis; white-space: nowrap; }
       #close {
         margin-left: auto; flex: none; cursor: default;
-        color: #6b7280; font-size: 18px; line-height: 1; padding: 2px 4px;
+        color: #8a919e; font-size: 22px; line-height: 1; padding: 2px 4px;
       }
-      #close:hover { color: #eef1f7; }
+      #close:hover { color: #1a1f28; }
       main { flex: 1 1 auto; min-height: 0; padding: 12px 18px; overflow-y: auto; }
       pre { margin: 0; white-space: pre; overflow-x: auto; }
       pre.wrap { white-space: pre-wrap; overflow-x: hidden; word-break: break-word; }
-      .note { margin: 2px 0; color: #8b93a3; white-space: pre-wrap; }
+      .note { margin: 2px 0; color: #6f7684; white-space: pre-wrap; }
       .b { font-weight: 700; }
       .d { opacity: 0.55; }
       .i { font-style: italic; }
@@ -323,11 +324,11 @@ extension StackPanelController {
       footer {
         flex: none;
         padding: 9px 18px 11px;
-        border-top: 1px solid #262a35;
-        font-size: 13px; color: #545b69;
+        border-top: 1px solid #e4e7ec;
+        font-size: 16px; color: #9aa1ac;
       }
       ::-webkit-scrollbar { width: 9px; height: 9px; }
-      ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 5px; }
+      ::-webkit-scrollbar-thumb { background: #d4d8df; border-radius: 5px; }
     </style>
     </head>
     <body>
