@@ -1,4 +1,5 @@
 import SwiftUI
+import WLKit
 
 struct ContentView: View {
     @EnvironmentObject var model: AppModel

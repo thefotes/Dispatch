@@ -11,21 +11,21 @@ import SwiftUI
 ///   1. Field names are abbreviated on the wire: `c b e s m`, not the full
 ///      names `lights.preview` uses.
 ///   2. `effect` is an integer here, not one of the effect strings.
-enum OAI {
+public enum OAI {
 
     /// Per-key lighting. Params are a bare ARRAY, one entry per key.
-    static let methodThreads = "v.oai.thstatus"
+    public static let methodThreads = "v.oai.thstatus"
     /// Zone lighting: the keys plate and the ambient ring.
-    static let methodRGBConfig = "v.oai.rgbcfg"
+    public static let methodRGBConfig = "v.oai.rgbcfg"
     /// The documented two-surface call, kept for comparison.
-    static let methodPreview = "lights.preview"
+    public static let methodPreview = "lights.preview"
 
     /// Device → host notification channels. These are pushed by the device and
     /// are not callable methods; calling them returns "Method not found".
-    static let notifyHID = "v.oai.hid"
-    static let notifyJoystick = "v.oai.rad"
+    public static let notifyHID = "v.oai.hid"
+    public static let notifyJoystick = "v.oai.rad"
 
-    enum Effect: Int, CaseIterable, Identifiable {
+    public enum Effect: Int, CaseIterable, Identifiable, Sendable {
         case off = 0
         case solid = 1
         case snake = 2
@@ -34,9 +34,9 @@ enum OAI {
         case gradient = 5
         case shallowBreath = 6
 
-        var id: Int { rawValue }
+        public var id: Int { rawValue }
 
-        var label: String {
+        public var label: String {
             switch self {
             case .off: return "Off"
             case .solid: return "Solid"
@@ -51,17 +51,35 @@ enum OAI {
 
     /// One key. `id` is a key index: 0-based, row-major over the pad's
     /// [2, 4, 4, 3] matrix, so the top two rows are ids 0...5.
-    struct Thread {
-        var id: Int
-        var color: Int?
-        var brightness: Double?
-        var effect: Effect?
-        var speed: Double?
-        var syncKeys: Bool?
-        var syncAmbient: Bool?
+    public struct Thread: Equatable, Sendable {
+        public var id: Int
+        public var color: Int?
+        public var brightness: Double?
+        public var effect: Effect?
+        public var speed: Double?
+        public var syncKeys: Bool?
+        public var syncAmbient: Bool?
+
+        public init(
+            id: Int,
+            color: Int? = nil,
+            brightness: Double? = nil,
+            effect: Effect? = nil,
+            speed: Double? = nil,
+            syncKeys: Bool? = nil,
+            syncAmbient: Bool? = nil
+        ) {
+            self.id = id
+            self.color = color
+            self.brightness = brightness
+            self.effect = effect
+            self.speed = speed
+            self.syncKeys = syncKeys
+            self.syncAmbient = syncAmbient
+        }
 
         /// Only `id` is required; omitted fields leave that aspect unchanged.
-        var wire: [String: Any] {
+        public var wire: [String: Any] {
             var out: [String: Any] = ["id": id]
             if let color { out["c"] = color }
             if let brightness { out["b"] = brightness }
@@ -74,32 +92,46 @@ enum OAI {
     }
 
     /// One zone.
-    struct Zone {
-        var effect: Effect = .solid
-        var brightness: Double = 1
-        var speed: Double = 0.5
-        var magic: Double = 1
-        var color: Int = 0
+    public struct Zone: Equatable, Sendable {
+        public var effect: Effect = .solid
+        public var brightness: Double = 1
+        public var speed: Double = 0.5
+        public var magic: Double = 1
+        public var color: Int = 0
 
-        var wire: [String: Any] {
+        public init(
+            effect: Effect = .solid,
+            brightness: Double = 1,
+            speed: Double = 0.5,
+            magic: Double = 1,
+            color: Int = 0
+        ) {
+            self.effect = effect
+            self.brightness = brightness
+            self.speed = speed
+            self.magic = magic
+            self.color = color
+        }
+
+        public var wire: [String: Any] {
             ["e": effect.rawValue, "b": brightness, "s": speed, "m": magic, "c": color]
         }
 
-        static let dark = Zone(effect: .off, brightness: 0, speed: 0.5, magic: 1, color: 0)
+        public static let dark = Zone(effect: .off, brightness: 0, speed: 0.5, magic: 1, color: 0)
     }
 
     /// An AG key reports itself by name, "AG00".."AG19"; the number is the key
     /// index, the same one used as a thread id for lighting.
-    static func agIndex(_ name: String?) -> Int? {
+    public static func agIndex(_ name: String?) -> Int? {
         guard let name, name.hasPrefix("AG") else { return nil }
         return Int(name.dropFirst(2))
     }
 
-    static func threadsParams(_ threads: [Thread]) -> [[String: Any]] {
+    public static func threadsParams(_ threads: [Thread]) -> [[String: Any]] {
         threads.map(\.wire)
     }
 
-    static func rgbConfigParams(keys: Zone, ambient: Zone) -> [String: Any] {
+    public static func rgbConfigParams(keys: Zone, ambient: Zone) -> [String: Any] {
         ["keys": keys.wire, "ambient": ambient.wire]
     }
 }
@@ -108,19 +140,21 @@ enum OAI {
 
 /// The pad's physical key rows, matching the firmware's [2, 4, 4, 3] matrix.
 /// Key index runs row-major from 0, so the six agent keys are 0...5.
-enum Pad {
-    static let rows: [[Int]] = [
+public enum Pad {
+    public static let rows: [[Int]] = [
         [0, 1],
         [2, 3, 4, 5],
         [6, 7, 8, 9],
         [10, 11, 12],
     ]
-    static let keyCount = 13
+    public static let keyCount = 13
     /// The firmware's keycode table goes to AG19, so clear the whole id space
     /// when turning everything off, not just the visible keys.
-    static let maxThreadID = 19
+    public static let maxThreadID = 19
+    /// The keys bound to `KV_OAI_AG*`, and so the only ones that can be lit.
+    public static let agentKeyIDs = [0, 1, 2, 3, 4, 5]
 
-    static func row(of key: Int) -> Int? {
+    public static func row(of key: Int) -> Int? {
         rows.firstIndex { $0.contains(key) }
     }
 }
@@ -129,7 +163,7 @@ enum Pad {
 
 extension Color {
     /// Packed 0xRRGGBB, which is how colours go on the wire.
-    var packedRGB: Int {
+    public var packedRGB: Int {
         let ns = NSColor(self).usingColorSpace(.sRGB) ?? .black
         let r = Int((ns.redComponent * 255).rounded())
         let g = Int((ns.greenComponent * 255).rounded())
@@ -137,7 +171,7 @@ extension Color {
         return (r << 16) | (g << 8) | b
     }
 
-    init(packedRGB: Int) {
+    public init(packedRGB: Int) {
         self.init(
             .sRGB,
             red: Double((packedRGB >> 16) & 0xFF) / 255,
@@ -147,6 +181,14 @@ extension Color {
     }
 }
 
-func hexString(_ packed: Int) -> String {
+public func hexString(_ packed: Int) -> String {
     String(format: "#%06X", packed & 0xFFFFFF)
+}
+
+/// `"#RRGGBB"` / `"#RGB"` → packed int. Mirrors `toColorInt` in lib/oai.js.
+public func packedRGB(fromHex hex: String) -> Int? {
+    var text = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+    if text.count == 3 { text = text.map { "\($0)\($0)" }.joined() }
+    guard text.count == 6 else { return nil }
+    return Int(text, radix: 16)
 }

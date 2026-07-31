@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import WLKit
 
 struct LogEntry: Identifiable {
     enum Kind: String, CaseIterable {

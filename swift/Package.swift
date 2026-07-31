@@ -2,12 +2,24 @@
 import PackageDescription
 
 let package = Package(
-    name: "WLInspector",
+    name: "WLTools",
     platforms: [.macOS(.v13)],
+    products: [
+        .library(name: "WLKit", targets: ["WLKit"]),
+        .executable(name: "WLInspector", targets: ["WLInspector"]),
+        .executable(name: "WLMicroManager", targets: ["WLMicroManager"]),
+    ],
     targets: [
-        .executableTarget(
-            name: "WLInspector",
-            path: "Sources/WLInspector"
-        )
+        // Device transport, vendor protocol, Herdr client and the bridge engine.
+        // Shared by the debug inspector and the menu-bar manager.
+        .target(name: "WLKit", path: "Sources/WLKit"),
+
+        // Debug UI: traffic log and manual lighting control.
+        .executableTarget(name: "WLInspector", dependencies: ["WLKit"], path: "Sources/WLInspector"),
+
+        // Menu-bar app: runs the bridge in the background.
+        .executableTarget(name: "WLMicroManager", dependencies: ["WLKit"], path: "Sources/WLMicroManager"),
+
+        .testTarget(name: "WLKitTests", dependencies: ["WLKit"], path: "Tests/WLKitTests"),
     ]
 )

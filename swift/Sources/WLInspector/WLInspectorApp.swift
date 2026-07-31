@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import WLKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {

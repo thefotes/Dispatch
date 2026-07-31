@@ -19,28 +19,28 @@ import IOKit.hid
 /// an IOHIDDevice with a keyboard collection, and macOS refuses to let anything
 /// seize a keyboard — a seizing open fails with 0xE00002C1, which looks exactly
 /// like a missing Input Monitoring grant and is not.
-final class WLDevice {
+public final class WLDevice {
 
-    static let vendorID = 0x303A
-    static let reportID: UInt8 = 0x06
-    static let channelDebug: UInt8 = 1
-    static let channelRPC: UInt8 = 2
-    static let maxChunk = 61
-    static let reportSize = 64
+    public static let vendorID = 0x303A
+    public static let reportID: UInt8 = 0x06
+    public static let channelDebug: UInt8 = 1
+    public static let channelRPC: UInt8 = 2
+    public static let maxChunk = 61
+    public static let reportSize = 64
 
-    struct Info {
-        var product: String
-        var productID: Int
-        var transport: String
-        var serial: String
-        var usagePage: Int
-        var interfaceCount: Int
+    public struct Info {
+        public var product: String
+        public var productID: Int
+        public var transport: String
+        public var serial: String
+        public var usagePage: Int
+        public var interfaceCount: Int
     }
 
-    static let vendorUsagePage = 0xFF00
-    static let vendorUsage = 0x01
+    public static let vendorUsagePage = 0xFF00
+    public static let vendorUsage = 0x01
 
-    enum Failure: LocalizedError {
+    public enum Failure: LocalizedError {
         case notFound
         case noVendorCollection
         case openFailed(IOReturn)
@@ -48,7 +48,7 @@ final class WLDevice {
         case writeFailed(IOReturn)
         case timeout(String)
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .notFound:
                 return "No Work Louder device on the HID bus. If it is a Bluetooth pad it may have gone to sleep — press a key to wake it."
@@ -80,18 +80,18 @@ final class WLDevice {
     }
 
     // Callbacks, always delivered on the main queue.
-    var onTX: ((String, Any?, Int) -> Void)?          // method, params, id
-    var onResponse: ((Int, Any?, String?) -> Void)?   // id, result, errorMessage
-    var onNotification: ((String, Any?) -> Void)?     // method, params
-    var onDeviceLog: ((String) -> Void)?
-    var onWriteError: ((String, String) -> Void)?
+    public var onTX: ((String, Any?, Int) -> Void)?          // method, params, id
+    public var onResponse: ((Int, Any?, String?) -> Void)?   // id, result, errorMessage
+    public var onNotification: ((String, Any?) -> Void)?     // method, params
+    public var onDeviceLog: ((String) -> Void)?
+    public var onWriteError: ((String, String) -> Void)?
     /// Every input report, before framing. Reports that do not match the
     /// channel framing are otherwise dropped, which hides any other traffic
     /// the device emits - key presses included.
-    var onRawReport: ((UInt32, [UInt8]) -> Void)?
-    var onDisconnect: ((String) -> Void)?
+    public var onRawReport: ((UInt32, [UInt8]) -> Void)?
+    public var onDisconnect: ((String) -> Void)?
 
-    private(set) var info: Info?
+    public private(set) var info: Info?
     private var manager: IOHIDManager?
     private var device: IOHIDDevice?
     private var inputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: reportSize)
@@ -100,13 +100,15 @@ final class WLDevice {
     private var pending: [Int: (Any?, String?) -> Void] = [:]
     private var nextID = 1
 
-    var isConnected: Bool { device != nil }
+    public var isConnected: Bool { device != nil }
+
+    public init() {}
 
     deinit { inputBuffer.deallocate() }
 
     // MARK: - Connect
 
-    func connect() throws {
+    public func connect() throws {
         disconnect(reason: nil)
 
         // Must be held for the lifetime of the connection: releasing the
@@ -164,7 +166,7 @@ final class WLDevice {
         IOHIDDeviceScheduleWithRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
     }
 
-    func disconnect(reason: String?) {
+    public func disconnect(reason: String?) {
         guard let dev = device else { return }
         IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -184,7 +186,7 @@ final class WLDevice {
     // MARK: - Send
 
     @discardableResult
-    func call(_ method: String, params: Any?, completion: ((Any?, String?) -> Void)? = nil) -> Int? {
+    public func call(_ method: String, params: Any?, completion: ((Any?, String?) -> Void)? = nil) -> Int? {
         guard let dev = device else {
             completion?(nil, Failure.notConnected.errorDescription)
             return nil
