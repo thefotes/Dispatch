@@ -7,74 +7,64 @@ to your running coding agents:
   anything needs you
 - the top six keys jump straight to agents 1-6 in Herdr
 
-## Per-key colours: investigated, not available
+## Per-key colours: solved
 
-Short version: **the host cannot address individual keys on a Creator Micro 2.**
-The pad exposes exactly two controllable lighting surfaces. This was worth
-chasing hard, because the hardware really does have per-key LEDs and the
-firmware really does contain an agent-status bridge — neither is reachable.
+**Each key can be set individually.** The channel is a vendor RPC the Input app
+never calls, recovered from `@worklouder/device-kit-oai` - a *different* SDK that
+ships inside the Codex desktop app.
 
-What the hardware has: QMK's v1 Creator Micro board declares an `rgb_matrix`
-of 12 positioned per-key LEDs plus 8 underglow. The LEDs exist.
-
-What the firmware contains, found by pulling `cm-v2-fw-releases` and reading
-its strings:
-
-| method | notes |
-|---|---|
-| `lights.preview` | sections `backlight` + `underglow`, one `{effect,brightness,speed,magic,color}` each |
-| `v.oai.rgbcfg` | same vocabulary plus sections **`keys`** and **`ambient`** |
-| `v.oai.thstatus` | `"OAI BRIDGE: init, ... registered on all variants"` (`src/oai/wl_oai_bridge.cpp`), alongside `syncKeysLighting` / `syncAmbientLighting` |
-| `v.oai.hid`, `v.oai.rad` | not registered on this variant |
-
-`oai` is OpenAI — this is the Codex Micro's integration, shipped in the same
-image. Its default profile maps the top six keys to `KV_OAI_AG00`..`AG05`
-(`AG` is *action group*, not *agent*).
-
-Tested against real hardware on firmware **v0.6.0-rc.10**:
-
-- `v.oai.rgbcfg` is registered but **inert** on the Creator Micro 2 — it
-  answers `{"ok":1}` to every payload, including malformed ones, and changes
-  nothing visible under any of the per-key encodings tried.
-- `v.oai.thstatus` behaves the same way. `v.oai.hid` / `v.oai.rad` return
-  `Method not found`.
-- `lights.preview` with `backlight`/`underglow` **works**: the two surfaces are
-  independent and `effect` is honoured (rainbow animates).
-- The device's own `keymap.json` persists lighting as exactly those two
-  surfaces per layer, with no per-key colour field.
-
-Everything tried, and what it showed:
-
-| avenue | result |
-|---|---|
-| `lights.preview` (`backlight`/`underglow`) | **works** — two independent surfaces, effects honoured |
-| `v.oai.rgbcfg`, every per-key encoding | registered, accepts anything, **no visible effect** |
-| `v.oai.thstatus`, 8 payload shapes | registered, accepts anything, **no visible effect** |
-| `v.oai.thstatus` + top six keys bound to `KV_OAI_AG00..AG05` | firmware **accepts and persists** the OAI keycodes; still **nothing lights** |
-| `v.oai.hid`, `v.oai.rad` | `Method not found` — so handler sets really do differ by variant |
-| device `keymap.json` | lighting persisted as exactly two surfaces per layer |
-| Input app 0.17.3 **and** 0.18.0-rc.8 | identical `wl-device-kit` 0.1.28, `lights.preview` only, no `v.oai.*` |
-| public docs / forum | no API; an unanswered feedback post asks exactly this |
-
-The LEDs are individually addressable in hardware — the Codex Micro shows five
-per-key agent states (idle, thinking, complete, needs input, error) from the
-same firmware image. On the Creator Micro 2 that path is gated off by board
-identity, which the firmware reads from eFuse (or `/fs/board_info.json`, which
-does not exist on this device). The remaining untried lever is writing that file
-to declare a different vendor/variant; it is deliberately not attempted here,
-because the correct integers are unknown and a wrong pair makes the pad identify
-as hardware it is not.
-
-The probe tools are kept so this can be re-checked on future firmware:
-
-```bash
-npm run probe          # which methods exist, and what they answer
-node bin/lighttest.js  # visual: does lights.preview reach the pad
-node bin/keytest.js    # visual: can individual keys ever differ
+```
+v.oai.thstatus   params = ARRAY of { id, c, b, e, s, sk, sa }
+v.oai.rgbcfg     params = { ambient: {e,b,s,m,c}, keys: {e,b,s,m,c} }
 ```
 
-If a later firmware makes `v.oai.rgbcfg` live, `bin/leds.js` can be extended to
-light one key per agent instead of one aggregate colour.
+| field | meaning |
+|---|---|
+| `id` | key index, **0-based, row-major** over the pad's `[2,4,4,3]` matrix |
+| `c` | packed RGB integer |
+| `b` | brightness, 0..1 |
+| `e` | effect **as a number**: 0 off, 1 solid, 2 snake, 3 rainbow, 4 breath, 5 gradient, 6 shallowBreath |
+| `s` | speed, 0..1 |
+| `sk` / `sa` | 1/0 - mirror this thread onto the keys / ambient zone |
+
+Two things make this easy to miss, and both cause silent no-ops rather than
+errors, because the firmware answers `{"ok":1}` to any payload including
+malformed ones:
+
+1. **Field names are abbreviated on the wire.** `c`/`b`/`e`/`s`/`m`, not the full
+   names `lights.preview` uses.
+2. **`effect` is an integer**, not one of the effect strings `lights.preview` takes.
+
+Verified on hardware (firmware v0.6.0-rc.10): sending one thread lit and the
+rest off lights exactly one key, and walking a single lit thread through ids
+0..12 moves one lit key across the pad. Thread ids 1..6 light keys 1..6 and
+leave key 0 dark, confirming 0-based indexing. Sync flags are optional - colours
+apply without them. **Thread state overrides the zones**, so turning the pad off
+means clearing threads *and* zones (see `bin/lights-off.js`).
+
+Also useful: `v.oai.hid` and `v.oai.rad` are device-to-host **notifications**, not
+callable methods - key events (`{k, act, ag}`) and joystick position (`{a, d}`).
+
+### The keymap is not optional
+
+A key can only be lit if it is bound to a `KV_OAI_AG*` keycode **on the active
+layer**. Parking the codes on a spare layer does nothing. Nothing reports the
+mismatch: `v.oai.thstatus` still answers `{"ok":1}` for a key it cannot light,
+so a wrong keymap is indistinguishable from a working one from the host side.
+
+The trade-off is real: **an AG-bound key stops being an input.** It sends no
+keystroke, and on this variant it pushes no `v.oai.hid` notification either. A
+key is a status light or an input, not both.
+
+This plugin binds the top six keys (rows 1-2) and leaves rows 3-4 alone, so
+those still send `KC_F19`..`KC_F24` if you want them for shortcuts.
+
+### What did not work
+
+For the record, since these cost time: `lights.preview` with `keys`/`ambient`
+sections; any full-field-name payload to `v.oai.rgbcfg`; AG keycodes on a
+non-active layer; and both Input app versions, which ship only
+`lights.preview`.
 
 ## Requirements
 
@@ -94,19 +84,23 @@ herdr plugin link /path/to/herdr-worklouder-micro
 
 ## The status light
 
-`bin/leds.js` is a long-running bridge. It watches Herdr and pushes a colour to
-both the key backlight and the underglow:
+`bin/leds.js` is a long-running bridge. It gives **each agent its own key** and
+keeps an aggregate on the underglow:
 
-| condition | colour |
+| agent status | its key |
 |---|---|
-| any agent blocked / waiting on you | red, breathing |
-| else any agent working | amber |
-| else agents running but idle | green |
-| no agents | off |
+| blocked / waiting on you | red, breathing |
+| working | amber |
+| idle or done | green |
+| no agent in that slot | off |
 
-Worst state wins, because with one colour the useful question is "does anything
-need me?". Set `drive_backlight: false` to leave the key backlight alone and
-use only the underglow.
+Agent slot N takes key N — the same physical keys that send F13–F18, so the key
+you look at is the key you press. The **underglow** carries the worst state
+across all agents, so "does anything need me?" is readable from across the room
+without counting keys.
+
+Set `drive_backlight: true` to also wash the key *zone* with the aggregate
+colour, though it competes with the per-agent colours.
 
 Run it in a pane to watch it work:
 
@@ -138,32 +132,41 @@ Keys you omit keep their defaults. `priority` reorders which state wins.
 
 ## The six keys
 
-Map the pad's top six keys to **F13-F18** in Work Louder's Input app, then bind
-them in `~/.config/herdr/config.toml`:
+The bridge binds them on startup (`manage_keymap: true`). To do it by hand:
 
-```toml
-[[keys.command]]
-key = "f13"
-type = "plugin_action"
-command = "worklouder.micro.focus1"
-description = "focus agent 1"
-
-# ... f14 -> focus2, through f18 -> focus6
+```bash
+node bin/apply-ag-keymap.js     # bind the six agent keys for lighting
+node bin/restore-keymap.js      # put your original keymap back
 ```
 
 Slots are ordered by workspace, then tab, then pane, so a key keeps pointing at
-the same agent as long as the set of agents does not change. Check the current
-mapping with:
+the same agent as long as the set of agents does not change:
 
 ```bash
 herdr agent list
 ```
 
+### Jumping to an agent
+
+An AG key sends no keystroke, but it does report itself over HID:
+
+```json
+{"m": "v.oai.hid", "p": {"k": "AG01", "act": 1}}
+```
+
+`act` is 1 on press, 0 on release, and `k` carries the key index. The bridge
+listens for these, so **the key showing an agent's status is the key that jumps
+to it** — no keybindings, no F-keys.
+
+Watch out for the envelope: notifications use `m`/`p`, while responses use the
+full `method`. Match only on `method` and every key event vanishes silently.
+
 ## Known conflict
 
 Work Louder's Input app drives the underglow from the focused desktop app
-("AppSense" colour cues). If it is running it will fight this bridge for the
-light. Turn that feature off, or quit Input, while using the bridge.
+("AppSense" colour cues), and the Codex desktop app drives the same vendor
+thread API this plugin uses. Either will fight the bridge for the lighting.
+Quit them, or turn those features off, while using the bridge.
 
 ## Tests
 
@@ -171,8 +174,18 @@ light. Turn that feature off, or quit Input, while using the bridge.
 npm test
 ```
 
-Covers the status-to-colour mapping, config merging, slot ordering, and colour
-encoding — everything that does not need hardware.
+Covers the status-to-colour mapping, per-key thread assignment, config merging,
+slot ordering, and colour encoding — everything that does not need hardware.
+
+Hardware-in-the-loop tools:
+
+| command | purpose |
+|---|---|
+| `npm run probe` | which RPC methods this firmware registers |
+| `node bin/oai-test.js` | exercise the per-key API end to end |
+| `node bin/interactive-lab.js` | 12 lighting experiments, prompting after each |
+| `node bin/lights-off.js` | clear threads *and* zones |
+| `node bin/restore-keymap.js` | put `backup/keymap.json` back on the device |
 
 ## Protocol notes
 

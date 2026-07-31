@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert");
-const { DEFAULTS, aggregate, lightingFor, mergeConfig } = require("../lib/status.js");
+const { DEFAULTS, aggregate, lightingFor, threadsFor, mergeConfig } = require("../lib/status.js");
 const { sortAgents } = require("../lib/herdr-client.js");
 const { hexToInt } = require("../lib/wl-device.js");
 
@@ -66,4 +66,102 @@ test("colours convert to the integer the firmware expects", () => {
   assert.strictEqual(hexToInt("#FF2D2D"), 0xff2d2d);
   assert.strictEqual(hexToInt("00C853"), 0x00c853);
   assert.strictEqual(hexToInt("#0f0"), 0x00ff00);
+});
+
+// ---- per-key mapping (vendor thread API) ----
+
+test("each agent gets its own key, in slot order", () => {
+  const threads = threadsFor([
+    agent("working"), agent("blocked"), agent("idle"),
+  ]);
+  assert.strictEqual(threads.length, 6, "one entry per agent key");
+  assert.deepStrictEqual(threads.map((t) => t.id), [0, 1, 2, 3, 4, 5], "ids are 0-based key indices");
+  assert.strictEqual(threads[0].color, "#FFA000");
+  assert.strictEqual(threads[1].color, "#FF2D2D");
+  assert.strictEqual(threads[2].color, "#00C853");
+});
+
+test("keys with no agent are switched off, not left stale", () => {
+  const threads = threadsFor([agent("working")]);
+  for (const t of threads.slice(1)) {
+    assert.strictEqual(t.effect, "off");
+    assert.strictEqual(t.brightness, 0);
+    assert.strictEqual(t.color, undefined, "no colour on an unused key");
+  }
+});
+
+test("a blocked agent breathes on its own key", () => {
+  const threads = threadsFor([agent("idle"), agent("blocked")]);
+  assert.strictEqual(threads[0].effect, "solid");
+  assert.strictEqual(threads[1].effect, "breath");
+});
+
+test("more agents than keys does not overflow the key set", () => {
+  const many = Array.from({ length: 9 }, () => agent("working"));
+  assert.strictEqual(threadsFor(many).length, 6);
+});
+
+test("no agents leaves every key dark", () => {
+  assert.ok(threadsFor([]).every((t) => t.effect === "off"));
+});
+
+test("per-key colours honour config overrides", () => {
+  const cfg = mergeConfig({ colors: { working: "#123456" }, brightness: 0.3 });
+  const t = threadsFor([agent("working")], cfg)[0];
+  assert.strictEqual(t.color, "#123456");
+  assert.strictEqual(t.brightness, 0.3);
+});
+
+// ---- device notification envelope ----
+// Captured from a real key press. Note the envelope is abbreviated: the device
+// sends {"m": method, "p": params} for notifications, while responses use the
+// full "method". Matching only on "method" silently drops every key event.
+
+const { WLDevice } = require("../lib/wl-device.js");
+const { onNotify, agIndex } = require("../lib/oai.js");
+
+function fakeDevice() {
+  const dev = Object.create(WLDevice.prototype);
+  dev.pending = new Map();
+  dev.accum = "";
+  dev.onNotify = null;
+  dev.onDebug = null;
+  return dev;
+}
+
+test("a key press notification is decoded, not dropped", () => {
+  const dev = fakeDevice();
+  const seen = [];
+  onNotify(dev, { onKey: (k) => seen.push(k) });
+  dev._feedRpc('{"m":"v.oai.hid","p":{"k":"AG01","act":1}}\r\n');
+  assert.strictEqual(seen.length, 1);
+  assert.strictEqual(seen[0].key, "AG01");
+  assert.strictEqual(seen[0].index, 1, "AG01 is key index 1");
+  assert.strictEqual(seen[0].pressed, true);
+});
+
+test("press and release are distinguishable", () => {
+  const dev = fakeDevice();
+  const seen = [];
+  onNotify(dev, { onKey: (k) => seen.push(k) });
+  dev._feedRpc('{"m":"v.oai.hid","p":{"k":"AG02","act":1}}');
+  dev._feedRpc('{"m":"v.oai.hid","p":{"k":"AG02","act":0}}');
+  assert.deepStrictEqual(seen.map((k) => k.pressed), [true, false]);
+});
+
+test("a response is not mistaken for a notification", () => {
+  const dev = fakeDevice();
+  let notified = 0;
+  onNotify(dev, { onKey: () => notified++ });
+  dev.pending.set("332", { resolve() {}, reject() {}, timer: setTimeout(() => {}, 0) });
+  dev._feedRpc('{"result":{"ok":1},"id":332,"method":"v.oai.thstatus"}\r\n');
+  assert.strictEqual(notified, 0, "responses carry a full 'method' and an id");
+});
+
+test("AG names map to key indices", () => {
+  assert.strictEqual(agIndex("AG00"), 0);
+  assert.strictEqual(agIndex("AG05"), 5);
+  assert.strictEqual(agIndex("AG12"), 12);
+  assert.strictEqual(agIndex("KC_F13"), null);
+  assert.strictEqual(agIndex(undefined), null);
 });
