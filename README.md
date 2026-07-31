@@ -52,9 +52,9 @@ layer**. Parking the codes on a spare layer does nothing. Nothing reports the
 mismatch: `v.oai.thstatus` still answers `{"ok":1}` for a key it cannot light,
 so a wrong keymap is indistinguishable from a working one from the host side.
 
-The trade-off is real: **an AG-bound key stops being an input.** It sends no
-keystroke, and on this variant it pushes no `v.oai.hid` notification either. A
-key is a status light or an input, not both.
+An AG-bound key stops sending keystrokes, but it still reports presses over HID
+as `{"m":"v.oai.hid","p":{"k":"AG01","act":1}}`, so it is both a status light
+and an input.
 
 This plugin binds the top six keys (rows 1-2) and leaves rows 3-4 alone, so
 those still send `KC_F19`..`KC_F24` if you want them for shortcuts.

@@ -1,4 +1,61 @@
-# Work Louder Inspector
+# Work Louder Swift tools
+
+Two macOS apps over a shared `WLKit` library:
+
+| product | what it is |
+|---|---|
+| `WLMicroManager` | the menu-bar app that runs the Herdr bridge in the background |
+| `WLInspector` | a debug UI for watching traffic and driving lighting by hand |
+
+---
+
+# Micro Manager
+
+A menu-bar app that lights each running Herdr agent on its own pad key, and
+jumps to that agent when you press the key. It is the bridge itself — no Node
+at runtime.
+
+```bash
+./scripts/bundle.sh --install     # build, sign, install to /Applications, launch
+```
+
+The first launch asks for Input Monitoring. Grant it, then toggle the manager
+off and on.
+
+**The icon** shows state at a glance: dimmed when off, a coloured dot when
+running — green all idle, amber something working, red something needs you —
+and a badge when the pad is missing or permission is denied.
+
+**The panel** draws the pad in its real shape with the six agent keys showing
+their live colour, then one row per agent. Click a key or a row to jump to that
+agent. It also carries the on/off switch, an "Open at login" toggle, and a
+warning when another app is fighting for the device.
+
+**Off** clears the lights and stops driving, but deliberately leaves the device
+keymap alone: rebinding is a flash write, and the keys light instantly on the
+way back in if the bindings are still there.
+
+## Why it must be bundled and signed
+
+`swift run` works for development because it inherits your terminal's Input
+Monitoring grant. A background app needs its own, and macOS keys that grant to
+the **code signature** — so an ad-hoc signature, whose hash changes on every
+build, forces you to re-grant after every rebuild. `bundle.sh` prefers a real
+Apple Development or Developer ID identity from your keychain, which gives a
+stable designated requirement and makes the grant stick. It also sets
+`LSUIElement` so there is no Dock icon, and gives `SMAppService` a bundle it
+will actually register as a login item.
+
+## Only one bridge at a time
+
+The Node bridge (`node bin/leds.js`), Work Louder's Input app and the Codex
+desktop app all drive this same pad. Running two at once means they overwrite
+each other. The panel detects this — a shared HID open means we receive other
+clients' replies, so a response id we never issued is a reliable tell.
+
+---
+
+# Inspector
 
 A macOS app for watching the traffic to and from a Work Louder pad, and for
 driving its lighting by hand.
