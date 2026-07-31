@@ -15,8 +15,12 @@ public struct BridgeConfig: Sendable {
     public var colors: [String: Int] = [
         "blocked": 0xFF2D2D,
         "working": 0xFFA000,
+        // Herdr reports "done" for an agent that has finished and that you
+        // have not looked at yet, and "idle" once it is focused. That is a
+        // real difference - one is waiting to be read, the other is just
+        // quiet - so give them different colours.
+        "done": 0x00B0FF,
         "idle": 0x00C853,
-        "done": 0x00C853,
         "unknown": 0x00C853,
     ]
     public var effects: [String: OAI.Effect] = [

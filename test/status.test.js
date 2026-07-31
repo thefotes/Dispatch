@@ -29,10 +29,28 @@ test("working outranks idle and done", () => {
   assert.strictEqual(lightingFor(state).color, "#FFA000");
 });
 
-test("all idle or done is the calm colour", () => {
-  assert.strictEqual(aggregate([agent("idle"), agent("done")]), "idle");
+test("done and idle are told apart by colour", () => {
+  // "done" means finished and not yet looked at; "idle" means finished and
+  // seen. Different signals, so they must not share a colour.
+  assert.notStrictEqual(
+    lightingFor("done").color,
+    lightingFor("idle").color,
+    "a finished-but-unread agent must be distinguishable from a quiet one",
+  );
   assert.strictEqual(lightingFor("idle").color, "#00C853");
-  assert.strictEqual(lightingFor("done").color, "#00C853");
+  assert.strictEqual(lightingFor("done").color, "#00B0FF");
+});
+
+test("the attention states all have distinct colours", () => {
+  const seen = new Map();
+  for (const state of ["blocked", "working", "done", "idle"]) {
+    const color = lightingFor(state).color;
+    assert.ok(
+      !seen.has(color),
+      state + ' reuses the colour of ' + seen.get(color),
+    );
+    seen.set(color, state);
+  }
 });
 
 test("an unrecognised status still yields a state rather than throwing", () => {

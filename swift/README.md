@@ -26,6 +26,9 @@ off and on.
 running — green all idle, amber something working, red something needs you —
 and a badge when the pad is missing or permission is denied.
 
+**Key colours** are red (blocked), amber (working), blue (done — finished but
+not yet looked at) and green (idle — finished and seen).
+
 **The panel** draws the pad in its real shape with the six agent keys showing
 their live colour, then one row per agent. Click a key or a row to jump to that
 agent. It also carries the on/off switch, an "Open at login" toggle, and a

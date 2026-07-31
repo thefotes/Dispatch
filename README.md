@@ -91,8 +91,13 @@ keeps an aggregate on the underglow:
 |---|---|
 | blocked / waiting on you | red, breathing |
 | working | amber |
-| idle or done | green |
+| done — finished, not yet looked at | blue |
+| idle — finished and seen | green |
 | no agent in that slot | off |
+
+Herdr distinguishes "done" from "idle" by whether you have focused the pane
+yet, so blue means there is something finished waiting to be read and green
+means everything is quiet.
 
 Agent slot N takes key N — the same physical keys that send F13–F18, so the key
 you look at is the key you press. The **underglow** carries the worst state

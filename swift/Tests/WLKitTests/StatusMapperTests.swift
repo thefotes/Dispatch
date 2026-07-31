@@ -126,3 +126,57 @@ final class StatusMapperTests: XCTestCase {
         XCTAssertNil(OAI.agIndex(nil))
     }
 }
+
+// MARK: - Status colours must stay distinguishable
+
+extension StatusMapperTests {
+
+    func testDoneAndIdleAreToldApartByColour() {
+        // "done" means finished and not yet looked at; "idle" means finished
+        // and seen. Different signals, so they must not share a colour.
+        let cfg = BridgeConfig()
+        XCTAssertNotEqual(
+            cfg.color(for: "done"),
+            cfg.color(for: "idle"),
+            "a finished-but-unread agent must be distinguishable from a quiet one"
+        )
+        XCTAssertEqual(cfg.color(for: "idle"), 0x00C853)
+        XCTAssertEqual(cfg.color(for: "done"), 0x00B0FF)
+    }
+
+    func testAttentionStatesAllHaveDistinctColours() {
+        let cfg = BridgeConfig()
+        var seen: [Int: String] = [:]
+        for state in ["blocked", "working", "done", "idle"] {
+            let color = cfg.color(for: state)
+            XCTAssertNil(seen[color], "\(state) reuses the colour of \(seen[color] ?? "")")
+            seen[color] = state
+        }
+    }
+
+    func testDoneAndIdleAgentsGetDifferentKeys() {
+        let threads = StatusMapper.threads(for: [
+            HerdrAgent(status: "done", paneID: "w1:p1"),
+            HerdrAgent(status: "idle", paneID: "w1:p2"),
+        ])
+        XCTAssertEqual(threads[0].color, 0x00B0FF)
+        XCTAssertEqual(threads[1].color, 0x00C853)
+    }
+
+    /// Guards the two implementations against drifting apart.
+    func testColoursMatchTheNodeImplementation() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lib/status.js")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let cfg = BridgeConfig()
+        for state in ["blocked", "working", "done", "idle", "unknown"] {
+            let hex = hexString(cfg.color(for: state))
+            XCTAssertTrue(
+                source.contains("\(state): \"\(hex)\""),
+                "lib/status.js has a different colour for \(state) than \(hex)"
+            )
+        }
+    }
+}
