@@ -29,10 +29,34 @@ and a badge when the pad is missing or permission is denied.
 **Key colours** are red (blocked), amber (working), blue (done — finished but
 not yet looked at) and green (idle — finished and seen).
 
+## The stack key
+
+The first key of row 3 — key 6, directly under the agent block — shows the
+GitButler stack for whichever agent has focus in Herdr. It floats `but status`
+in the middle of the screen; press it again to put it away.
+
+The window never takes focus. You are reading it *from* the terminal you were
+already typing in, and a read-only view that steals the keyboard would cost two
+keystrokes to undo. Click the output to select text, click anywhere else in the
+window to dismiss it. It sizes itself to the stack rather than to a guess.
+
+The key sits dim violet while the stack is hidden and breathes while it is up.
+Lighting it is not decoration: binding it to `KV_OAI_AG06` took away the `F19`
+it used to send, and a dark key with no keystroke reads as a broken one.
+
+Herdr reports `foreground_cwd`, so the stack follows a `cd` inside the pane
+rather than staying on wherever the pane started.
+
+`but` is found by search, not by `PATH`: an app launched by launchd inherits
+`/usr/bin:/bin:/usr/sbin:/sbin`, so the binary your terminal finds instantly is
+invisible here. Homebrew and Cargo locations are checked directly, then your
+login shell is asked. Set `WL_BUT_PATH` to skip all of it.
+
 **The panel** draws the pad in its real shape with the six agent keys showing
 their live colour, then one row per agent. Click a key or a row to jump to that
-agent. It also carries the on/off switch, an "Open at login" toggle, and a
-warning when another app is fighting for the device.
+agent, or the stack key to open the stack. It also carries the on/off switch,
+an "Open at login" toggle, and a warning when another app is fighting for the
+device.
 
 **Off** clears the lights and stops driving, but deliberately leaves the device
 keymap alone: rebinding is a flash write, and the keys light instantly on the

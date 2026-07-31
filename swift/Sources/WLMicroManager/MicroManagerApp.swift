@@ -20,6 +20,14 @@ struct MicroManagerApp: App {
             MenuPanelView()
                 .environmentObject(bridge)
                 .task {
+                    // The stack key opens a window, which the bridge knows
+                    // nothing about, so the two are joined here.
+                    let stack = StackPanelController.shared
+                    stack.onVisibilityChange = { [weak bridge] open in
+                        Task { await bridge?.setStackPanelOpen(open) }
+                    }
+                    bridge.onStackKey = { stack.toggle() }
+
                     // Come back up in whatever state it was left in, so a
                     // login-item launch resumes rather than sitting idle.
                     // Defaults to on for a first run.

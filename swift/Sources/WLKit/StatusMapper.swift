@@ -30,12 +30,15 @@ public struct BridgeConfig: Sendable {
         "done": .solid,
         "unknown": .solid,
     ]
+    /// The stack key is not an agent, so it gets a colour of its own rather
+    /// than borrowing one of the status colours.
+    public var stackColor: Int = 0x7C4DFF
     public var brightness: Double = 1
     public var speed: Double = 0.5
     /// Leave the key-backlight ZONE alone: keys are painted per-agent instead,
     /// and a zone colour would only compete with them.
     public var driveBacklight = false
-    /// Bind the six agent keys to `KV_OAI_AG00..AG05` on startup. Required for
+    /// Bind the keys this app drives to `KV_OAI_AG*` on startup. Required for
     /// per-key colour to work at all.
     public var manageKeymap = true
     public var pollInterval: TimeInterval = 2.5
@@ -77,6 +80,23 @@ public enum StatusMapper {
                 speed: cfg.speed
             )
         }
+    }
+
+    /// The stack key's own thread. It stays lit whenever the bridge is
+    /// running: binding it to an AG keycode took away the keystroke it used to
+    /// send, so an unlit key would just read as broken. Breathing while the
+    /// stack is on screen, since the same key is what dismisses it.
+    public static func stackThread(
+        open: Bool,
+        _ cfg: BridgeConfig = BridgeConfig()
+    ) -> OAI.Thread {
+        OAI.Thread(
+            id: Pad.stackKeyID,
+            color: cfg.stackColor,
+            brightness: open ? cfg.brightness : cfg.brightness * 0.3,
+            effect: open ? .breath : .solid,
+            speed: cfg.speed
+        )
     }
 
     /// The underglow zone for an aggregate state, or nil to switch it off.

@@ -16,16 +16,23 @@ public struct HerdrAgent: Equatable, Sendable {
     public var agent: String
     public var status: String
     public var cwd: String?
+    public var foregroundCwd: String?
     public var focused: Bool
 
     /// The target to hand to `agent.focus`.
     public var focusTarget: String? { terminalID ?? paneID }
 
+    /// Where the agent is actually working. `foreground_cwd` follows a `cd`
+    /// inside the pane; `cwd` is only where the pane started.
+    public var workingDirectory: String? {
+        [foregroundCwd, cwd].compactMap { $0 }.first { !$0.isEmpty }
+    }
+
     /// Last path component of the working directory, which is what a person
     /// recognises the agent by.
     public var shortName: String {
-        guard let cwd, !cwd.isEmpty else { return agent }
-        return (cwd as NSString).lastPathComponent
+        guard let directory = workingDirectory else { return agent }
+        return (directory as NSString).lastPathComponent
     }
 
     init(json: [String: Any]) {
@@ -36,6 +43,7 @@ public struct HerdrAgent: Equatable, Sendable {
         agent = json["agent"] as? String ?? "agent"
         status = json["agent_status"] as? String ?? "unknown"
         cwd = json["cwd"] as? String
+        foregroundCwd = json["foreground_cwd"] as? String
         focused = json["focused"] as? Bool ?? false
     }
 
@@ -48,6 +56,7 @@ public struct HerdrAgent: Equatable, Sendable {
         workspaceID: String? = nil,
         terminalID: String? = nil,
         cwd: String? = nil,
+        foregroundCwd: String? = nil,
         focused: Bool = false
     ) {
         self.agent = agent
@@ -57,6 +66,7 @@ public struct HerdrAgent: Equatable, Sendable {
         self.workspaceID = workspaceID
         self.terminalID = terminalID
         self.cwd = cwd
+        self.foregroundCwd = foregroundCwd
         self.focused = focused
     }
 
@@ -155,6 +165,13 @@ public enum HerdrClient {
         let result = try await request("agent.list")
         let raw = result["agents"] as? [[String: Any]] ?? []
         return raw.map(HerdrAgent.init(json:)).sorted { $0.sortKey < $1.sortKey }
+    }
+
+    /// The agent whose pane has focus in Herdr, if any. Fetched fresh rather
+    /// than read off the bridge's poll, since focus is exactly the thing that
+    /// changes between polls.
+    public static func focusedAgent() async throws -> HerdrAgent? {
+        try await listAgents().first(where: \.focused)
     }
 
     public static func focusAgent(_ target: String) async throws {

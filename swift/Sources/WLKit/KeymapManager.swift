@@ -12,16 +12,23 @@ import Foundation
 /// where the inner string is the real config.
 public enum KeymapManager {
 
+    /// Indexed by key: key N is bound to `agCodes[N]`.
     public static let agCodes = [
         "KV_OAI_AG00", "KV_OAI_AG01", "KV_OAI_AG02",
         "KV_OAI_AG03", "KV_OAI_AG04", "KV_OAI_AG05",
+        "KV_OAI_AG06",
     ]
 
-    /// Rows are [2, 4, 4, 3]; the six agent keys are rows 0 and 1.
-    static let agentRows: [(row: Int, codes: [String])] = [
-        (0, Array(agCodes[0..<2])),
-        (1, Array(agCodes[2..<6])),
-    ]
+    /// The keycode each managed key must carry, addressed by its position in
+    /// the [2, 4, 4, 3] matrix. Bindings are per key rather than per row: the
+    /// stack key shares row 2 with three keys this app has no business
+    /// touching, and rewriting the row would take their keycodes with it.
+    static var bindings: [(row: Int, column: Int, code: String)] {
+        Pad.boundKeyIDs.compactMap { key in
+            guard key < agCodes.count, let at = Pad.position(of: key) else { return nil }
+            return (at.row, at.column, agCodes[key])
+        }
+    }
 
     public enum Failure: LocalizedError {
         case noProfiles
@@ -67,19 +74,19 @@ public enum KeymapManager {
         return keymap
     }
 
-    /// True when the six agent keys are bound to AG keycodes on the active layer.
+    /// True when every managed key is bound to its AG keycode on the active layer.
     public static func isAgentKeymapApplied(_ config: [String: Any]) -> Bool {
         guard let keymap = activeLayerKeymap(config) else { return false }
-        for (row, codes) in agentRows {
-            guard row < keymap.count else { return false }
-            let actual = keymap[row]
-            guard actual.count >= codes.count else { return false }
-            for (i, code) in codes.enumerated() where actual[i] != code { return false }
+        for binding in bindings {
+            guard binding.row < keymap.count,
+                  binding.column < keymap[binding.row].count,
+                  keymap[binding.row][binding.column] == binding.code
+            else { return false }
         }
         return true
     }
 
-    /// Rebinds the six agent keys, leaving every other key, layer, encoder,
+    /// Rebinds the managed keys, leaving every other key, layer, encoder,
     /// joystick and lighting setting untouched.
     public static func withAgentKeymap(_ config: [String: Any]) throws -> [String: Any] {
         var next = config
@@ -97,8 +104,9 @@ public enum KeymapManager {
               var keymap = layout["keymap"] as? [[String]]
         else { throw Failure.noProfiles }
 
-        for (row, codes) in agentRows where row < keymap.count {
-            keymap[row] = codes
+        for binding in bindings
+        where binding.row < keymap.count && binding.column < keymap[binding.row].count {
+            keymap[binding.row][binding.column] = binding.code
         }
 
         layout["keymap"] = keymap

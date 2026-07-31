@@ -151,11 +151,25 @@ public enum Pad {
     /// The firmware's keycode table goes to AG19, so clear the whole id space
     /// when turning everything off, not just the visible keys.
     public static let maxThreadID = 19
-    /// The keys bound to `KV_OAI_AG*`, and so the only ones that can be lit.
+    /// Key N shows agent N's status and jumps to it.
     public static let agentKeyIDs = [0, 1, 2, 3, 4, 5]
+    /// Toggles the GitButler stack for the focused agent's directory. First key
+    /// of row 3, so the agent block above it stays whole.
+    public static let stackKeyID = 6
+    /// The keys bound to `KV_OAI_AG*`, and so the only ones that can be lit.
+    /// Everything else keeps whatever keycode is already on it.
+    public static let boundKeyIDs = agentKeyIDs + [stackKeyID]
 
     public static func row(of key: Int) -> Int? {
         rows.firstIndex { $0.contains(key) }
+    }
+
+    /// Where a key sits in `rows`, which is the shape the device keymap uses.
+    public static func position(of key: Int) -> (row: Int, column: Int)? {
+        for (row, keys) in rows.enumerated() {
+            if let column = keys.firstIndex(of: key) { return (row, column) }
+        }
+        return nil
     }
 }
 

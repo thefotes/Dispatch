@@ -36,8 +36,15 @@ public final class BridgeController: ObservableObject {
     /// receive its replies too, so a response id we never issued is a reliable
     /// tell.
     @Published public private(set) var contendingClient = false
+    /// Whether the GitButler stack is on screen. Only the key light cares —
+    /// the panel itself lives in the app layer.
+    @Published public private(set) var stackPanelOpen = false
 
     public var config: BridgeConfig
+
+    /// Called when the stack key is pressed. The bridge owns the key, the app
+    /// owns the window, so this is where the two meet.
+    public var onStackKey: (() -> Void)?
 
     // MARK: - Internals
 
@@ -72,7 +79,7 @@ public final class BridgeController: ObservableObject {
             guard let dict = params as? [String: Any] else { return }
             guard (dict["act"] as? Int) == 1 else { return }   // press, not release
             guard let index = OAI.agIndex(dict["k"] as? String) else { return }
-            Task { await self.focusSlot(index) }
+            self.handleKeyPress(index)
         }
     }
 
@@ -184,7 +191,7 @@ public final class BridgeController: ObservableObject {
                 let cfg = try await KeymapManager.read(device)
                 keymapReady = KeymapManager.isAgentKeymapApplied(cfg)
                 if !keymapReady {
-                    lastError = "The six agent keys are not bound to KV_OAI_AG00..AG05, so per-key colours will do nothing."
+                    lastError = "The agent keys and the stack key are not bound to KV_OAI_AG00..AG06, so per-key colours will do nothing."
                 }
             }
         } catch {
@@ -286,6 +293,7 @@ public final class BridgeController: ObservableObject {
 
         let state = StatusMapper.aggregate(fetched, config)
         let threads = StatusMapper.threads(for: fetched, config)
+            + [StatusMapper.stackThread(open: stackPanelOpen, config)]
 
         // Fingerprint the whole rendered picture, not just the aggregate, so
         // one agent changing still repaints when the worst state has not.
@@ -346,6 +354,24 @@ public final class BridgeController: ObservableObject {
     }
 
     // MARK: - Key presses
+
+    /// Every bound key arrives here. Which key does what is the one place that
+    /// has to agree with `Pad`, so keep the dispatch in a single switch.
+    public func handleKeyPress(_ index: Int) {
+        if index == Pad.stackKeyID {
+            onStackKey?()
+        } else if Pad.agentKeyIDs.contains(index) {
+            Task { await focusSlot(index) }
+        }
+    }
+
+    /// Repaints the stack key. Called by the app when the window opens or
+    /// closes, so the key reflects what is actually on screen.
+    public func setStackPanelOpen(_ open: Bool) async {
+        guard stackPanelOpen != open else { return }
+        stackPanelOpen = open
+        await forceRepaint()
+    }
 
     /// Key index N is agent slot N — the same mapping the lighting uses, which
     /// is what makes the key you look at the key you press.

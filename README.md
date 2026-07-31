@@ -6,6 +6,8 @@ to your running coding agents:
 - the pad's light reflects agent status, so you can tell at a glance whether
   anything needs you
 - the top six keys jump straight to agents 1-6 in Herdr
+- the key below them shows the GitButler stack of whichever agent has focus
+  (Micro Manager only — see `swift/README.md`)
 
 ## Per-key colours: solved
 
@@ -56,8 +58,11 @@ An AG-bound key stops sending keystrokes, but it still reports presses over HID
 as `{"m":"v.oai.hid","p":{"k":"AG01","act":1}}`, so it is both a status light
 and an input.
 
-This plugin binds the top six keys (rows 1-2) and leaves rows 3-4 alone, so
-those still send `KC_F19`..`KC_F24` if you want them for shortcuts.
+The Node bridge binds the top six keys (rows 1-2) and leaves rows 3-4 alone, so
+those still send `KC_F19`..`KC_F24` if you want them for shortcuts. Micro
+Manager additionally binds the first key of row 3 for the GitButler stack, so
+that one no longer sends `KC_F19`. Bindings are written per key rather than per
+row, which is what lets the other three keys in that row keep their keycodes.
 
 ### What did not work
 

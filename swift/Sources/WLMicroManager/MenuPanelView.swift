@@ -99,14 +99,23 @@ struct MenuPanelView: View {
 
     private func keyView(_ index: Int) -> some View {
         let color = bridge.keyColors[index]
-        let isAgentKey = Pad.agentKeyIDs.contains(index)
-        let agent = index < bridge.agents.count ? bridge.agents[index] : nil
+        let isBound = Pad.boundKeyIDs.contains(index)
+        let isStackKey = index == Pad.stackKeyID
+        // Only agent keys index into the agent list; the stack key sits at 6,
+        // which is a perfectly valid agent index and would be the wrong agent.
+        let agent = Pad.agentKeyIDs.contains(index) && index < bridge.agents.count
+            ? bridge.agents[index]
+            : nil
 
         return Button {
-            if agent != nil { Task { await bridge.focusSlot(index) } }
+            if isStackKey {
+                StackPanelController.shared.toggle()
+            } else if agent != nil {
+                Task { await bridge.focusSlot(index) }
+            }
         } label: {
             RoundedRectangle(cornerRadius: 5)
-                .fill(color ?? Color.secondary.opacity(isAgentKey ? 0.16 : 0.07))
+                .fill(color ?? Color.secondary.opacity(isBound ? 0.16 : 0.07))
                 .frame(width: 34, height: 26)
                 .overlay(
                     RoundedRectangle(cornerRadius: 5)
@@ -114,8 +123,14 @@ struct MenuPanelView: View {
                 )
         }
         .buttonStyle(.plain)
-        .disabled(agent == nil)
-        .help(agent.map { "\($0.shortName) — \($0.status)" } ?? "Key \(index)")
+        .disabled(agent == nil && !isStackKey)
+        .help(helpText(index, agent: agent, isStackKey: isStackKey))
+    }
+
+    private func helpText(_ index: Int, agent: HerdrAgent?, isStackKey: Bool) -> String {
+        if isStackKey { return "GitButler stack for the focused agent" }
+        if let agent { return "\(agent.shortName) — \(agent.status)" }
+        return "Key \(index)"
     }
 
     // MARK: - Agents
