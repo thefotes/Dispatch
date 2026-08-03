@@ -25,6 +25,15 @@ final class LiveHerdrTests: XCTestCase {
         XCTAssertEqual(Set(targets).count, targets.count, "targets are unique")
     }
 
+    func testFocusedAgentIsTheOneHerdrReports() async throws {
+        try XCTSkipUnless(serverRunning(), "no herdr server")
+        let all = try await HerdrClient.listAgents()
+        let focused = try await HerdrClient.focusedAgent()
+        print("focused: \(focused?.workingDirectory ?? "none")")
+        XCTAssertEqual(all.filter(\.focused).count <= 1, true, "focus is singular")
+        XCTAssertEqual(focused?.paneID, all.first(where: \.focused)?.paneID)
+    }
+
     func testSecondRequestOnAFreshConnectionWorks() async throws {
         try XCTSkipUnless(serverRunning(), "no herdr server")
         // The server closes after one request; each call must open its own
