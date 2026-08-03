@@ -193,6 +193,34 @@ public enum Pad {
     public static let boundKeyIDs =
         agentKeyIDs + [stackKeyID, tabCycleKeyID, landKeyID] + voiceKeyIDs + macroKeyIDs
 
+    // MARK: Dial and joystick
+
+    /// The dial and joystick emit keycodes like the keys do, so binding them
+    /// to the AG codes above 12 turns rotations and deflections into the same
+    /// `v.oai.hid` reports. These IDs never light — nothing is under them.
+    public static let dialUpID = 13     // encoder, clockwise detent
+    public static let dialDownID = 14   // encoder, counter-clockwise detent
+    /// The joystick's four cardinal sectors, named by the angle fraction at
+    /// their centre in the radial map (0 = east, counter-clockwise).
+    public static let joyNorthID = 15   // sector centred on 0.25
+    public static let joyWestID = 16    // sector centred on 0.5
+    public static let joySouthID = 17   // sector centred on 0.75
+    public static let joyEastID = 18    // sector centred on 0.0
+
+    public enum JoystickDirection {
+        case north, south, east, west
+
+        public init?(keyID: Int) {
+            switch keyID {
+            case Pad.joyNorthID: self = .north
+            case Pad.joySouthID: self = .south
+            case Pad.joyEastID: self = .east
+            case Pad.joyWestID: self = .west
+            default: return nil
+            }
+        }
+    }
+
     public static func row(of key: Int) -> Int? {
         rows.firstIndex { $0.contains(key) }
     }

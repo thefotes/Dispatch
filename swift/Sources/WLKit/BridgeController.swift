@@ -56,6 +56,10 @@ public final class BridgeController: ObservableObject {
     public var onLandKey: (() -> Void)?
     /// Called when either half of the wide voice key is pressed.
     public var onVoiceKey: (() -> Void)?
+    /// Called per dial detent: +1 clockwise, -1 counter-clockwise.
+    public var onDial: ((Int) -> Void)?
+    /// Called when the joystick enters a cardinal sector.
+    public var onJoystick: ((Pad.JoystickDirection) -> Void)?
     /// Consulted before any key does its normal job. Returning true consumes
     /// the press — this is how a pending land confirmation turns every other
     /// key into "cancel" without those keys also doing their usual work.
@@ -403,6 +407,10 @@ public final class BridgeController: ObservableObject {
             } else if Pad.voiceKeyIDs.contains(index) {
                 onVoiceKey?()
             }
+        } else if index == Pad.dialUpID || index == Pad.dialDownID {
+            onDial?(index == Pad.dialUpID ? 1 : -1)
+        } else if let direction = Pad.JoystickDirection(keyID: index) {
+            onJoystick?(direction)
         } else if let slot = Pad.agentSlot(for: index) {
             Task { await focusSlot(slot) }
         }

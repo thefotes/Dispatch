@@ -21,14 +21,27 @@ import Foundation
 public struct KeyBindings: Sendable, Equatable {
 
     public private(set) var texts: [Int: String]
+    /// The models the joystick cycles through in Claude Code, in order.
+    /// Overridable with a top-level `"claude": {"models": [...]}` object.
+    public private(set) var claudeModels: [String]
+    /// The effort ladder the dial climbs in Claude Code.
+    public private(set) var claudeEfforts: [String]
 
     public static let defaults: [Int: String] = [
         8: "Open PRs for all active GitButler branches",
         12: "Run but pull",
     ]
+    public static let defaultClaudeModels = ["fable", "opus", "sonnet", "haiku"]
+    public static let defaultClaudeEfforts = ["low", "medium", "high", "xhigh", "max"]
 
-    public init(texts: [Int: String] = KeyBindings.defaults) {
+    public init(
+        texts: [Int: String] = KeyBindings.defaults,
+        claudeModels: [String] = KeyBindings.defaultClaudeModels,
+        claudeEfforts: [String] = KeyBindings.defaultClaudeEfforts
+    ) {
         self.texts = texts
+        self.claudeModels = claudeModels
+        self.claudeEfforts = claudeEfforts
     }
 
     /// The string bound to a key, or nil when the key does something else.
@@ -53,22 +66,31 @@ public struct KeyBindings: Sendable, Equatable {
 
     /// A malformed file falls back to the defaults rather than a dead pad.
     static func parse(_ data: Data) -> KeyBindings {
-        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let keys = json["keys"] as? [String: Any]
+        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         else { return KeyBindings() }
 
         var texts = defaults
-        for (name, value) in keys {
-            guard let text = value as? String else { continue }
-            for key in keyIDs(for: name) {
-                if text.isEmpty {
-                    texts.removeValue(forKey: key)
-                } else {
-                    texts[key] = text
+        if let keys = json["keys"] as? [String: Any] {
+            for (name, value) in keys {
+                guard let text = value as? String else { continue }
+                for key in keyIDs(for: name) {
+                    if text.isEmpty {
+                        texts.removeValue(forKey: key)
+                    } else {
+                        texts[key] = text
+                    }
                 }
             }
         }
-        return KeyBindings(texts: texts)
+
+        let claude = json["claude"] as? [String: Any]
+        let models = (claude?["models"] as? [String])?.filter { !$0.isEmpty }
+        let efforts = (claude?["efforts"] as? [String])?.filter { !$0.isEmpty }
+        return KeyBindings(
+            texts: texts,
+            claudeModels: models?.isEmpty == false ? models! : defaultClaudeModels,
+            claudeEfforts: efforts?.isEmpty == false ? efforts! : defaultClaudeEfforts
+        )
     }
 
     private static func keyIDs(for name: String) -> [Int] {

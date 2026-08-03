@@ -45,4 +45,23 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertEqual(parse("not json"), KeyBindings())
         XCTAssertEqual(parse(#"{"keys": "nope"}"#), KeyBindings())
     }
+
+    func testClaudeModelAndEffortListsHaveDefaults() {
+        let bindings = KeyBindings()
+        XCTAssertEqual(bindings.claudeModels, ["fable", "opus", "sonnet", "haiku"])
+        XCTAssertEqual(bindings.claudeEfforts, ["low", "medium", "high", "xhigh", "max"])
+    }
+
+    func testClaudeListsAreOverridable() {
+        let bindings = parse(#"{"claude": {"models": ["opus", "sonnet"], "efforts": ["low", "high"]}}"#)
+        XCTAssertEqual(bindings.claudeModels, ["opus", "sonnet"])
+        XCTAssertEqual(bindings.claudeEfforts, ["low", "high"])
+        XCTAssertEqual(bindings.text(for: 8), "Open PRs for all active GitButler branches",
+                       "key defaults survive a claude-only config")
+    }
+
+    func testEmptyClaudeListsFallBackToDefaults() {
+        let bindings = parse(#"{"claude": {"models": []}}"#)
+        XCTAssertEqual(bindings.claudeModels, KeyBindings.defaultClaudeModels)
+    }
 }

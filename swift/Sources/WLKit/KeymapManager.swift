@@ -21,6 +21,25 @@ public enum KeymapManager {
         "KV_OAI_AG12",
     ]
 
+    /// The dial: clockwise, counter-clockwise. Its press keeps whatever it
+    /// already does — that click is not this app's to take.
+    static let dialCodes = ["KV_OAI_AG13", "KV_OAI_AG14"]
+
+    /// The joystick's four cardinal sectors, matched by the angle at their
+    /// centre in the radial map. Diagonal sectors are left alone.
+    static let joystickCodes: [(centre: Double, code: String)] = [
+        (0.25, "KV_OAI_AG15"),
+        (0.50, "KV_OAI_AG16"),
+        (0.75, "KV_OAI_AG17"),
+        (0.00, "KV_OAI_AG18"),
+    ]
+
+    /// A sector's centre angle, handling the one that wraps through zero.
+    static func sectorCentre(_ a1: Double, _ a2: Double) -> Double {
+        let centre = a2 >= a1 ? (a1 + a2) / 2 : ((a1 + a2 + 1) / 2)
+        return centre.truncatingRemainder(dividingBy: 1)
+    }
+
     /// The keycode each managed key must carry, addressed by its position in
     /// the [2, 4, 4, 3] matrix. Bindings are per key rather than per row: the
     /// stack key shares row 2 with three keys this app has no business
@@ -76,7 +95,18 @@ public enum KeymapManager {
         return keymap
     }
 
-    /// True when every managed key is bound to its AG keycode on the active layer.
+    static func activeLayerLayout(_ config: [String: Any]) -> [String: Any]? {
+        let index = config["activeProfileId"] as? Int ?? 0
+        guard let profiles = config["profiles"] as? [[String: Any]] else { return nil }
+        let profile = index < profiles.count ? profiles[index] : profiles.first
+        guard let layers = profile?["layers"] as? [[String: Any]],
+              let layer = layers.first
+        else { return nil }
+        return layer["layout"] as? [String: Any]
+    }
+
+    /// True when every managed key, the dial and the joystick's cardinal
+    /// sectors carry their AG codes on the active layer.
     public static func isAgentKeymapApplied(_ config: [String: Any]) -> Bool {
         guard let keymap = activeLayerKeymap(config) else { return false }
         for binding in bindings {
@@ -84,6 +114,26 @@ public enum KeymapManager {
                   binding.column < keymap[binding.row].count,
                   keymap[binding.row][binding.column] == binding.code
             else { return false }
+        }
+
+        guard let layout = activeLayerLayout(config) else { return false }
+        if let encoders = layout["encoders"] as? [[String]], let dial = encoders.first {
+            guard dial.count >= 2, dial[0] == dialCodes[0], dial[1] == dialCodes[1] else {
+                return false
+            }
+        }
+        if let joystick = layout["joystick"] as? [String: Any],
+           let sectors = joystick["sectors"] as? [[String: Any]] {
+            for (centre, code) in joystickCodes {
+                let bound = sectors.contains { sector in
+                    guard let a1 = sector["a1"] as? Double,
+                          let a2 = sector["a2"] as? Double
+                    else { return false }
+                    return abs(sectorCentre(a1, a2) - centre) < 0.01
+                        && sector["k"] as? String == code
+                }
+                if !bound { return false }
+            }
         }
         return true
     }
@@ -109,6 +159,31 @@ public enum KeymapManager {
         for binding in bindings
         where binding.row < keymap.count && binding.column < keymap[binding.row].count {
             keymap[binding.row][binding.column] = binding.code
+        }
+
+        // The dial's two rotation slots; its press stays untouched.
+        if var encoders = layout["encoders"] as? [[String]],
+           var dial = encoders.first, dial.count >= 2 {
+            dial[0] = dialCodes[0]
+            dial[1] = dialCodes[1]
+            encoders[0] = dial
+            layout["encoders"] = encoders
+        }
+
+        // The joystick's cardinal sectors; diagonals keep their keycodes.
+        if var joystick = layout["joystick"] as? [String: Any],
+           var sectors = joystick["sectors"] as? [[String: Any]] {
+            for index in sectors.indices {
+                guard let a1 = sectors[index]["a1"] as? Double,
+                      let a2 = sectors[index]["a2"] as? Double
+                else { continue }
+                let centre = sectorCentre(a1, a2)
+                if let match = joystickCodes.first(where: { abs($0.centre - centre) < 0.01 }) {
+                    sectors[index]["k"] = match.code
+                }
+            }
+            joystick["sectors"] = sectors
+            layout["joystick"] = joystick
         }
 
         layout["keymap"] = keymap

@@ -42,6 +42,16 @@ struct MicroManagerApp: App {
                         bridge?.noteError(message)
                     }
                     bridge.onVoiceKey = { voice.handleVoiceKey() }
+
+                    let tune = TuneController.shared
+                    tune.onError = { [weak bridge] message in
+                        bridge?.noteError(message)
+                    }
+                    tune.bindings = { [weak bridge] in
+                        bridge?.keyBindings ?? KeyBindings()
+                    }
+                    bridge.onDial = { step in tune.handleDial(step) }
+                    bridge.onJoystick = { direction in tune.handleJoystick(direction) }
                     // While a land confirmation is up, every key that is not
                     // the land key means "cancel", nothing else.
                     bridge.onKeyIntercept = { index in
