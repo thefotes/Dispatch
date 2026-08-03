@@ -16,6 +16,11 @@ final class FloatingPanel: NSObject {
     /// whether dismissal is allowed right now, so this asks rather than closes.
     var onDismissRequested: (() -> Void)?
 
+    /// Owners whose content is a short list rather than command output can ask
+    /// for something narrower; the stack graph needs the full width, a model
+    /// list would just be mostly margin. Set before the first `present`.
+    var preferredWidth: CGFloat = FloatingPanel.width
+
     private var panel: NSPanel?
     private var webView: WKWebView?
     private var messageBridge: MessageBridge?
@@ -79,7 +84,7 @@ final class FloatingPanel: NSObject {
     // MARK: - Window
 
     private func makePanel() -> NSPanel {
-        let contentRect = NSRect(x: 0, y: 0, width: Self.width, height: Self.initialHeight)
+        let contentRect = NSRect(x: 0, y: 0, width: preferredWidth, height: Self.initialHeight)
         let panel = NSPanel(
             contentRect: contentRect,
             styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
@@ -132,7 +137,7 @@ final class FloatingPanel: NSObject {
             ?? NSScreen.screens.first
         guard let visible = screen?.visibleFrame else { return }
 
-        let width = min(Self.width, visible.width - 80)
+        let width = min(preferredWidth, visible.width - 80)
         let clamped = min(max(height, Self.minimumHeight), visible.height * 0.8)
         panel.setFrame(
             NSRect(

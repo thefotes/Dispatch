@@ -10,7 +10,9 @@ import Foundation
 ///         "8": "Open PRs for all active GitButler branches",
 ///         "12": "Run but pull",
 ///         "10+11": "Summarise what you are working on"
-///       }
+///       },
+///       "claude": { "models": ["fable", "opus"], "efforts": ["low", "high"] },
+///       "codex":  { "models": ["gpt-5.6-sol", "gpt-5.6-codex"] }
 ///     }
 ///
 /// A bound string is injected into the focused agent's prompt, unsubmitted.
@@ -26,6 +28,12 @@ public struct KeyBindings: Sendable, Equatable {
     public private(set) var claudeModels: [String]
     /// The effort ladder the dial climbs in Claude Code.
     public private(set) var claudeEfforts: [String]
+    /// Codex's own `/model` menu, in the order it lists them, from a
+    /// `"codex": {"models": [...]}` object. The joystick steers that menu
+    /// rather than owning it, so this is the user's copy of what it offers —
+    /// there is nothing to read it from, and no sensible default. Empty means
+    /// the panel shows the steering guide alone.
+    public private(set) var codexModels: [String]
 
     public static let defaults: [Int: String] = [
         8: "Open PRs for all active GitButler branches",
@@ -37,11 +45,13 @@ public struct KeyBindings: Sendable, Equatable {
     public init(
         texts: [Int: String] = KeyBindings.defaults,
         claudeModels: [String] = KeyBindings.defaultClaudeModels,
-        claudeEfforts: [String] = KeyBindings.defaultClaudeEfforts
+        claudeEfforts: [String] = KeyBindings.defaultClaudeEfforts,
+        codexModels: [String] = []
     ) {
         self.texts = texts
         self.claudeModels = claudeModels
         self.claudeEfforts = claudeEfforts
+        self.codexModels = codexModels
     }
 
     /// The string bound to a key, or nil when the key does something else.
@@ -86,10 +96,13 @@ public struct KeyBindings: Sendable, Equatable {
         let claude = json["claude"] as? [String: Any]
         let models = (claude?["models"] as? [String])?.filter { !$0.isEmpty }
         let efforts = (claude?["efforts"] as? [String])?.filter { !$0.isEmpty }
+        let codex = json["codex"] as? [String: Any]
+        let codexModels = (codex?["models"] as? [String])?.filter { !$0.isEmpty }
         return KeyBindings(
             texts: texts,
             claudeModels: models?.isEmpty == false ? models! : defaultClaudeModels,
-            claudeEfforts: efforts?.isEmpty == false ? efforts! : defaultClaudeEfforts
+            claudeEfforts: efforts?.isEmpty == false ? efforts! : defaultClaudeEfforts,
+            codexModels: codexModels ?? []
         )
     }
 

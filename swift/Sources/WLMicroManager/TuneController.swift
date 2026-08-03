@@ -9,6 +9,9 @@ import WLKit
 /// only a picker for models, so its dial sends the chords bound in
 /// `[tui.keymap]` and its joystick drives the `/model` picker: north opens
 /// it, north/south move, east confirms, west cancels.
+///
+/// Either way the joystick is working a list you cannot see from the pad, so
+/// every deflection also puts that list on screen — see `TunePanelController`.
 @MainActor
 final class TuneController {
 
@@ -82,9 +85,9 @@ final class TuneController {
         let kind = agent.agent.lowercased()
         do {
             if kind.contains("claude") {
-                try await claudeModel(direction, pane: pane)
+                try await claudeModel(direction, pane: pane, agent: agent.shortName)
             } else if kind.contains("codex") {
-                try await codexModel(direction, pane: pane)
+                try await codexModel(direction, pane: pane, agent: agent.shortName)
             } else {
                 onError?("No model control for \(agent.agent).")
             }
@@ -95,7 +98,11 @@ final class TuneController {
 
     /// Models cycle with wraparound — unlike effort, a list of names has no
     /// natural top or bottom.
-    private func claudeModel(_ direction: Pad.JoystickDirection, pane: String) async throws {
+    private func claudeModel(
+        _ direction: Pad.JoystickDirection,
+        pane: String,
+        agent: String
+    ) async throws {
         let models = bindings().claudeModels
         let step: Int
         switch direction {
@@ -105,10 +112,22 @@ final class TuneController {
         }
         let index = ((claudeModelIndex[pane] ?? 0) + step + models.count) % models.count
         claudeModelIndex[pane] = index
+        // Up before the command goes out: the panel is the answer to "what did
+        // I just land on", and waiting for the TUI to echo would show it late.
+        TunePanelController.shared.showModels(
+            models,
+            current: index,
+            agent: agent,
+            hint: "north and south cycle the list"
+        )
         try await send(command: "/model \(models[index])", to: pane)
     }
 
-    private func codexModel(_ direction: Pad.JoystickDirection, pane: String) async throws {
+    private func codexModel(
+        _ direction: Pad.JoystickDirection,
+        pane: String,
+        agent: String
+    ) async throws {
         let pickerOpen = codexPickerPane == pane
             && Date().timeIntervalSince(codexPickerOpened ?? .distantPast) < Self.pickerLifetime
 
@@ -118,22 +137,39 @@ final class TuneController {
             try await send(command: "/model", to: pane)
             codexPickerPane = pane
             codexPickerOpened = Date()
+            showCodexModels(agent: agent)
             return
         }
 
         switch direction {
         case .north:
             try await HerdrClient.sendKeys(paneID: pane, keys: ["up"])
+            showCodexModels(agent: agent)
         case .south:
             try await HerdrClient.sendKeys(paneID: pane, keys: ["down"])
+            showCodexModels(agent: agent)
         case .east:
             try await HerdrClient.sendKeys(paneID: pane, keys: ["enter"])
             codexPickerPane = nil
+            TunePanelController.shared.hide()
         case .west:
             try await HerdrClient.sendKeys(paneID: pane, keys: ["esc"])
             codexPickerPane = nil
+            TunePanelController.shared.hide()
         }
         codexPickerOpened = Date()
+    }
+
+    /// Codex's picker is its own; we push arrow keys at it without being told
+    /// where the cursor sits, so the panel is a numbered reading of the list
+    /// and nothing is marked as current.
+    private func showCodexModels(agent: String) {
+        TunePanelController.shared.showModels(
+            bindings().codexModels,
+            current: nil,
+            agent: agent,
+            hint: "north and south move · east confirms · west cancels"
+        )
     }
 
     // MARK: - Plumbing
