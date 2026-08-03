@@ -39,6 +39,11 @@ public struct BridgeConfig: Sendable {
     /// The land key pushes to the target, so it gets a colour with some weight
     /// to it — distinct from blocked-red, which means "look", not "beware".
     public var landColor: Int = 0xE91E63
+    /// The voice key: white at rest, recording-red while a take is open.
+    public var voiceColor: Int = 0xECEFF1
+    public var voiceActiveColor: Int = 0xFF3B30
+    /// Text-macro keys: a quiet steel blue — bound, but not status-bearing.
+    public var macroColor: Int = 0x90A4AE
     public var brightness: Double = 1
     public var speed: Double = 0.5
     /// Leave the key-backlight ZONE alone: keys are painted per-agent instead,
@@ -129,6 +134,35 @@ public enum StatusMapper {
             color: cfg.landColor,
             brightness: open ? cfg.brightness : cfg.brightness * 0.3,
             effect: open ? .breath : .solid,
+            speed: cfg.speed
+        )
+    }
+
+    /// One half of the voice key — the callers paint both matrix positions
+    /// identically so the single wide keycap reads as one light. Dim white at
+    /// rest; breathing red while a Claude voice take is open.
+    public static func voiceThread(
+        id: Int,
+        active: Bool,
+        _ cfg: BridgeConfig = BridgeConfig()
+    ) -> OAI.Thread {
+        OAI.Thread(
+            id: id,
+            color: active ? cfg.voiceActiveColor : cfg.voiceColor,
+            brightness: active ? cfg.brightness : cfg.brightness * 0.25,
+            effect: active ? .breath : .solid,
+            speed: cfg.speed
+        )
+    }
+
+    /// A text-macro key's thread: dimly lit so it reads as bound, in a colour
+    /// that stays out of the status conversation.
+    public static func macroThread(id: Int, _ cfg: BridgeConfig = BridgeConfig()) -> OAI.Thread {
+        OAI.Thread(
+            id: id,
+            color: cfg.macroColor,
+            brightness: cfg.brightness * 0.25,
+            effect: .solid,
             speed: cfg.speed
         )
     }

@@ -212,6 +212,18 @@ public enum HerdrClient {
         _ = try await request("tab.focus", params: ["tab_id": tabID])
     }
 
+    /// Injects key chords into a pane, crossterm-style names ("ctrl+alt+v",
+    /// "f13", "enter"). The pane's terminal encodes them as if typed.
+    public static func sendKeys(paneID: String, keys: [String]) async throws {
+        _ = try await request("pane.send_keys", params: ["pane_id": paneID, "keys": keys])
+    }
+
+    /// Types a string into a pane — bracketed-pasted when the pane supports
+    /// it, so multi-word text lands as one block and nothing auto-submits.
+    public static func sendText(paneID: String, text: String) async throws {
+        _ = try await request("pane.send_text", params: ["pane_id": paneID, "text": text])
+    }
+
     /// Focuses the tab after the focused one in its workspace, wrapping at the
     /// end. Tabs in other workspaces are left alone: cycling is a
     /// within-window gesture, not a window switcher.

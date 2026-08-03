@@ -103,6 +103,8 @@ struct MenuPanelView: View {
         let isStackKey = index == Pad.stackKeyID
         let isTabCycleKey = index == Pad.tabCycleKeyID
         let isLandKey = index == Pad.landKeyID
+        let macroText = bridge.keyBindings.text(for: index)
+        let isVoiceKey = macroText == nil && Pad.voiceKeyIDs.contains(index)
         // Key index and agent slot are different orderings — the top row is
         // wired right to left — so the slot lookup goes through the pad map.
         let slot = Pad.agentSlot(for: index)
@@ -115,6 +117,10 @@ struct MenuPanelView: View {
                 Task { await bridge.cycleTabs() }
             } else if isLandKey {
                 LandPanelController.shared.handleLandKey()
+            } else if let macroText {
+                Task { await bridge.injectPrompt(macroText) }
+            } else if isVoiceKey {
+                VoiceController.shared.handleVoiceKey()
             } else if let slot, agent != nil {
                 Task { await bridge.focusSlot(slot) }
             }
@@ -128,9 +134,11 @@ struct MenuPanelView: View {
                 )
         }
         .buttonStyle(.plain)
-        .disabled(agent == nil && !isStackKey && !isTabCycleKey && !isLandKey)
+        .disabled(agent == nil && !isStackKey && !isTabCycleKey && !isLandKey
+                  && macroText == nil && !isVoiceKey)
         .help(helpText(index, agent: agent, isStackKey: isStackKey,
-                       isTabCycleKey: isTabCycleKey, isLandKey: isLandKey))
+                       isTabCycleKey: isTabCycleKey, isLandKey: isLandKey,
+                       macroText: macroText, isVoiceKey: isVoiceKey))
     }
 
     private func helpText(
@@ -138,11 +146,15 @@ struct MenuPanelView: View {
         agent: HerdrAgent?,
         isStackKey: Bool,
         isTabCycleKey: Bool,
-        isLandKey: Bool
+        isLandKey: Bool,
+        macroText: String?,
+        isVoiceKey: Bool
     ) -> String {
         if isStackKey { return "GitButler stack for the focused agent" }
         if isTabCycleKey { return "Cycle tabs in the focused Herdr window" }
         if isLandKey { return "Land the focused agent's branches onto the target" }
+        if let macroText { return "Type: \(macroText)" }
+        if isVoiceKey { return "Voice input for the focused agent" }
         if let agent { return "\(agent.shortName) — \(agent.status)" }
         return "Key \(index)"
     }

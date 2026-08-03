@@ -31,30 +31,19 @@ final class KeymapManagerTests: XCTestCase {
         XCTAssertEqual(KeymapManager.activeLayerKeymap(config)?[0], ["KC_F13", "KC_F14"])
     }
 
-    func testApplyingBindsTheAgentKeysAndTheStackKey() throws {
+    /// The whole pad is managed now — every key must carry its own AG code,
+    /// each key's code matching its index so lights and presses line up.
+    func testApplyingBindsEveryKeyToItsOwnCode() throws {
         let config = try backupKeymap()
         let next = try KeymapManager.withAgentKeymap(config)
         XCTAssertTrue(KeymapManager.isAgentKeymapApplied(next))
 
         let keymap = try XCTUnwrap(KeymapManager.activeLayerKeymap(next))
-        XCTAssertEqual(keymap[0], ["KV_OAI_AG00", "KV_OAI_AG01"])
-        XCTAssertEqual(keymap[1], ["KV_OAI_AG02", "KV_OAI_AG03", "KV_OAI_AG04", "KV_OAI_AG05"])
-        // Row 2 is stack, tab cycle, an unmanaged key, then land.
-        XCTAssertEqual(keymap[2][0], "KV_OAI_AG06")
-        XCTAssertEqual(keymap[2][1], "KV_OAI_AG07")
-        XCTAssertEqual(keymap[2][3], "KV_OAI_AG09")
-    }
-
-    /// Key 8 and row 3 are not this app's to touch, so binding the managed
-    /// keys must not take them along.
-    func testApplyingLeavesTheRestOfTheKeymapAlone() throws {
-        let config = try backupKeymap()
-        let next = try KeymapManager.withAgentKeymap(config)
-
-        let original = try XCTUnwrap(KeymapManager.activeLayerKeymap(config))
-        let keymap = try XCTUnwrap(KeymapManager.activeLayerKeymap(next))
-        XCTAssertEqual(keymap[2][2], original[2][2])
-        XCTAssertEqual(keymap[3], original[3])
+        XCTAssertEqual(Set(Pad.boundKeyIDs).count, Pad.keyCount, "every key is managed")
+        for key in Pad.boundKeyIDs {
+            let at = try XCTUnwrap(Pad.position(of: key))
+            XCTAssertEqual(keymap[at.row][at.column], KeymapManager.agCodes[key])
+        }
     }
 
     /// A pad bound the old way — six agent keys, stack key still on its F-key —

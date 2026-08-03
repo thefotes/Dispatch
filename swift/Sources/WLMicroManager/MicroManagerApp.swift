@@ -33,6 +33,15 @@ struct MicroManagerApp: App {
                         Task { await bridge?.setLandPanelOpen(open) }
                     }
                     bridge.onLandKey = { land.handleLandKey() }
+
+                    let voice = VoiceController.shared
+                    voice.onActiveChange = { [weak bridge] active in
+                        Task { await bridge?.setVoiceActive(active) }
+                    }
+                    voice.onError = { [weak bridge] message in
+                        bridge?.noteError(message)
+                    }
+                    bridge.onVoiceKey = { voice.handleVoiceKey() }
                     // While a land confirmation is up, every key that is not
                     // the land key means "cancel", nothing else.
                     bridge.onKeyIntercept = { index in

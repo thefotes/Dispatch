@@ -179,9 +179,19 @@ public enum Pad {
     /// Last key of row 3 — the far corner of the managed block, which suits a
     /// key that pushes.
     public static let landKeyID = 9
+    /// The wide key at the bottom left: one keycap over matrix positions 10
+    /// and 11, so both are bound and lit together and a press from either
+    /// half means the same thing — voice input for the focused agent, unless
+    /// the config file rebinds it to a text macro.
+    public static let voiceKeyIDs = [10, 11]
+    /// Text-macro keys: inject a configured string into the focused agent's
+    /// prompt. Key 8 sits between the tab-cycle and land keys; key 12 is the
+    /// bottom-right corner.
+    public static let macroKeyIDs = [8, 12]
     /// The keys bound to `KV_OAI_AG*`, and so the only ones that can be lit.
-    /// Everything else keeps whatever keycode is already on it.
-    public static let boundKeyIDs = agentKeyIDs + [stackKeyID, tabCycleKeyID, landKeyID]
+    /// With the macro and voice keys this is now the whole pad.
+    public static let boundKeyIDs =
+        agentKeyIDs + [stackKeyID, tabCycleKeyID, landKeyID] + voiceKeyIDs + macroKeyIDs
 
     public static func row(of key: Int) -> Int? {
         rows.firstIndex { $0.contains(key) }

@@ -41,14 +41,21 @@ public final class BridgeController: ObservableObject {
     @Published public private(set) var stackPanelOpen = false
     /// Same for the land window.
     @Published public private(set) var landPanelOpen = false
+    /// Whether a Claude voice take is open, for the voice key's light.
+    @Published public private(set) var voiceActive = false
 
     public var config: BridgeConfig
+    /// Text macros for the spare keys, reloaded on every bridge start so a
+    /// config edit only needs an off/on toggle, not a relaunch.
+    public private(set) var keyBindings = KeyBindings.load()
 
     /// Called when the stack key is pressed. The bridge owns the key, the app
     /// owns the window, so this is where the two meet.
     public var onStackKey: (() -> Void)?
     /// Called when the land key is pressed; same split as `onStackKey`.
     public var onLandKey: (() -> Void)?
+    /// Called when either half of the wide voice key is pressed.
+    public var onVoiceKey: (() -> Void)?
     /// Consulted before any key does its normal job. Returning true consumes
     /// the press — this is how a pending land confirmation turns every other
     /// key into "cancel" without those keys also doing their usual work.
@@ -102,6 +109,7 @@ public final class BridgeController: ObservableObject {
         isRunning = true
         lastError = nil
         contendingClient = false
+        keyBindings = KeyBindings.load()
 
         await openDevice()
         startLifecycleStream()
@@ -300,10 +308,22 @@ public final class BridgeController: ObservableObject {
         reconcileStatusStreams(fetched)
 
         let state = StatusMapper.aggregate(fetched, config)
+        // Macro and voice keys share ids, so the binding decides each key's
+        // light: configured text wins, the wide key falls back to voice.
+        let flexKeys = (Pad.macroKeyIDs + Pad.voiceKeyIDs).map { key -> OAI.Thread in
+            if keyBindings.text(for: key) != nil {
+                return StatusMapper.macroThread(id: key, config)
+            }
+            if Pad.voiceKeyIDs.contains(key) {
+                return StatusMapper.voiceThread(id: key, active: voiceActive, config)
+            }
+            return OAI.Thread(id: key, brightness: 0, effect: .off)
+        }
         let threads = StatusMapper.threads(for: fetched, config)
             + [StatusMapper.stackThread(open: stackPanelOpen, config),
                StatusMapper.tabCycleThread(config),
                StatusMapper.landThread(open: landPanelOpen, config)]
+            + flexKeys
 
         // Fingerprint the whole rendered picture, not just the aggregate, so
         // one agent changing still repaints when the worst state has not.
@@ -375,9 +395,46 @@ public final class BridgeController: ObservableObject {
             Task { await cycleTabs() }
         } else if index == Pad.landKeyID {
             onLandKey?()
+        } else if Pad.macroKeyIDs.contains(index) || Pad.voiceKeyIDs.contains(index) {
+            // A configured text macro wins over the key's built-in role, which
+            // is how the config file may repurpose the wide voice key.
+            if let text = keyBindings.text(for: index) {
+                Task { await injectPrompt(text) }
+            } else if Pad.voiceKeyIDs.contains(index) {
+                onVoiceKey?()
+            }
         } else if let slot = Pad.agentSlot(for: index) {
             Task { await focusSlot(slot) }
         }
+    }
+
+    /// Types a macro string into the focused agent's prompt, unsubmitted —
+    /// the human still reads it and presses enter.
+    public func injectPrompt(_ text: String) async {
+        do {
+            guard let agent = try await HerdrClient.focusedAgent(),
+                  let pane = agent.paneID
+            else {
+                lastError = "Nothing has focus in Herdr right now."
+                return
+            }
+            try await HerdrClient.sendText(paneID: pane, text: text)
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    /// Repaints the voice key. Same contract as `setStackPanelOpen`.
+    public func setVoiceActive(_ active: Bool) async {
+        guard voiceActive != active else { return }
+        voiceActive = active
+        await forceRepaint()
+    }
+
+    /// Lets app-layer features that fail outside the bridge surface their
+    /// error where the menu already shows the bridge's own.
+    public func noteError(_ message: String) {
+        lastError = message
     }
 
     /// Advances the focused workspace to its next tab, wrapping.
