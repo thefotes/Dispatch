@@ -472,13 +472,43 @@ public final class BridgeController: ObservableObject {
     /// Slot N is the Nth key in reading order (`Pad.agentKeyIDs[N]`) — the
     /// same mapping the lighting uses, which is what makes the key you look at
     /// the key you press.
+    ///
+    /// Herdr selects the pane but leaves the terminal wherever it was in the
+    /// window order, so an agent key pressed from a browser used to move a
+    /// cursor you could not see. The terminal comes forward with it.
     public func focusSlot(_ index: Int) async {
         guard index >= 0, index < agents.count else { return }
         guard let target = agents[index].focusTarget else { return }
         do {
             try await HerdrClient.focusAgent(target)
+            raiseTerminal()
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    /// The app Herdr's panes live in. Override with `WL_TERMINAL_BUNDLE_ID` if
+    /// they live somewhere other than Ghostty.
+    public static let defaultTerminalBundleID = "com.mitchellh.ghostty"
+
+    /// Brings the terminal forward unless it is already the active app.
+    ///
+    /// Nothing is ever launched: the agent whose key was pressed is running in
+    /// a pane of a terminal that is by definition already up, so a terminal
+    /// that is not running means the bundle id is wrong, and opening a fresh
+    /// window would not be what the key meant. macOS may refuse a background
+    /// app's `activate` outright, which is what the second attempt is for —
+    /// `openApplication` on an already-running app raises it the way `open -a`
+    /// does.
+    private func raiseTerminal() {
+        let identifier = ProcessInfo.processInfo.environment["WL_TERMINAL_BUNDLE_ID"]
+            .flatMap { $0.isEmpty ? nil : $0 } ?? Self.defaultTerminalBundleID
+        guard let app = NSRunningApplication
+            .runningApplications(withBundleIdentifier: identifier).first
+        else { return }
+        guard !app.isActive else { return }
+        if app.activate(options: []) { return }
+        guard let url = app.bundleURL else { return }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 }
