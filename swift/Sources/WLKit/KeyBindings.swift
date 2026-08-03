@@ -7,7 +7,7 @@ import Foundation
 ///
 ///     {
 ///       "keys": {
-///         "8": "Open PRs for all active GitButler branches",
+///         "9": "Open PRs for all active GitButler branches",
 ///         "12": "Run but pull",
 ///         "10+11": "Summarise what you are working on"
 ///       },
@@ -18,7 +18,7 @@ import Foundation
 /// A bound string is injected into the focused agent's prompt, unsubmitted.
 /// `"10+11"` addresses the wide key as one; `"10"` and `"11"` address its
 /// halves separately. Keys the file does not mention keep their defaults —
-/// 8 and 12 have the defaults below, the wide key defaults to voice input.
+/// 9 and 12 have the defaults below, the wide key defaults to voice input.
 /// An empty string unbinds a key outright.
 public struct KeyBindings: Sendable, Equatable {
 
@@ -36,7 +36,7 @@ public struct KeyBindings: Sendable, Equatable {
     public private(set) var codexModels: [String]
 
     public static let defaults: [Int: String] = [
-        8: "Open PRs for all active GitButler branches",
+        9: "Open PRs for all active GitButler branches",
         12: "Run but pull",
     ]
     public static let defaultClaudeModels = ["fable", "opus", "sonnet", "haiku"]

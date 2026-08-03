@@ -9,15 +9,23 @@ final class KeyBindingsTests: XCTestCase {
 
     func testMissingFileMeansDefaults() {
         let bindings = KeyBindings()
-        XCTAssertEqual(bindings.text(for: 8), "Open PRs for all active GitButler branches")
+        XCTAssertEqual(bindings.text(for: 9), "Open PRs for all active GitButler branches")
         XCTAssertEqual(bindings.text(for: 12), "Run but pull")
         XCTAssertNil(bindings.text(for: 10), "the wide key defaults to voice, not text")
         XCTAssertNil(bindings.text(for: 11))
     }
 
+    /// The defaults are meaningless on a key the pad does not route to a macro,
+    /// so the two lists have to keep agreeing.
+    func testDefaultsSitOnTheMacroKeys() {
+        XCTAssertEqual(KeyBindings.defaults.keys.sorted(), Pad.macroKeyIDs.sorted())
+        XCTAssertFalse(Pad.macroKeyIDs.contains(Pad.landKeyID),
+                       "the land key answers before any macro on it would")
+    }
+
     func testFileOverridesAKeyAndKeepsTheOtherDefault() {
-        let bindings = parse(#"{"keys": {"8": "Ship it"}}"#)
-        XCTAssertEqual(bindings.text(for: 8), "Ship it")
+        let bindings = parse(#"{"keys": {"9": "Ship it"}}"#)
+        XCTAssertEqual(bindings.text(for: 9), "Ship it")
         XCTAssertEqual(bindings.text(for: 12), "Run but pull")
     }
 
@@ -38,7 +46,7 @@ final class KeyBindingsTests: XCTestCase {
     func testEmptyStringUnbindsADefault() {
         let bindings = parse(#"{"keys": {"12": ""}}"#)
         XCTAssertNil(bindings.text(for: 12))
-        XCTAssertEqual(bindings.text(for: 8), "Open PRs for all active GitButler branches")
+        XCTAssertEqual(bindings.text(for: 9), "Open PRs for all active GitButler branches")
     }
 
     func testMalformedFileFallsBackToDefaults() {
@@ -56,7 +64,7 @@ final class KeyBindingsTests: XCTestCase {
         let bindings = parse(#"{"claude": {"models": ["opus", "sonnet"], "efforts": ["low", "high"]}}"#)
         XCTAssertEqual(bindings.claudeModels, ["opus", "sonnet"])
         XCTAssertEqual(bindings.claudeEfforts, ["low", "high"])
-        XCTAssertEqual(bindings.text(for: 8), "Open PRs for all active GitButler branches",
+        XCTAssertEqual(bindings.text(for: 9), "Open PRs for all active GitButler branches",
                        "key defaults survive a claude-only config")
     }
 

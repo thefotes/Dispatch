@@ -176,18 +176,17 @@ public enum Pad {
     /// row 3, next to the stack key.
     public static let tabCycleKeyID = 7
     /// Lands the focused agent's stack onto the target, bottom branch first.
-    /// Last key of row 3 — the far corner of the managed block, which suits a
-    /// key that pushes.
-    public static let landKeyID = 9
+    /// Third key of row 3, next to the tab-cycle key.
+    public static let landKeyID = 8
     /// The wide key at the bottom left: one keycap over matrix positions 10
     /// and 11, so both are bound and lit together and a press from either
     /// half means the same thing — voice input for the focused agent, unless
     /// the config file rebinds it to a text macro.
     public static let voiceKeyIDs = [10, 11]
     /// Text-macro keys: inject a configured string into the focused agent's
-    /// prompt. Key 8 sits between the tab-cycle and land keys; key 12 is the
-    /// bottom-right corner.
-    public static let macroKeyIDs = [8, 12]
+    /// prompt. Key 9 is the last key of row 3; key 12 is the bottom-right
+    /// corner.
+    public static let macroKeyIDs = [9, 12]
     /// The keys bound to `KV_OAI_AG*`, and so the only ones that can be lit.
     /// With the macro and voice keys this is now the whole pad.
     public static let boundKeyIDs =
