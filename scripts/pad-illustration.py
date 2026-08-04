@@ -242,6 +242,12 @@ for (kx, ky, kw, colour, slot) in rows:
     body.append(f'<path class="rim" d="{path(t2)}" fill="none" stroke="{shade(colour, 1.5)}" '
                 'stroke-width="1.4" opacity="0.75"/>')
     if slot is not None:
+        # Ripple ring for a key press. Invisible until the page animates its
+        # stroke-width outward — growing a stroke avoids needing a transform
+        # origin, which on an arbitrary SVG path is more trouble than it is
+        # worth.
+        body.append(f'<path class="press" d="{path(t2)}" fill="none" '
+                    f'stroke="{shade(colour, 1.7)}" stroke-width="1.5" opacity="0"/>')
         body.append('</g>')
     drawn.append((depth, "".join(body)))
 
