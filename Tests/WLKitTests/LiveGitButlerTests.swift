@@ -5,8 +5,14 @@ import XCTest
 /// suite still passes on a machine without GitButler.
 final class LiveGitButlerTests: XCTestCase {
 
+    /// Skip, don't fail: a machine without GitButler — a CI runner, say — has
+    /// nothing to say about whether this code is correct. `XCTUnwrap` here
+    /// would report a red suite for an absent dependency.
     private func binary() throws -> String {
-        try XCTUnwrap(GitButler.locateBinary(), "no `but` binary")
+        guard let path = GitButler.locateBinary() else {
+            throw XCTSkip("no `but` binary on this machine")
+        }
+        return path
     }
 
     func testFindsTheBinaryOutsideTheLaunchdPath() throws {
@@ -22,7 +28,6 @@ final class LiveGitButlerTests: XCTestCase {
         let repo = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // WLKitTests
             .deletingLastPathComponent()   // Tests
-            .deletingLastPathComponent()   // swift
             .deletingLastPathComponent()   // repo root
             .path
 
