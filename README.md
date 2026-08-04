@@ -1,7 +1,8 @@
 # Micro Manager
 
 A macOS menu-bar app that lights each running [Herdr](https://herdr.dev) agent
-on its own key of a Work Louder **Creator Micro 2**, and jumps to that agent
+on its own key of a Work Louder
+**[Creator Micro 2](https://worklouder.cc/creator-micro-2)**, and jumps to that agent
 when you press the key.
 
 It is the bridge itself — no Node, no daemon, nothing to install on the Herdr

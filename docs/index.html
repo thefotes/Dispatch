@@ -72,6 +72,9 @@
          display: flex; align-items: center; justify-content: center;
          font-size: .68rem; color: var(--muted); font-family: var(--mono); }
   .cap.wide { width: 6.8rem; }
+  /* Holds a column open: the dial and joystick sit either side of the top row,
+     and the bottom row starts one column in. */
+  .cap.blank { background: none; border-color: transparent; }
   .cap.agent { border-color: transparent; color: #fff; }
   footer { margin: 4rem 0 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule);
            color: var(--muted); font-size: .88rem; text-align: center; }
@@ -80,12 +83,15 @@
 </head>
 <body>
 
+    <br/>
+
 <header class="wrap">
   <h1>Micro Manager</h1>
   <p class="tagline">
     Your coding agents, lit up on your keyboard. Each running
     <a href="https://herdr.dev">Herdr</a> agent gets its own key on a Work Louder
-    Creator&nbsp;Micro&nbsp;2 — press the key, jump to the agent.
+    <a href="https://worklouder.cc/creator-micro-2">Creator&nbsp;Micro&nbsp;2</a>
+    — press the key, jump to the agent.
   </p>
   <a class="cta" href="https://github.com/schacon/micro-manager/releases/latest/download/MicroManager.zip">
     Download for macOS
@@ -155,8 +161,10 @@
 
   <div class="pad" aria-label="Creator Micro 2 key layout">
     <div class="pad-row">
-      <div class="cap agent" style="background:var(--amber);width:6.8rem">agent</div>
-      <div class="cap agent" style="background:var(--green);width:6.8rem">agent</div>
+      <div class="cap blank" aria-hidden="true"></div>
+      <div class="cap agent" style="background:var(--amber)">agent</div>
+      <div class="cap agent" style="background:var(--green)">agent</div>
+      <div class="cap blank" aria-hidden="true"></div>
     </div>
     <div class="pad-row">
       <div class="cap agent" style="background:var(--red)">agent</div>
@@ -171,6 +179,7 @@
       <div class="cap">macro</div>
     </div>
     <div class="pad-row">
+      <div class="cap blank" aria-hidden="true"></div>
       <div class="cap wide">voice</div>
       <div class="cap">macro</div>
     </div>
@@ -195,7 +204,8 @@
   <div class="card">
     <h3>You will also need</h3>
     <p>
-      A <strong>Work Louder Creator Micro 2</strong>, and a running
+      A <strong><a href="https://worklouder.cc/creator-micro-2">Work Louder
+      Creator Micro 2</a></strong>, and a running
       <strong>Herdr</strong> server with some agents in it — Micro Manager reads
       Herdr's socket directly, so there is no plugin to install on that side.
       Quit Work Louder's Input app and the Codex desktop app while you use it:

@@ -4,7 +4,8 @@ A step-by-step guide to driving the pad from your own code: setting individual
 key colours, reading key presses back, and using the dial and joystick as
 inputs. No Work Louder software involved — this talks to the firmware directly.
 
-Everything here is verified on a **Creator Micro 2, firmware v0.6.0-rc.10**,
+Everything here is verified on a
+**[Creator Micro 2](https://worklouder.cc/creator-micro-2), firmware v0.6.0-rc.10**,
 over USB and Bluetooth, on macOS. Examples are Node with
 [`node-hid`](https://github.com/node-hid/node-hid); the same protocol is
 implemented in Swift/IOKit in `Sources/WLKit/`, which is what the app itself
