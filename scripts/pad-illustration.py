@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Draw the pad as an angled 3-D illustration and print the SVG.
+"""Draw the pad square on, from directly above, and print the SVG.
 
 The result is pasted into docs/index.html. It is generated rather than drawn by
-hand because the perspective is real: every keycap is a box in 3-D space, put
-through the same yaw/pitch/perspective transform, then painted back to front.
-Nudging the camera means changing YAW or PITCH here, not editing 400 numbers.
+hand because every keycap is a box in 3-D space put through one shared
+transform, then painted back to front. The camera is currently square on and
+almost orthographic; give YAW and PITCH non-zero angles to tilt it instead.
 
     ./scripts/pad-illustration.py > /tmp/pad.svg
 
@@ -16,10 +16,10 @@ import math
 
 # ---------------------------------------------------------------- camera
 
-YAW = math.radians(13)      # swing the pad so its left side comes forward
-PITCH = math.radians(57)    # look down on it; lower shows more of the side wall
-FOCAL = 22.0                # smaller = wider lens = more dramatic convergence
-SCALE = 104.0
+YAW = 0.0                   # square on: no rotation
+PITCH = 0.0                 # straight down on the top face
+FOCAL = 46.0                # long lens: near-orthographic, only a hint of key side
+SCALE = 118.0
 
 W, H = 900, 560
 
@@ -127,20 +127,20 @@ rows = []
 y0 = -1.78
 # knobs sit on their own strip at the back; keys start below
 rows += row_keys([2 * U + GAP, 2 * U + GAP], [WORKING, IDLE], y0 + 0.00)
-rows += row_keys([U] * 4, [BLOCKED, DONE, IDLE, IDLE], y0 + 1.20)
-rows += row_keys([U] * 4, [STACK, TABS, LAND, MACRO], y0 + 2.40)
-rows += row_keys([span - GAP - U, U], [VOICE, MACRO], y0 + 3.60)
+rows += row_keys([U] * 4, [BLOCKED, DONE, IDLE, IDLE], y0 + 1.12)
+rows += row_keys([U] * 4, [STACK, TABS, LAND, MACRO], y0 + 2.24)
+rows += row_keys([span - GAP - U, U], [VOICE, MACRO], y0 + 3.36)
 
 CASE_W = span + 0.85
-CASE_D = 5.85
-CASE_Y = -0.22   # the knob strip needs more room at the back
+CASE_D = 5.25    # matches CASE_W, so the body reads as a square
+CASE_Y = -0.42   # centred on the content: knob strip at the back, four key rows
 
 out = []
 add = out.append
 
 add('<defs>')
 add('<filter id="glow" x="-80%" y="-80%" width="260%" height="260%">'
-    '<feGaussianBlur stdDeviation="13"/></filter>')
+    '<feGaussianBlur stdDeviation="9"/></filter>')
 add('<filter id="softglow" x="-60%" y="-60%" width="220%" height="220%">'
     '<feGaussianBlur stdDeviation="26"/></filter>')
 add('<linearGradient id="caseTop" x1="0" y1="0" x2="0.4" y2="1">'
@@ -169,7 +169,7 @@ add(f'<path d="{path(hull(top2 + bot2))}" fill="url(#caseSide)" '
 add(f'<path d="{path(top2)}" fill="url(#caseTop)"/>')
 
 # ---- recessed key plate
-plate = [(p[0], p[1]) for p in map(project, rounded_rect(0, CASE_Y + 0.46, CASE_W - 0.5, CASE_D - 1.55, 0.34, 0.02))]
+plate = [(p[0], p[1]) for p in map(project, rounded_rect(0, CASE_Y + 0.52, CASE_W - 0.42, CASE_D - 1.35, 0.30, 0.02))]
 add(f'<path d="{path(plate)}" fill="url(#plate)"/>')
 
 # ---- knobs at the back: the dial and the joystick
@@ -187,8 +187,8 @@ def knob(x, y, r, height, cap="#101319"):
     return "".join(body)
 
 
-add(knob(-span / 2 + 0.52, y0 - 0.88, 0.42, 0.58))
-add(knob(span / 2 - 0.52, y0 - 0.88, 0.30, 0.36, cap="#171B22"))
+add(knob(-span / 2 + 0.50, y0 - 0.78, 0.40, 0.30))
+add(knob(span / 2 - 0.50, y0 - 0.78, 0.29, 0.22, cap="#171B22"))
 
 # ---- keys, painted back to front
 drawn = []
