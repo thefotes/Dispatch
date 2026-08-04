@@ -7,7 +7,8 @@ inputs. No Work Louder software involved — this talks to the firmware directly
 Everything here is verified on a **Creator Micro 2, firmware v0.6.0-rc.10**,
 over USB and Bluetooth, on macOS. Examples are Node with
 [`node-hid`](https://github.com/node-hid/node-hid); the same protocol is
-implemented in Swift/IOKit in `swift/Sources/WLKit/` if you prefer that.
+implemented in Swift/IOKit in `Sources/WLKit/`, which is what the app itself
+uses.
 
 > **The one thing to know before you start.** The firmware answers `{"ok":1}` to
 > almost any payload, including malformed ones. A wrong shape looks exactly like
@@ -37,7 +38,7 @@ implemented in Swift/IOKit in `swift/Sources/WLKit/` if you prefer that.
 
 - A Work Louder pad on vendor id `0x303A`. This guide is written for the
   Creator Micro 2 (`0x8297` / `0x8298`); the transport is shared with the other
-  boards listed in `lib/wl-device.js`.
+  boards this firmware family covers.
 - Node 18+ and `npm install node-hid`.
 - **macOS: Input Monitoring** for whatever process runs your code — System
   Settings → Privacy & Security → Input Monitoring. Add your terminal while you
@@ -80,7 +81,7 @@ interface is its own device, so picking the first vendor-id match lands you on
 the keyboard and every write is silently dropped. `node-hid`'s `devices()` list
 is already flattened per usage pair, so the filter above is correct; if you use
 IOKit directly, check `DeviceUsagePairs` — see `WLDevice.hasVendorCollection` in
-`swift/Sources/WLKit/WLDevice.swift`.
+`Sources/WLKit/WLDevice.swift`.
 
 ---
 
@@ -117,7 +118,7 @@ Colours go on the wire as a packed `0xRRGGBB` integer. `brightness`, `speed` and
 
 Save this as `wl.js`. It is about 90 lines and is all you need for everything
 below. (The production version, with reconnect handling and a fake-device mode,
-is `lib/wl-device.js`.)
+is `Sources/WLKit/WLDevice.swift`, in Swift.)
 
 ```js
 "use strict";
@@ -247,8 +248,7 @@ your transport is correct and everything else is payload shape.
 
 A method the firmware does not register answers **`Method not found`** — which
 is genuinely useful, because it distinguishes "this variant doesn't have it"
-from "I sent the wrong shape". Use it to probe (`bin/probe.js` does exactly
-this).
+from "I sent the wrong shape". Use it to probe the firmware you actually have.
 
 ---
 
@@ -347,7 +347,7 @@ active layer is `layers[0]`.
 require("fs").writeFileSync("keymap-backup.json", JSON.stringify(raw));
 ```
 
-Keep it. Restoring is just writing `raw.data` back (`bin/restore-keymap.js`).
+Keep it. Restoring is just writing that same `data` string back.
 
 ### Bind some keys
 
@@ -481,7 +481,8 @@ An AG-bound key sends no keystroke, but it reports itself as a **notification**:
   you use as a thread id.
 - `act` — `1` on press, `0` on release.
 - `ag` — an agent field belonging to the Codex firmware's own agent-key
-  feature. The decoders in `lib/oai.js` surface it; nothing here depends on it.
+  feature. `OAI.agIndex` in `Sources/WLKit/OAIProtocol.swift` ignores it, and
+  nothing here depends on it.
 
 Remember the envelope is `m`/`p`, not `method`/`params`.
 
@@ -571,7 +572,7 @@ The device also pushes a continuous radial notification:
 `a` is the angle on the same 0..1 scale, `d` the distance from centre, 0..1.
 Use this if you want analogue position rather than four discrete directions —
 you handle your own deadzone and repeat-rate. The sector-binding route above is
-the easier one and is what Micro Manager uses; `WLInspector` decodes and logs
+the easier one and is what Micro Manager uses; the Inspector decodes and logs
 `v.oai.rad` if you want to watch it.
 
 ---

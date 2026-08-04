@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Micro Manager — your agents, on your keyboard</title>
+<meta name="description" content="A macOS menu-bar app that lights each running Herdr agent on its own key of a Work Louder Creator Micro 2, and jumps to that agent when you press it.">
+<style>
+  :root {
+    --paper:  #F7F8FA;
+    --raised: #FFFFFF;
+    --ink:    #14161C;
+    --muted:  #5C6472;
+    --rule:   #E2E6EC;
+    --accent: #0B6BCB;
+    --red:    #E5484D;
+    --amber:  #F0A202;
+    --blue:   #3B82F6;
+    --green:  #00A25B;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0E1014; --raised: #171A21; --ink: #E8EBF0;
+      --muted: #98A1B0; --rule: #262B34; --accent: #5AA7FF;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 0 1.25rem; }
+  header { padding: 4.5rem 0 3rem; text-align: center; }
+  h1 { font-size: clamp(2.2rem, 6vw, 3.1rem); line-height: 1.1; margin: 0 0 .6rem; letter-spacing: -.02em; }
+  .tagline { font-size: 1.15rem; color: var(--muted); margin: 0 auto 2rem; max-width: 34rem; }
+  .cta { display: inline-flex; align-items: center; gap: .55rem;
+         background: var(--accent); color: #fff; text-decoration: none;
+         font-weight: 600; font-size: 1.02rem;
+         padding: .8rem 1.6rem; border-radius: .6rem; }
+  .cta:hover { filter: brightness(1.08); }
+  .sub { display: block; margin-top: .75rem; font-size: .85rem; color: var(--muted); }
+  .sub a { color: var(--muted); }
+  h2 { font-size: 1.3rem; margin: 2.75rem 0 .75rem; letter-spacing: -.01em; }
+  p { margin: 0 0 1rem; }
+  a { color: var(--accent); }
+  code { font-family: var(--mono); font-size: .88em;
+         background: color-mix(in srgb, var(--muted) 14%, transparent);
+         padding: .12em .38em; border-radius: .25rem; }
+  pre { background: var(--raised); border: 1px solid var(--rule); border-radius: .5rem;
+        padding: .9rem 1rem; overflow-x: auto; font-family: var(--mono); font-size: .85rem; }
+  pre code { background: none; padding: 0; }
+  ol, ul { margin: 0 0 1rem; padding-left: 1.3rem; }
+  li { margin-bottom: .4rem; }
+  .card { background: var(--raised); border: 1px solid var(--rule);
+          border-radius: .7rem; padding: 1.1rem 1.3rem; margin: 1.25rem 0; }
+  .card h3 { margin: 0 0 .4rem; font-size: 1rem; }
+  .card p:last-child { margin-bottom: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: .95rem; }
+  th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--rule); }
+  th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+  .swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: .2rem;
+            margin-right: .5rem; vertical-align: -1px; }
+  .pad { display: grid; gap: .4rem; width: max-content; margin: 1.25rem 0; }
+  .pad-row { display: flex; gap: .4rem; }
+  .cap { width: 3.2rem; height: 2.3rem; border-radius: .35rem;
+         border: 1px solid var(--rule); background: var(--raised);
+         display: flex; align-items: center; justify-content: center;
+         font-size: .68rem; color: var(--muted); font-family: var(--mono); }
+  .cap.wide { width: 6.8rem; }
+  .cap.agent { border-color: transparent; color: #fff; }
+  footer { margin: 4rem 0 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule);
+           color: var(--muted); font-size: .88rem; text-align: center; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <h1>Micro Manager</h1>
+  <p class="tagline">
+    Your coding agents, lit up on your keyboard. Each running
+    <a href="https://herdr.dev">Herdr</a> agent gets its own key on a Work Louder
+    Creator&nbsp;Micro&nbsp;2 — press the key, jump to the agent.
+  </p>
+  <a class="cta" href="https://github.com/schacon/micro-manager/releases/latest/download/MicroManager.zip">
+    Download for macOS
+  </a>
+  <span class="sub">
+    Apple silicon &amp; Intel · macOS 13+ ·
+    <a href="https://github.com/schacon/micro-manager/releases">all releases</a> ·
+    <a href="https://github.com/schacon/micro-manager">source</a>
+  </span>
+</header>
+
+<main class="wrap">
+
+  <h2>What it does</h2>
+  <p>
+    It is a menu-bar app and a hardware bridge in one — no Node, no daemon, no
+    configuration to speak of. It watches Herdr for what your agents are doing
+    and paints that onto the pad, so <em>does anything need me?</em> is a glance
+    rather than a hunt through panes.
+  </p>
+
+  <table>
+    <thead><tr><th>Key colour</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td><span class="swatch" style="background:var(--red)"></span>Red</td><td>Blocked — the agent is waiting on you</td></tr>
+      <tr><td><span class="swatch" style="background:var(--amber)"></span>Amber</td><td>Working</td></tr>
+      <tr><td><span class="swatch" style="background:var(--blue)"></span>Blue</td><td>Done — finished, but you haven't looked yet</td></tr>
+      <tr><td><span class="swatch" style="background:var(--green)"></span>Green</td><td>Idle — finished and seen</td></tr>
+    </tbody>
+  </table>
+
+  <p>The underglow carries the worst state across every agent, so the answer is readable from across the room.</p>
+
+  <h2>The rest of the pad</h2>
+
+  <div class="pad" aria-label="Creator Micro 2 key layout">
+    <div class="pad-row">
+      <div class="cap agent" style="background:var(--amber);width:6.8rem">agent</div>
+      <div class="cap agent" style="background:var(--green);width:6.8rem">agent</div>
+    </div>
+    <div class="pad-row">
+      <div class="cap agent" style="background:var(--red)">agent</div>
+      <div class="cap agent" style="background:var(--blue)">agent</div>
+      <div class="cap agent" style="background:var(--green)">agent</div>
+      <div class="cap agent" style="background:var(--green)">agent</div>
+    </div>
+    <div class="pad-row">
+      <div class="cap">stack</div>
+      <div class="cap">tabs</div>
+      <div class="cap">land</div>
+      <div class="cap">macro</div>
+    </div>
+    <div class="pad-row">
+      <div class="cap wide">voice</div>
+      <div class="cap">macro</div>
+    </div>
+  </div>
+
+  <ul>
+    <li><strong>Stack</strong> floats the GitButler stack for whichever agent has focus, without stealing the keyboard.</li>
+    <li><strong>Tabs</strong> cycles the tabs of the focused Herdr window.</li>
+    <li><strong>Land</strong> lands the focused agent's branches, bottom first, after showing you the plan.</li>
+    <li><strong>Voice</strong> starts voice input for the focused agent.</li>
+    <li><strong>Macro</strong> keys type a string you configure into the agent's prompt.</li>
+    <li>The <strong>dial</strong> tunes reasoning effort; the <strong>joystick</strong> switches model.</li>
+  </ul>
+
+  <h2>Installing</h2>
+  <ol>
+    <li>Download, unzip, and drag <code>MicroManager.app</code> to your Applications folder.</li>
+    <li>Launch it. macOS will ask for <strong>Input Monitoring</strong> — grant it. This is not optional: without it the app cannot talk to the pad at all.</li>
+    <li>Toggle the manager off and on from the menu-bar panel so it reconnects with the new permission.</li>
+  </ol>
+
+  <div class="card">
+    <h3>You will also need</h3>
+    <p>
+      A <strong>Work Louder Creator Micro 2</strong>, and a running
+      <strong>Herdr</strong> server with some agents in it — Micro Manager reads
+      Herdr's socket directly, so there is no plugin to install on that side.
+      Quit Work Louder's Input app and the Codex desktop app while you use it:
+      all three drive the same lighting and will fight over it.
+    </p>
+  </div>
+
+  <h2>The Inspector</h2>
+  <p>
+    A debug UI ships inside the app — open it from the <strong>Inspector</strong>
+    button in the menu-bar panel. It logs every message in both directions,
+    decodes the device's notifications, and lets you drive the lighting by hand:
+    per-key colours, effects, the underglow, and a raw JSON-RPC console.
+  </p>
+
+  <h2>Hacking on the pad yourself</h2>
+  <p>
+    The protocol is written up in full — the raw-HID framing, the vendor RPC
+    that reaches individual keys, the keymap binding that makes per-key colour
+    possible at all, and how to read key, dial and joystick events back.
+  </p>
+  <p>
+    <a href="https://github.com/schacon/micro-manager/blob/main/docs/hacking.md">Read the hacking guide →</a>
+  </p>
+
+  <h2>Building from source</h2>
+  <pre><code>git clone https://github.com/schacon/micro-manager.git
+cd micro-manager
+./scripts/bundle.sh --install</code></pre>
+  <p>
+    Requires a Swift 5.9 toolchain. The script signs with the first Developer ID
+    or Apple Development identity in your keychain — which matters more than it
+    sounds, because macOS keys the Input Monitoring grant to the signature, and
+    an ad-hoc one changes on every build.
+  </p>
+
+</main>
+
+<footer class="wrap">
+  <a href="https://github.com/schacon/micro-manager">GitHub</a> ·
+  <a href="https://github.com/schacon/micro-manager/blob/main/docs/hacking.md">Hacking guide</a> ·
+  <a href="https://herdr.dev">Herdr</a>
+  <br><br>
+  An independent interoperability tool. Not affiliated with Work Louder.
+</footer>
+
+</body>
+</html>

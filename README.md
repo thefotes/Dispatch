@@ -1,214 +1,192 @@
-# herdr-worklouder-micro
+# Micro Manager
 
-A [Herdr](https://herdr.dev) plugin that connects a Work Louder **Creator Micro 2**
-to your running coding agents:
+A macOS menu-bar app that lights each running [Herdr](https://herdr.dev) agent
+on its own key of a Work Louder **Creator Micro 2**, and jumps to that agent
+when you press the key.
 
-- the pad's light reflects agent status, so you can tell at a glance whether
-  anything needs you
-- the top six keys jump straight to agents 1-6 in Herdr
-- the key below them shows the GitButler stack of whichever agent has focus
-  (Micro Manager only — see `swift/README.md`)
+It is the bridge itself — no Node, no daemon, nothing to install on the Herdr
+side. It reads Herdr's socket directly and drives the pad over raw HID.
 
-## Per-key colours: solved
+**[Download the latest release](https://github.com/schacon/micro-manager/releases/latest/download/MicroManager.zip)**
+· [website](https://schacon.github.io/micro-manager/)
+· [hacking guide](docs/hacking.md)
 
-**Each key can be set individually.** The channel is a vendor RPC the Input app
-never calls, recovered from `@worklouder/device-kit-oai` - a *different* SDK that
-ships inside the Codex desktop app.
-
-```
-v.oai.thstatus   params = ARRAY of { id, c, b, e, s, sk, sa }
-v.oai.rgbcfg     params = { ambient: {e,b,s,m,c}, keys: {e,b,s,m,c} }
-```
-
-| field | meaning |
-|---|---|
-| `id` | key index, **0-based, row-major** over the pad's `[2,4,4,3]` matrix |
-| `c` | packed RGB integer |
-| `b` | brightness, 0..1 |
-| `e` | effect **as a number**: 0 off, 1 solid, 2 snake, 3 rainbow, 4 breath, 5 gradient, 6 shallowBreath |
-| `s` | speed, 0..1 |
-| `sk` / `sa` | 1/0 - mirror this thread onto the keys / ambient zone |
-
-Two things make this easy to miss, and both cause silent no-ops rather than
-errors, because the firmware answers `{"ok":1}` to any payload including
-malformed ones:
-
-1. **Field names are abbreviated on the wire.** `c`/`b`/`e`/`s`/`m`, not the full
-   names `lights.preview` uses.
-2. **`effect` is an integer**, not one of the effect strings `lights.preview` takes.
-
-Verified on hardware (firmware v0.6.0-rc.10): sending one thread lit and the
-rest off lights exactly one key, and walking a single lit thread through ids
-0..12 moves one lit key across the pad. Thread ids 1..6 light keys 1..6 and
-leave key 0 dark, confirming 0-based indexing. Sync flags are optional - colours
-apply without them. **Thread state overrides the zones**, so turning the pad off
-means clearing threads *and* zones (see `bin/lights-off.js`).
-
-Also useful: `v.oai.hid` and `v.oai.rad` are device-to-host **notifications**, not
-callable methods - key events (`{k, act, ag}`) and joystick position (`{a, d}`).
-
-### The keymap is not optional
-
-A key can only be lit if it is bound to a `KV_OAI_AG*` keycode **on the active
-layer**. Parking the codes on a spare layer does nothing. Nothing reports the
-mismatch: `v.oai.thstatus` still answers `{"ok":1}` for a key it cannot light,
-so a wrong keymap is indistinguishable from a working one from the host side.
-
-An AG-bound key stops sending keystrokes, but it still reports presses over HID
-as `{"m":"v.oai.hid","p":{"k":"AG01","act":1}}`, so it is both a status light
-and an input.
-
-The Node bridge binds the top six keys (rows 1-2) and leaves rows 3-4 alone, so
-those still send `KC_F19`..`KC_F24` if you want them for shortcuts. Micro
-Manager additionally binds the first key of row 3 for the GitButler stack, so
-that one no longer sends `KC_F19`. Bindings are written per key rather than per
-row, which is what lets the other three keys in that row keep their keycodes.
-
-### What did not work
-
-For the record, since these cost time: `lights.preview` with `keys`/`ambient`
-sections; any full-field-name payload to `v.oai.rgbcfg`; AG keycodes on a
-non-active layer; and both Input app versions, which ship only
-`lights.preview`.
-
-## Requirements
-
-- Node 18+
-- A running Herdr server (`herdr status`)
-- **macOS:** Input Monitoring permission for whatever process runs the bridge
-  (System Settings → Privacy & Security → Input Monitoring). Without it, opening
-  the HID interface fails with `privilege violation`.
-- **Linux:** a udev rule granting access to the `303a:` HID device.
+---
 
 ## Install
 
+Download, unzip, drag `MicroManager.app` to Applications, and launch it. macOS
+will ask for **Input Monitoring** — grant it, then toggle the manager off and on
+from the menu-bar panel so it reconnects with the permission.
+
+Or build it yourself:
+
 ```bash
-npm install --omit=dev
-herdr plugin link /path/to/herdr-worklouder-micro
+./scripts/bundle.sh --install     # build, sign, install to /Applications, launch
 ```
 
-## The status light
+You will also need a Creator Micro 2 and a running Herdr server with agents in
+it. Quit Work Louder's Input app and the Codex desktop app while you use this —
+all three drive the same lighting and will overwrite each other.
 
-`bin/leds.js` is a long-running bridge. It gives **each agent its own key** and
-keeps an aggregate on the underglow:
+## What the pad does
 
-| agent status | its key |
+**The icon** shows state at a glance: dimmed when off, a coloured dot when
+running — green all idle, amber something working, red something needs you —
+and a badge when the pad is missing or permission is denied.
+
+**The top six keys** are one agent each, in the order Herdr's own panel lists
+them. Colours are red (blocked, breathing), amber (working), blue (done —
+finished but not yet looked at) and green (idle — finished and seen). Herdr
+distinguishes done from idle by whether you have focused the pane yet, so blue
+means something is waiting to be read and green means quiet. The **underglow**
+carries the worst state across all agents, so "does anything need me?" is
+readable from across the room.
+
+Pressing an agent key focuses that agent in Herdr **and brings the terminal
+forward** — Herdr selects the pane but leaves the window where it was, so an
+agent key pressed from a browser used to move a cursor you could not see. Set
+`WL_TERMINAL_BUNDLE_ID` if your panes do not live in Ghostty.
+
+**Row 3** is actions:
+
+| key | what it does |
 |---|---|
-| blocked / waiting on you | red, breathing |
-| working | amber |
-| done — finished, not yet looked at | blue |
-| idle — finished and seen | green |
-| no agent in that slot | off |
+| stack | floats the GitButler stack for the focused agent |
+| tabs | cycles the tabs of the focused Herdr window |
+| land | lands the focused agent's branches, bottom first |
+| macro | types a configured string into the agent's prompt |
 
-Herdr distinguishes "done" from "idle" by whether you have focused the pane
-yet, so blue means there is something finished waiting to be read and green
-means everything is quiet.
+**Row 4** is the wide key — voice input for the focused agent — and one more
+macro key.
 
-Agent slot N takes key N — the same physical keys that send F13–F18, so the key
-you look at is the key you press. The **underglow** carries the worst state
-across all agents, so "does anything need me?" is readable from across the room
-without counting keys.
+**The dial** tunes reasoning effort. **The joystick** switches model: it puts
+the model list on screen, north and south move, east confirms, west cancels.
 
-Set `drive_backlight: true` to also wash the key *zone* with the aggregate
-colour, though it competes with the per-agent colours.
+### The stack key
 
-Run it in a pane to watch it work:
+It floats `but status` in the middle of the screen; press again to put it away.
+The window never takes focus — you are reading it *from* the terminal you were
+already typing in, and a read-only view that steals the keyboard would cost two
+keystrokes to undo. Click the output to select text, click anywhere else to
+dismiss.
+
+`but` is found by search, not by `PATH`: an app launched by launchd inherits
+`/usr/bin:/bin:/usr/sbin:/sbin`, so the binary your terminal finds instantly is
+invisible here. Homebrew and Cargo locations are checked directly, then your
+login shell is asked. Set `WL_BUT_PATH` to skip all of it.
+
+## The panel
+
+Click the menu-bar icon. It draws the pad in its real shape with every key
+showing its live colour, then one row per agent. Click a key or a row to jump to
+that agent. It also carries the on/off switch, an "Open at login" toggle, a
+warning when another app is fighting for the device, and the **Inspector**
+button.
+
+**Off** clears the lights and stops driving, but deliberately leaves the device
+keymap alone: rebinding is a flash write, and the keys light instantly on the
+way back in if the bindings are still there.
+
+## The Inspector
+
+The debug UI ships inside the app — the **Inspector** button in the panel opens
+it. It logs every message in both directions (`TX`, `RX`, `NOTIFY`, `DEVICE`),
+decodes the device's abbreviated notifications, and drives the lighting by hand:
+per-key colours and effects, the two zones, a key walk, and a raw JSON-RPC
+console with presets.
+
+It lives at `MicroManager.app/Contents/Library/Inspector.app`, signed by the
+same identity as its host, so it is one download and one trust decision. During
+development there is no surrounding bundle, so run it directly:
 
 ```bash
-herdr plugin pane open worklouder.micro.leds
+swift run WLInspector
 ```
 
-Or in the background (see `launchd/` for a macOS agent). To develop without the
-hardware present:
+Run that **from your terminal**, not from Finder: macOS attributes Input
+Monitoring to the responsible process, so a terminal that already has the grant
+passes it on.
 
-```bash
-WL_FAKE_DEVICE=1 npm run leds
-```
+## Configuration
 
-### Configuring colours
-
-Drop a `config.json` into the plugin's config dir
-(`herdr plugin config-dir worklouder.micro`):
+Everything works without a config file. To rebind the macro keys or change what
+the dial and joystick offer, drop a `config.json` into
+`~/.config/micromanager/`:
 
 ```json
 {
-  "colors": { "blocked": "#FF0055", "working": "#FFAA00", "idle": "#003311" },
-  "brightness": 0.6,
-  "drive_backlight": true
+  "keys": {
+    "9":     "Open PRs for all active GitButler branches",
+    "12":    "Run but pull",
+    "10+11": "Summarise what you are working on"
+  },
+  "claude": { "models": ["fable", "opus"], "efforts": ["low", "high"] },
+  "codex":  { "models": ["gpt-5.6-sol", "gpt-5.6-codex"] }
 }
 ```
 
-Keys you omit keep their defaults. `priority` reorders which state wins.
+A bound string is injected into the focused agent's prompt, unsubmitted — you
+still read it and press enter. `"10+11"` addresses the wide key as one; `"10"`
+and `"11"` address its halves. Keys the file does not mention keep their
+defaults, and an empty string unbinds a key outright. Binding the wide key to
+text replaces its voice role.
 
-## The six keys
+`codex.models` is your copy of what Codex's own `/model` menu offers, in its
+order — the joystick steers that menu rather than owning it, so there is nothing
+to read it from.
 
-The bridge binds them on startup (`manage_keymap: true`). To do it by hand:
-
-```bash
-node bin/apply-ag-keymap.js     # bind the six agent keys for lighting
-node bin/restore-keymap.js      # put your original keymap back
-```
-
-Slots are ordered by workspace, then tab, then pane, so a key keeps pointing at
-the same agent as long as the set of agents does not change:
-
-```bash
-herdr agent list
-```
-
-### Jumping to an agent
-
-An AG key sends no keystroke, but it does report itself over HID:
-
-```json
-{"m": "v.oai.hid", "p": {"k": "AG01", "act": 1}}
-```
-
-`act` is 1 on press, 0 on release, and `k` carries the key index. The bridge
-listens for these, so **the key showing an agent's status is the key that jumps
-to it** — no keybindings, no F-keys.
-
-Watch out for the envelope: notifications use `m`/`p`, while responses use the
-full `method`. Match only on `method` and every key event vanishes silently.
-
-## Known conflict
-
-Work Louder's Input app drives the underglow from the focused desktop app
-("AppSense" colour cues), and the Codex desktop app drives the same vendor
-thread API this plugin uses. Either will fight the bridge for the lighting.
-Quit them, or turn those features off, while using the bridge.
-
-## Tests
-
-```bash
-npm test
-```
-
-Covers the status-to-colour mapping, per-key thread assignment, config merging,
-slot ordering, and colour encoding — everything that does not need hardware.
-
-Hardware-in-the-loop tools:
-
-| command | purpose |
+| variable | what it overrides |
 |---|---|
-| `npm run probe` | which RPC methods this firmware registers |
-| `node bin/oai-test.js` | exercise the per-key API end to end |
-| `node bin/interactive-lab.js` | 12 lighting experiments, prompting after each |
-| `node bin/lights-off.js` | clear threads *and* zones |
-| `node bin/restore-keymap.js` | put `backup/keymap.json` back on the device |
+| `WL_TERMINAL_BUNDLE_ID` | the terminal to raise (default Ghostty) |
+| `WL_BUT_PATH` | the GitButler binary, skipping the search |
+| `HERDR_SOCKET_PATH` | the Herdr socket |
+| `WL_SIGN_IDENTITY` | the signing identity `bundle.sh` uses |
 
-## Protocol notes
+## Why it must be bundled and signed
 
-The device speaks JSON-RPC 2.0 over raw HID on usage page `0xFF00`, usage `1`:
+`swift run` works for development because it inherits your terminal's Input
+Monitoring grant. A background app needs its own, and macOS keys that grant to
+the **code signature** — so an ad-hoc signature, whose hash changes on every
+build, forces you to re-grant after every rebuild. `bundle.sh` prefers a real
+Apple Development or Developer ID identity from your keychain, which gives a
+stable designated requirement and makes the grant stick. It also sets
+`LSUIElement` so there is no Dock icon, and gives `SMAppService` a bundle it
+will actually register as a login item.
 
+Released builds are Developer ID signed and notarized by
+[the release workflow](.github/workflows/release.yml), which lists the repository
+secrets it needs.
+
+## Only one bridge at a time
+
+Work Louder's Input app and the Codex desktop app drive this same pad. Running
+two at once means they overwrite each other. The panel detects this — the device
+is opened shared, so we receive other clients' replies, and a response id we
+never issued is a reliable tell.
+
+## Development
+
+```bash
+swift build            # both apps and the shared library
+swift test             # live tests skip themselves without hardware
+swift run WLInspector  # the debug UI
+./scripts/bundle.sh    # assemble build/MicroManager.app, unsigned install
 ```
-byte 0      report id, always 0x06
-byte 1      channel: 1 = firmware debug log, 2 = JSON-RPC
-byte 2      payload length in this report, <= 61
-bytes 3..   UTF-8 fragment of the JSON message
-```
 
-Requests are split across as many 64-byte reports as needed; responses are
-reassembled by scanning for balanced braces. Colours go on the wire as a
-`0xRRGGBB` integer; `brightness`, `speed`, and `magic` are 0..1 floats. Call ids
-must be under 1000.
+| | |
+|---|---|
+| `Sources/WLKit` | device transport, vendor protocol, Herdr client, bridge engine |
+| `Sources/WLMicroManager` | the menu-bar app and its panels |
+| `Sources/WLInspector` | the debug UI |
+| `docs/hacking.md` | how the pad protocol works, and how to drive it yourself |
+| `docs/index.html` | the website, served by GitHub Pages from `docs/` |
+
+The device protocol — raw-HID JSON-RPC, per-key colour, key and joystick events,
+and the keymap binding that makes per-key lighting possible at all — is written
+up in full in **[docs/hacking.md](docs/hacking.md)**.
+
+---
+
+An independent interoperability tool for hardware I own. Not affiliated with
+Work Louder.
