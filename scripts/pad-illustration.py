@@ -221,6 +221,7 @@ add(knob(col(3), y0, 0.31, 0.22, cap="#2A2F39"))   # unlit, but light enough to 
 # on the rim) from one status colour, applying the same five shade factors used
 # here. Change the factors here and the live recolour drifts from the default.
 drawn = []
+rings = []   # press ripples, drawn last so nothing clips them
 for (kx, ky, kw, colour, slot) in rows:
     top = rounded_rect(kx, ky, kw, U, 0.17, KEY_H)
     bot = rounded_rect(kx, ky, kw, U, 0.17, 0.03)
@@ -242,17 +243,22 @@ for (kx, ky, kw, colour, slot) in rows:
     body.append(f'<path class="rim" d="{path(t2)}" fill="none" stroke="{shade(colour, 1.5)}" '
                 'stroke-width="1.4" opacity="0.75"/>')
     if slot is not None:
-        # Ripple ring for a key press. Invisible until the page animates its
-        # stroke-width outward — growing a stroke avoids needing a transform
-        # origin, which on an arbitrary SVG path is more trouble than it is
-        # worth.
-        body.append(f'<path class="press" d="{path(t2)}" fill="none" '
-                    f'stroke="{shade(colour, 1.7)}" stroke-width="1.5" opacity="0"/>')
         body.append('</g>')
+        # Ripple ring for a key press, collected for a layer drawn above every
+        # key. Inside the group it would be painted over by whichever keys come
+        # later, clipping the ripple exactly where it expands. Growing a stroke
+        # rather than scaling a shape avoids needing a transform origin, which
+        # on an arbitrary path is more trouble than it is worth.
+        rings.append(f'<path class="press" data-slot="{slot}" d="{path(t2)}" '
+                     f'fill="none" stroke="{shade(colour, 1.9)}" '
+                     'stroke-width="2" opacity="0"/>')
     drawn.append((depth, "".join(body)))
 
 for _, svg in sorted(drawn, key=lambda d: -d[0]):
     add(svg)
+
+# Above every key: the press ripples have to escape their own keycap.
+add('<g class="press-layer">' + "".join(rings) + '</g>')
 
 add('</svg>')
 
