@@ -29,7 +29,9 @@ async function main() {
   }
 
   try {
-    await focusAgent(agent.terminal_id || agent.pane_id);
+    // Pane id first: `agent.focus` resolves pane ids only, and answers
+    // `agent_not_found` for a terminal id (Herdr 0.7.5).
+    await focusAgent(agent.pane_id || agent.terminal_id);
   } catch (err) {
     console.error(err.message);
     process.exit(1);

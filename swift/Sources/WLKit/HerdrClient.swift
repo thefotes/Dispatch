@@ -19,8 +19,13 @@ public struct HerdrAgent: Equatable, Sendable {
     public var foregroundCwd: String?
     public var focused: Bool
 
-    /// The target to hand to `agent.focus`.
-    public var focusTarget: String? { terminalID ?? paneID }
+    /// The target to hand to `agent.focus`, which resolves **pane ids only**:
+    /// a `terminal_id` comes back as `agent_not_found` (Herdr 0.7.5). Herdr
+    /// reports a terminal id for every agent, so preferring it here meant every
+    /// jump failed while the read-only paths — which never call `agent.focus` —
+    /// kept working. Terminal id stays as a fallback for a Herdr that omits
+    /// `pane_id`.
+    public var focusTarget: String? { paneID ?? terminalID }
 
     /// Where the agent is actually working. `foreground_cwd` follows a `cd`
     /// inside the pane; `cwd` is only where the pane started.
