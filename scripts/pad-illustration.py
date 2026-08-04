@@ -98,8 +98,8 @@ def shade(hex_colour, factor):
 
 # Colours the app really drives (BridgeConfig).
 BLOCKED, WORKING, DONE, IDLE = "#FF2D2D", "#FFA000", "#00B0FF", "#00C853"
-STACK, TABS, LAND = "#7C4DFF", "#00BFA5", "#E91E63"
 VOICE, MACRO = "#ECEFF1", "#90A4AE"
+BOWTIE = "#9AA3B2"   # silkscreened on the case, not a lit key
 DARKCAP = "#23262E"
 DIAL = "#FF8A1E"   # the dial wears the orange cap the hardware is known for
 
@@ -129,7 +129,9 @@ rows = []
 # Row 0 is shared with the dial and the joystick, one in each outer column.
 rows += [(col(1), y0, U, WORKING), (col(2), y0, U, IDLE)]
 rows += [(col(i), y0 + ROW, U, c) for i, c in enumerate([BLOCKED, DONE, IDLE, IDLE])]
-rows += [(col(i), y0 + 2 * ROW, U, c) for i, c in enumerate([STACK, TABS, LAND, MACRO])]
+# The action row reads as one group, so it is a single unlit grey rather than
+# four colours competing with the agent statuses above it.
+rows += [(col(i), y0 + 2 * ROW, U, MACRO) for i in range(4)]
 # Bottom row: the leftmost slot is empty, then a double-width key, then a single.
 rows += [(col(1, 2 * U + GAP), y0 + 3 * ROW, 2 * U + GAP, VOICE),
          (col(3), y0 + 3 * ROW, U, MACRO)]
@@ -191,6 +193,16 @@ def knob(x, y, r, height, cap="#101319", glow=False):
                 f'stroke="{shade(cap, 1.5) if glow else "#4A505C"}" stroke-width="1.4" opacity="0.75"/>')
     return "".join(body)
 
+
+# ---- bowtie in the empty bottom-left slot
+bx, by = col(0), y0 + 3 * ROW
+bw, bh, waist = 0.29, 0.20, 0.062
+tie = [(bx - bw, by - bh), (bx, by - waist), (bx + bw, by - bh),
+       (bx + bw, by + bh), (bx, by + waist), (bx - bw, by + bh)]
+add('<path d="%s" fill="%s" opacity="0.92"/>'
+    % (path([(p[0], p[1]) for p in map(project, [(x, y, 0.03) for x, y in tie])]), BOWTIE))
+knot = [(p[0], p[1]) for p in map(project, rounded_rect(bx, by, 0.125, 0.165, 0.045, 0.032))]
+add(f'<path d="{path(knot)}" fill="{shade(BOWTIE, 1.3)}"/>')
 
 add(knob(col(0), y0, 0.42, 0.30, cap=DIAL, glow=True))
 add(knob(col(3), y0, 0.31, 0.22, cap="#2A2F39"))   # unlit, but light enough to read as a control
