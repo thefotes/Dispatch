@@ -125,16 +125,22 @@ def col(i, w=U):
 ROW = U + GAP    # row-to-row pitch, same as the column pitch: the grid is square
 y0 = -1.5 * ROW  # four rows, centred on the case
 
+# (centre_x, centre_y, width, colour, agent slot or None)
+#
+# The six agent keys carry a slot number, which the page's script uses to
+# recolour them as its mock agents change state — see AGENT KEY CONTRACT below.
+# Slots run in reading order, the same as `Pad.agentKeyIDs` in the app.
 rows = []
 # Row 0 is shared with the dial and the joystick, one in each outer column.
-rows += [(col(1), y0, U, WORKING), (col(2), y0, U, IDLE)]
-rows += [(col(i), y0 + ROW, U, c) for i, c in enumerate([BLOCKED, DONE, IDLE, IDLE])]
+rows += [(col(1), y0, U, WORKING, 0), (col(2), y0, U, IDLE, 1)]
+rows += [(col(i), y0 + ROW, U, c, 2 + i)
+         for i, c in enumerate([BLOCKED, DONE, IDLE, IDLE])]
 # The action row reads as one group, so it is a single unlit grey rather than
 # four colours competing with the agent statuses above it.
-rows += [(col(i), y0 + 2 * ROW, U, MACRO) for i in range(4)]
+rows += [(col(i), y0 + 2 * ROW, U, MACRO, None) for i in range(4)]
 # Bottom row: the leftmost slot is empty, then a double-width key, then a single.
-rows += [(col(1, 2 * U + GAP), y0 + 3 * ROW, 2 * U + GAP, VOICE),
-         (col(3), y0 + 3 * ROW, U, MACRO)]
+rows += [(col(1, 2 * U + GAP), y0 + 3 * ROW, 2 * U + GAP, VOICE, None),
+         (col(3), y0 + 3 * ROW, U, MACRO, None)]
 
 CASE_W = span + 0.85
 CASE_D = CASE_W   # the grid is square, so the body is too
@@ -208,8 +214,14 @@ add(knob(col(0), y0, 0.42, 0.30, cap=DIAL, glow=True))
 add(knob(col(3), y0, 0.31, 0.22, cap="#2A2F39"))   # unlit, but light enough to read as a control
 
 # ---- keys, painted back to front
+#
+# AGENT KEY CONTRACT — docs/index.html scripts against this, so keep it stable:
+# each agent key is a <g class="agent-key" data-slot="N"> holding five paths
+# classed glow / side / top / inset / rim. The script sets `fill` (and `stroke`
+# on the rim) from one status colour, applying the same five shade factors used
+# here. Change the factors here and the live recolour drifts from the default.
 drawn = []
-for (kx, ky, kw, colour) in rows:
+for (kx, ky, kw, colour, slot) in rows:
     top = rounded_rect(kx, ky, kw, U, 0.17, KEY_H)
     bot = rounded_rect(kx, ky, kw, U, 0.17, 0.03)
     t2 = [(p[0], p[1]) for p in map(project, top)]
@@ -217,15 +229,20 @@ for (kx, ky, kw, colour) in rows:
     depth = project((kx, ky, KEY_H))[2]
 
     body = []
+    if slot is not None:
+        body.append(f'<g class="agent-key" data-slot="{slot}" role="button" '
+                    f'tabindex="0" aria-label="Agent {slot + 1}">')
     # glow first, so it sits under the cap it belongs to
-    body.append(f'<path d="{path(t2)}" fill="{colour}" opacity="0.5" filter="url(#glow)"/>')
-    body.append(f'<path d="{path(hull(t2 + b2))}" fill="{shade(colour, 0.52)}"/>')
-    body.append(f'<path d="{path(t2)}" fill="{shade(colour, 1.06)}"/>')
+    body.append(f'<path class="glow" d="{path(t2)}" fill="{colour}" opacity="0.5" filter="url(#glow)"/>')
+    body.append(f'<path class="side" d="{path(hull(t2 + b2))}" fill="{shade(colour, 0.52)}"/>')
+    body.append(f'<path class="top" d="{path(t2)}" fill="{shade(colour, 1.06)}"/>')
     # an inset, brighter core reads as light coming through a frosted cap
     inset = [(p[0], p[1]) for p in map(project, rounded_rect(kx, ky, kw - 0.2, U - 0.2, 0.12, KEY_H + 0.001))]
-    body.append(f'<path d="{path(inset)}" fill="{shade(colour, 1.34)}" opacity="0.9"/>')
-    body.append(f'<path d="{path(t2)}" fill="none" stroke="{shade(colour, 1.5)}" '
+    body.append(f'<path class="inset" d="{path(inset)}" fill="{shade(colour, 1.34)}" opacity="0.9"/>')
+    body.append(f'<path class="rim" d="{path(t2)}" fill="none" stroke="{shade(colour, 1.5)}" '
                 'stroke-width="1.4" opacity="0.75"/>')
+    if slot is not None:
+        body.append('</g>')
     drawn.append((depth, "".join(body)))
 
 for _, svg in sorted(drawn, key=lambda d: -d[0]):
@@ -239,9 +256,11 @@ xs = [p[0] for p in SEEN]
 ys = [p[1] for p in SEEN]
 vx, vy = min(xs) - PAD, min(ys) - PAD
 vw, vh = max(xs) - min(xs) + 2 * PAD, max(ys) - min(ys) + 2 * PAD
+# role="group", not "img": the agent keys are focusable buttons, and an image
+# role would hide them from assistive tech entirely.
 header = (f'<svg viewBox="{vx:.0f} {vy:.0f} {vw:.0f} {vh:.0f}" '
-          'xmlns="http://www.w3.org/2000/svg" role="img" class="pad3d" '
-          'aria-label="A Work Louder Creator Micro 2, seen at an angle, with its '
-          'keys lit in agent status colours.">')
+          'xmlns="http://www.w3.org/2000/svg" role="group" class="pad3d" '
+          'aria-label="A Work Louder Creator Micro 2 with its keys lit in agent '
+          'status colours. Each lit key selects that agent.">')
 print(header)
 print("\n".join(out))
