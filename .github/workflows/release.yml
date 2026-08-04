@@ -1,0 +1,132 @@
+name: Release
+
+# Tag a commit to ship it:
+#
+#     git tag v0.2.0 && git push origin v0.2.0
+#
+# Produces a Developer ID signed, notarized, stapled MicroManager.zip and
+# attaches it to a GitHub release. The website's download button points at
+# the latest release asset, so publishing a release updates the site.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#
+#   MACOS_CERTIFICATE_P12   base64 of your "Developer ID Application" .p12
+#                           export from Keychain Access, then:
+#                           base64 -i cert.p12 | pbcopy
+#   MACOS_CERTIFICATE_PASSWORD  the password you set on that .p12
+#   MACOS_SIGN_IDENTITY     the identity's full name, e.g.
+#                           "Developer ID Application: Your Name (TEAMID)"
+#   NOTARY_KEY_P8           base64 of the App Store Connect API key .p8
+#   NOTARY_KEY_ID           that key's Key ID
+#   NOTARY_ISSUER_ID        the Issuer ID from App Store Connect
+#
+# An *Apple Development* certificate will not do here: only Developer ID is
+# accepted for distribution outside the App Store, and only a notarized build
+# opens without Gatekeeper stopping it.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, sign, notarize
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the secrets are set
+        env:
+          CERT: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY_P8 }}
+        run: |
+          missing=()
+          [[ -n "$CERT" ]]       || missing+=(MACOS_CERTIFICATE_P12)
+          [[ -n "$IDENTITY" ]]   || missing+=(MACOS_SIGN_IDENTITY)
+          [[ -n "$NOTARY_KEY" ]] || missing+=(NOTARY_KEY_P8)
+          if (( ${#missing[@]} )); then
+            echo "::error::missing secrets: ${missing[*]} — see the comment at the top of this workflow"
+            exit 1
+          fi
+
+      - name: Import the signing certificate
+        env:
+          CERT: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          # Ephemeral: the keychain and its password die with the runner.
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+
+          echo "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+          # Without this, codesign blocks on a UI prompt that never comes.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+
+      - name: Version from the tag
+        run: echo "WL_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Build and sign
+        env:
+          WL_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: ./scripts/bundle.sh
+
+      - name: Package
+        run: ditto -c -k --keepParent build/MicroManager.app MicroManager.zip
+
+      - name: Notarize
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          xcrun notarytool submit MicroManager.zip \
+            --key "$RUNNER_TEMP/notary.p8" \
+            --key-id "$NOTARY_KEY_ID" \
+            --issuer "$NOTARY_ISSUER_ID" \
+            --wait --timeout 30m
+          rm -f "$RUNNER_TEMP/notary.p8"
+
+      # The ticket is stapled to the .app, so the zip has to be rebuilt around
+      # the stapled bundle. Shipping the pre-staple zip means every download
+      # phones Apple on first launch, and fails when offline.
+      - name: Staple and repackage
+        run: |
+          xcrun stapler staple build/MicroManager.app
+          xcrun stapler validate build/MicroManager.app
+          rm -f MicroManager.zip
+          ditto -c -k --keepParent build/MicroManager.app MicroManager.zip
+
+      - name: Verify it passes Gatekeeper
+        run: |
+          codesign --verify --deep --strict --verbose=2 build/MicroManager.app
+          spctl --assess --type execute --verbose=2 build/MicroManager.app
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" MicroManager.zip \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
+
+      - name: Clean up the keychain
+        if: always()
+        run: security delete-keychain "$KEYCHAIN" || true

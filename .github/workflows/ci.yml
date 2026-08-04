@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Build
+        run: swift build -c release
+
+      # The live tests skip themselves when there is no pad, no Herdr socket
+      # and no `but` binary — which is exactly a runner — so the suite is
+      # meaningful here without hardware.
+      - name: Test
+        run: swift test
+
+      - name: Bundle
+        run: ./scripts/bundle.sh
+
+      # ditto, not zip: the app is a bundle with a nested app inside it, and
+      # only ditto preserves the symlinks and the code signature.
+      - name: Package
+        run: ditto -c -k --keepParent build/MicroManager.app MicroManager.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MicroManager-adhoc-signed
+          path: MicroManager.zip
+          retention-days: 14
