@@ -101,6 +101,7 @@ BLOCKED, WORKING, DONE, IDLE = "#FF2D2D", "#FFA000", "#00B0FF", "#00C853"
 STACK, TABS, LAND = "#7C4DFF", "#00BFA5", "#E91E63"
 VOICE, MACRO = "#ECEFF1", "#90A4AE"
 DARKCAP = "#23262E"
+DIAL = "#FF8A1E"   # the dial wears the orange cap the hardware is known for
 
 U = 1.0          # one key unit
 GAP = 0.12
@@ -112,28 +113,30 @@ COLS = 4
 span = COLS * U + (COLS - 1) * GAP
 
 
-def row_keys(widths, colours, y):
-    """Lay out a row left to right, centred on the pad."""
-    total = sum(widths) + GAP * (len(widths) - 1)
-    x = -total / 2
-    out = []
-    for w, c in zip(widths, colours):
-        out.append((x + w / 2, y, w, c))
-        x += w + GAP
-    return out
+def col(i, w=U):
+    """Centre x of something `w` wide whose left edge sits in column `i`.
 
+    Everything is addressed by column so a double-width key and a knob line up
+    with the singles above and below them.
+    """
+    return -span / 2 + i * (U + GAP) + w / 2
+
+
+ROW = U + GAP    # row-to-row pitch, same as the column pitch: the grid is square
+y0 = -1.5 * ROW  # four rows, centred on the case
 
 rows = []
-y0 = -1.78
-# knobs sit on their own strip at the back; keys start below
-rows += row_keys([2 * U + GAP, 2 * U + GAP], [WORKING, IDLE], y0 + 0.00)
-rows += row_keys([U] * 4, [BLOCKED, DONE, IDLE, IDLE], y0 + 1.12)
-rows += row_keys([U] * 4, [STACK, TABS, LAND, MACRO], y0 + 2.24)
-rows += row_keys([span - GAP - U, U], [VOICE, MACRO], y0 + 3.36)
+# Row 0 is shared with the dial and the joystick, one in each outer column.
+rows += [(col(1), y0, U, WORKING), (col(2), y0, U, IDLE)]
+rows += [(col(i), y0 + ROW, U, c) for i, c in enumerate([BLOCKED, DONE, IDLE, IDLE])]
+rows += [(col(i), y0 + 2 * ROW, U, c) for i, c in enumerate([STACK, TABS, LAND, MACRO])]
+# Bottom row: the leftmost slot is empty, then a double-width key, then a single.
+rows += [(col(1, 2 * U + GAP), y0 + 3 * ROW, 2 * U + GAP, VOICE),
+         (col(3), y0 + 3 * ROW, U, MACRO)]
 
 CASE_W = span + 0.85
-CASE_D = 5.25    # matches CASE_W, so the body reads as a square
-CASE_Y = -0.42   # centred on the content: knob strip at the back, four key rows
+CASE_D = CASE_W   # the grid is square, so the body is too
+CASE_Y = 0.0
 
 out = []
 add = out.append
@@ -169,26 +172,28 @@ add(f'<path d="{path(hull(top2 + bot2))}" fill="url(#caseSide)" '
 add(f'<path d="{path(top2)}" fill="url(#caseTop)"/>')
 
 # ---- recessed key plate
-plate = [(p[0], p[1]) for p in map(project, rounded_rect(0, CASE_Y + 0.52, CASE_W - 0.42, CASE_D - 1.35, 0.30, 0.02))]
+plate = [(p[0], p[1]) for p in map(project, rounded_rect(0, CASE_Y, CASE_W - 0.42, CASE_D - 0.42, 0.32, 0.02))]
 add(f'<path d="{path(plate)}" fill="url(#plate)"/>')
 
-# ---- knobs at the back: the dial and the joystick
-def knob(x, y, r, height, cap="#101319"):
+
+# ---- the dial and the joystick, sharing the top row with its two keys
+def knob(x, y, r, height, cap="#101319", glow=False):
     body = []
-    ring_t = [(p[0], p[1]) for p in map(project, [
-        (x + r * math.cos(t), y + r * math.sin(t), height) for t in
+    ring = lambda z: [(p[0], p[1]) for p in map(project, [
+        (x + r * math.cos(t), y + r * math.sin(t), z) for t in
         [i * math.tau / 40 for i in range(40)]])]
-    ring_b = [(p[0], p[1]) for p in map(project, [
-        (x + r * math.cos(t), y + r * math.sin(t), 0.02) for t in
-        [i * math.tau / 40 for i in range(40)]])]
-    body.append(f'<path d="{path(hull(ring_t + ring_b))}" fill="#0B0D12"/>')
+    ring_t, ring_b = ring(height), ring(0.02)
+    if glow:
+        body.append(f'<path d="{path(ring_t)}" fill="{cap}" opacity="0.5" filter="url(#glow)"/>')
+    body.append(f'<path d="{path(hull(ring_t + ring_b))}" fill="{shade(cap, 0.45) if glow else "#0B0D12"}"/>')
     body.append(f'<path d="{path(ring_t)}" fill="{cap}"/>')
-    body.append(f'<path d="{path(ring_t)}" fill="none" stroke="#4A505C" stroke-width="1.4" opacity="0.7"/>')
+    body.append(f'<path d="{path(ring_t)}" fill="none" '
+                f'stroke="{shade(cap, 1.5) if glow else "#4A505C"}" stroke-width="1.4" opacity="0.75"/>')
     return "".join(body)
 
 
-add(knob(-span / 2 + 0.50, y0 - 0.78, 0.40, 0.30))
-add(knob(span / 2 - 0.50, y0 - 0.78, 0.29, 0.22, cap="#171B22"))
+add(knob(col(0), y0, 0.42, 0.30, cap=DIAL, glow=True))
+add(knob(col(3), y0, 0.31, 0.22, cap="#2A2F39"))   # unlit, but light enough to read as a control
 
 # ---- keys, painted back to front
 drawn = []
