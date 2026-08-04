@@ -20,6 +20,14 @@ let package = Package(
         // Menu-bar app: runs the bridge in the background.
         .executableTarget(name: "WLMicroManager", dependencies: ["WLKit"], path: "Sources/WLMicroManager"),
 
-        .testTarget(name: "WLKitTests", dependencies: ["WLKit"], path: "Tests/WLKitTests"),
+        // Fixtures are read from the source directory via #filePath rather than
+        // from the test bundle, so they are excluded rather than declared as
+        // resources — SwiftPM would otherwise warn about an unhandled file.
+        .testTarget(
+            name: "WLKitTests",
+            dependencies: ["WLKit"],
+            path: "Tests/WLKitTests",
+            exclude: ["Fixtures"]
+        ),
     ]
 )

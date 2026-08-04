@@ -166,20 +166,15 @@ extension StatusMapperTests {
         XCTAssertEqual(threads[1].color, 0x00C853)
     }
 
-    /// Guards the two implementations against drifting apart.
-    func testColoursMatchTheNodeImplementation() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("lib/status.js")
-        let source = try String(contentsOf: url, encoding: .utf8)
+    /// Pins every status colour. These are the whole point of the pad — a
+    /// silent change to one is a bug you find by looking at hardware, which is
+    /// the slowest possible way to find it.
+    func testEveryStatusColourIsPinned() {
         let cfg = BridgeConfig()
-        for state in ["blocked", "working", "done", "idle", "unknown"] {
-            let hex = hexString(cfg.color(for: state))
-            XCTAssertTrue(
-                source.contains("\(state): \"\(hex)\""),
-                "lib/status.js has a different colour for \(state) than \(hex)"
-            )
-        }
+        XCTAssertEqual(cfg.color(for: "blocked"), 0xFF2D2D)
+        XCTAssertEqual(cfg.color(for: "working"), 0xFFA000)
+        XCTAssertEqual(cfg.color(for: "done"), 0x00B0FF)
+        XCTAssertEqual(cfg.color(for: "idle"), 0x00C853)
+        XCTAssertEqual(cfg.color(for: "unknown"), 0x00C853)
     }
 }

@@ -1,18 +1,17 @@
 import XCTest
 @testable import WLKit
 
-/// Uses the real backed-up device keymap, so the double-encoded envelope and
-/// the layer layout are exercised against genuine data rather than a fixture I
-/// invented to match my own parser.
+/// Uses a real keymap read off a device, so the double-encoded envelope and the
+/// layer layout are exercised against genuine data rather than a fixture I
+/// invented to match my own parser. It is the stock F-key map, straight from
+/// `fs.read` — keep it that way, because half these tests assert on what an
+/// *unmodified* device looks like.
 final class KeymapManagerTests: XCTestCase {
 
     private func backupKeymap() throws -> [String: Any] {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // WLKitTests
-            .deletingLastPathComponent()   // Tests
-            .deletingLastPathComponent()   // swift
-            .deletingLastPathComponent()   // repo root
-            .appendingPathComponent("backup/keymap.json")
+            .appendingPathComponent("Fixtures/stock-keymap.json")
         let raw = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
         return try KeymapManager.parse(raw)
     }
