@@ -1,14 +1,20 @@
 name: Release
 
-# Tag a commit to ship it:
+# Every push to main republishes the `latest` release, so the website's
+# download button always points at the current build. Tagging `v*` cuts a
+# permanent versioned release alongside it.
 #
 #     git tag v0.2.0 && git push origin v0.2.0
 #
-# Produces a Developer ID signed, notarized, stapled MicroManager.zip and
-# attaches it to a GitHub release. The website's download button points at
-# the latest release asset, so publishing a release updates the site.
+# Signing degrades rather than failing. With the secrets below set, builds are
+# Developer ID signed, notarized and stapled — no Gatekeeper warning, and the
+# Input Monitoring grant survives updates because the signature is stable.
+# Without them the build is ad-hoc signed and says so loudly in the release
+# notes: macOS will refuse to open it until the user right-clicks → Open, and
+# the permission grant resets on every update, because an ad-hoc signature
+# changes every build.
 #
-# Required repository secrets (Settings → Secrets and variables → Actions):
+# Repository secrets (Settings → Secrets and variables → Actions):
 #
 #   MACOS_CERTIFICATE_P12   base64 of your "Developer ID Application" .p12
 #                           export from Keychain Access, then:
@@ -20,42 +26,49 @@ name: Release
 #   NOTARY_KEY_ID           that key's Key ID
 #   NOTARY_ISSUER_ID        the Issuer ID from App Store Connect
 #
-# An *Apple Development* certificate will not do here: only Developer ID is
-# accepted for distribution outside the App Store, and only a notarized build
-# opens without Gatekeeper stopping it.
+# An *Apple Development* certificate will not do: only Developer ID is
+# accepted for distribution outside the App Store.
 
 on:
   push:
+    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
-    name: Build, sign, notarize
+    name: Build, sign, publish
     runs-on: macos-14
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check the secrets are set
+      # Secrets cannot be tested in an `if:`, so decide here and let later
+      # steps key off the output.
+      - name: Decide how this build can be signed
+        id: mode
         env:
           CERT: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
           NOTARY_KEY: ${{ secrets.NOTARY_KEY_P8 }}
         run: |
-          missing=()
-          [[ -n "$CERT" ]]       || missing+=(MACOS_CERTIFICATE_P12)
-          [[ -n "$IDENTITY" ]]   || missing+=(MACOS_SIGN_IDENTITY)
-          [[ -n "$NOTARY_KEY" ]] || missing+=(NOTARY_KEY_P8)
-          if (( ${#missing[@]} )); then
-            echo "::error::missing secrets: ${missing[*]} — see the comment at the top of this workflow"
-            exit 1
+          if [[ -n "$CERT" && -n "$IDENTITY" && -n "$NOTARY_KEY" ]]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Developer ID signing and notarization enabled."
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Signing secrets are not set — publishing an ad-hoc signed build. See the comment at the top of this workflow."
           fi
 
       - name: Import the signing certificate
+        if: steps.mode.outputs.signed == 'true'
         env:
           CERT: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -79,18 +92,33 @@ jobs:
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
           security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
 
-      - name: Version from the tag
-        run: echo "WL_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      # A tag is its own version; a main build gets the run number so the
+      # bundle version still climbs between releases.
+      - name: Work out the version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "WL_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "title=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "rolling=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "WL_VERSION=0.1.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "title=Latest build (main)" >> "$GITHUB_OUTPUT"
+            echo "rolling=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build and sign
         env:
-          WL_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          WL_SIGN_IDENTITY: ${{ steps.mode.outputs.signed == 'true' && secrets.MACOS_SIGN_IDENTITY || '' }}
         run: ./scripts/bundle.sh
 
       - name: Package
         run: ditto -c -k --keepParent build/MicroManager.app MicroManager.zip
 
       - name: Notarize
+        if: steps.mode.outputs.signed == 'true'
         env:
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
@@ -108,25 +136,57 @@ jobs:
       # the stapled bundle. Shipping the pre-staple zip means every download
       # phones Apple on first launch, and fails when offline.
       - name: Staple and repackage
+        if: steps.mode.outputs.signed == 'true'
         run: |
           xcrun stapler staple build/MicroManager.app
           xcrun stapler validate build/MicroManager.app
           rm -f MicroManager.zip
           ditto -c -k --keepParent build/MicroManager.app MicroManager.zip
 
-      - name: Verify it passes Gatekeeper
+      - name: Verify the signature
         run: |
           codesign --verify --deep --strict --verbose=2 build/MicroManager.app
-          spctl --assess --type execute --verbose=2 build/MicroManager.app
+          if [[ "${{ steps.mode.outputs.signed }}" == "true" ]]; then
+            spctl --assess --type execute --verbose=2 build/MicroManager.app
+          fi
 
-      - name: Publish the release
+      - name: Write the release notes
+        id: notes
+        run: |
+          {
+            if [[ "${{ steps.version.outputs.rolling }}" == "true" ]]; then
+              echo "Built from \`main\` at [\`${GITHUB_SHA:0:7}\`](https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA})."
+              echo
+              echo "This release is replaced on every push to main. For a build that stays put, use a tagged release."
+            else
+              echo "Version ${WL_VERSION}, from [\`${GITHUB_SHA:0:7}\`](https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA})."
+            fi
+            echo
+            if [[ "${{ steps.mode.outputs.signed }}" == "true" ]]; then
+              echo "Developer ID signed, notarized and stapled — it opens normally, and the Input Monitoring grant survives updates."
+            else
+              echo "> **Ad-hoc signed.** The repository has no Developer ID secrets set, so macOS will refuse this build until you right-click the app and choose *Open*. The Input Monitoring grant is keyed to the code signature, and an ad-hoc one changes every build, so you will have to grant it again after each update."
+            fi
+            echo
+            echo "Unzip, drag \`MicroManager.app\` to Applications, launch it, and grant Input Monitoring."
+          } > notes.md
+
+      - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          TITLE: ${{ steps.version.outputs.title }}
         run: |
-          gh release create "$GITHUB_REF_NAME" MicroManager.zip \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes
+          # Replace rather than edit: it keeps the tag on the commit that
+          # actually produced the asset, which `gh release edit` will not do.
+          if [[ "${{ steps.version.outputs.rolling }}" == "true" ]]; then
+            gh release delete "$TAG" --cleanup-tag --yes || true
+          fi
+          gh release create "$TAG" MicroManager.zip \
+            --title "$TITLE" \
+            --notes-file notes.md \
+            --target "$GITHUB_SHA"
 
       - name: Clean up the keychain
-        if: always()
+        if: always() && steps.mode.outputs.signed == 'true'
         run: security delete-keychain "$KEYCHAIN" || true

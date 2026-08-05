@@ -183,9 +183,18 @@ stable designated requirement and makes the grant stick. It also sets
 `LSUIElement` so there is no Dock icon, and gives `SMAppService` a bundle it
 will actually register as a login item.
 
-Released builds are Developer ID signed and notarized by
-[the release workflow](.github/workflows/release.yml), which lists the repository
-secrets it needs.
+Every push to main republishes the **`latest`** release, so the download link
+above always points at the current build; tagging `v*` cuts a permanent
+versioned release alongside it. Both go through
+[the release workflow](.github/workflows/release.yml).
+
+That workflow signs with a Developer ID and notarizes when the repository has
+the secrets for it — the file lists them — and falls back to an ad-hoc
+signature when it does not, rather than failing. An ad-hoc build works, but
+macOS stops it until you right-click → Open, and because the grant is keyed to
+the signature and an ad-hoc one changes every build, Input Monitoring has to be
+granted again after each update. The release notes say which kind you are
+downloading.
 
 ## Only one bridge at a time
 
