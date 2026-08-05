@@ -1,81 +1,82 @@
 import AppKit
-import WLKit
 
-/// The wide bottom key: voice input for whichever agent has focus.
+/// The wide bottom key: taps **right command**, which is Superwhisper's
+/// start/stop.
 ///
-/// Claude Code has a real voice mode, so it gets the real thing — a key chord
-/// injected into its pane that its keybindings map to `voice:pushToTalk` in
-/// tap mode (start on the first press, transcribe and send on the second).
-/// Codex's and pi's terminal UIs have no voice of their own, so for every
-/// other harness the key triggers macOS dictation aimed at the same composer.
+/// Superwhisper is system-wide and types into whatever holds focus, so this
+/// deliberately does not care which agent Herdr has focused, or whether Herdr
+/// is running at all. That is the difference from what this key used to do: it
+/// asked Herdr for the focused agent and forked — Claude Code got a chord
+/// injected into its pane for its own voice mode, everything else got macOS
+/// dictation. One transcriber for every harness is simpler, and it is the one
+/// press that has to work when you are mid-thought.
+///
+/// Posting a key event needs the **Accessibility** grant, on top of the Input
+/// Monitoring grant the pad needs. The check below raises the system prompt the
+/// first time.
 @MainActor
 final class VoiceController {
 
     static let shared = VoiceController()
 
-    /// The chord Claude's `~/.claude/keybindings.json` maps to
-    /// `voice:pushToTalk`. Sent as terminal input, so it must be a chord a
-    /// terminal can encode.
-    static let claudeVoiceChord = "ctrl+alt+v"
+    /// Right command. Its left twin is a different key code, and Superwhisper
+    /// distinguishes them, so this must be the right-hand one.
+    static let triggerKey: CGKeyCode = 0x36
 
-    /// Mirrors an open Claude voice take, for the key light.
+    /// Mirrors an open take, for the key light.
     var onActiveChange: ((Bool) -> Void)?
     var onError: ((String) -> Void)?
 
-    /// Which half of Claude's start/stop cycle we are in. Only the light
-    /// cares. Cancelling voice inside Claude (esc) makes this drift; the
-    /// next press resynchronises it.
-    private var claudeTakeOpen = false
+    /// Which half of the start/stop cycle we are in. Only the light cares —
+    /// stopping a take from the keyboard makes this drift, and the next press
+    /// resynchronises it.
+    private var takeOpen = false
 
     func handleVoiceKey() {
-        Task { await trigger() }
-    }
-
-    private func trigger() async {
         do {
-            guard let agent = try await HerdrClient.focusedAgent() else {
-                onError?("Nothing has focus in Herdr right now.")
-                return
-            }
-            if agent.agent.lowercased().contains("claude"), let pane = agent.paneID {
-                try await HerdrClient.sendKeys(paneID: pane, keys: [Self.claudeVoiceChord])
-                claudeTakeOpen.toggle()
-                onActiveChange?(claudeTakeOpen)
-            } else {
-                try await triggerDictation()
-            }
+            try tapTriggerKey()
+            takeOpen.toggle()
+            onActiveChange?(takeOpen)
         } catch {
             onError?(error.localizedDescription)
         }
     }
 
-    /// Posts the macOS dictation shortcut — fn pressed twice, the system
-    /// default — as real key events. Dictated text lands in the focused
-    /// composer, whichever harness owns it. Needs the Accessibility grant on
-    /// top of Input Monitoring; the guard below shows the system prompt.
-    private func triggerDictation() async throws {
+    private func tapTriggerKey() throws {
         let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         guard AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary) else {
             throw VoiceFailure.accessibilityDenied
         }
 
         let source = CGEventSource(stateID: .hidSystemState)
-        let fn: CGKeyCode = 0x3F
-        for press in 0..<2 {
-            if press > 0 { try? await Task.sleep(nanoseconds: 90_000_000) }
-            CGEvent(keyboardEventSource: source, virtualKey: fn, keyDown: true)?
-                .post(tap: .cghidEventTap)
-            CGEvent(keyboardEventSource: source, virtualKey: fn, keyDown: false)?
-                .post(tap: .cghidEventTap)
-        }
+        guard
+            let down = CGEvent(keyboardEventSource: source,
+                               virtualKey: Self.triggerKey, keyDown: true),
+            let up = CGEvent(keyboardEventSource: source,
+                             virtualKey: Self.triggerKey, keyDown: false)
+        else { throw VoiceFailure.eventFailed }
+
+        // A modifier carries its own flag: set on the way down, cleared on the
+        // way up. Skip that and listeners see a command key that never
+        // releases, which leaves the whole machine holding a modifier down.
+        down.flags = .maskCommand
+        up.flags = []
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
     }
 
     enum VoiceFailure: LocalizedError {
         case accessibilityDenied
+        case eventFailed
 
         var errorDescription: String? {
-            "Dictation needs the Accessibility permission: System Settings → "
-                + "Privacy & Security → Accessibility → Micro Manager."
+            switch self {
+            case .accessibilityDenied:
+                return "Pressing right command needs the Accessibility permission: "
+                    + "System Settings → Privacy & Security → Accessibility → Micro Manager."
+            case .eventFailed:
+                return "Could not synthesise the right command key press."
+            }
         }
     }
 }

@@ -58,7 +58,8 @@ agent key pressed from a browser used to move a cursor you could not see. Set
 | land | lands the focused agent's branches, bottom first |
 | macro | types a configured string into the agent's prompt |
 
-**Row 4** is the wide key — voice input for the focused agent — and one more
+**Row 4** is the wide key — it taps right command, which starts and stops
+Superwhisper — and one more
 macro key.
 
 **The dial** tunes reasoning effort. **The joystick** switches model: it puts
@@ -158,7 +159,7 @@ A bound string is injected into the focused agent's prompt, unsubmitted — you
 still read it and press enter. `"10+11"` addresses the wide key as one; `"10"`
 and `"11"` address its halves. Keys the file does not mention keep their
 defaults, and an empty string unbinds a key outright. Binding the wide key to
-text replaces its voice role.
+text replaces its right-command tap.
 
 `codex.models` is your copy of what Codex's own `/model` menu offers, in its
 order — the joystick steers that menu rather than owning it, so there is nothing

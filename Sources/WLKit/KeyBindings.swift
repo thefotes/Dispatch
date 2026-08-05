@@ -18,7 +18,7 @@ import Foundation
 /// A bound string is injected into the focused agent's prompt, unsubmitted.
 /// `"10+11"` addresses the wide key as one; `"10"` and `"11"` address its
 /// halves separately. Keys the file does not mention keep their defaults —
-/// 9 and 12 have the defaults below, the wide key defaults to voice input.
+/// 9 and 12 have the defaults below, the wide key defaults to the voice key.
 /// An empty string unbinds a key outright.
 public struct KeyBindings: Sendable, Equatable {
 

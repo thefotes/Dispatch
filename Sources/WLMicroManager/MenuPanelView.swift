@@ -155,7 +155,7 @@ struct MenuPanelView: View {
         if isTabCycleKey { return "Cycle tabs in the focused Herdr window" }
         if isLandKey { return "Land the focused agent's branches onto the target" }
         if let macroText { return "Type: \(macroText)" }
-        if isVoiceKey { return "Voice input for the focused agent" }
+        if isVoiceKey { return "Right command — start or stop Superwhisper" }
         if let agent { return "\(agent.shortName) — \(agent.status)" }
         return "Key \(index)"
     }

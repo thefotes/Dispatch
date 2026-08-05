@@ -180,7 +180,7 @@ public enum Pad {
     public static let landKeyID = 8
     /// The wide key at the bottom left: one keycap over matrix positions 10
     /// and 11, so both are bound and lit together and a press from either
-    /// half means the same thing — voice input for the focused agent, unless
+    /// half means the same thing — a right-command tap for Superwhisper, unless
     /// the config file rebinds it to a text macro.
     public static let voiceKeyIDs = [10, 11]
     /// Text-macro keys: inject a configured string into the focused agent's
