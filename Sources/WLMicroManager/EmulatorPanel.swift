@@ -73,11 +73,19 @@ struct EmulatorView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14)
                     .strokeBorder(Color.secondary.opacity(0.25), lineWidth: 0.5))
 
-            VStack(spacing: 6) {
-                ForEach(Array(Pad.displayRows.enumerated()), id: \.offset) { _, row in
-                    HStack(spacing: 6) {
+            VStack(spacing: Self.gap) {
+                // Rows 0–2 are plain grids of single keys.
+                ForEach(Array(Pad.displayRows.prefix(3).enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: Self.gap) {
                         ForEach(row, id: \.self) { key in keyButton(key) }
                     }
+                }
+                // The bottom row starts one column in, and its wide keycap
+                // covers matrix positions 10 and 11 — one cap, one press.
+                HStack(spacing: Self.gap) {
+                    bowtie
+                    keyButton(Pad.voiceKeyIDs[0], width: Self.keyW * 2 + Self.gap)
+                    keyButton(12)
                 }
             }
             .padding(10)
@@ -91,7 +99,20 @@ struct EmulatorView: View {
         }
     }
 
-    private func keyButton(_ key: Int) -> some View {
+    static let keyW: CGFloat = 52
+    static let keyH: CGFloat = 40
+    static let gap: CGFloat = 6
+
+    /// The bowtie silkscreened on the case, in the slot the bottom row leaves
+    /// empty. Not a key: it takes up its column and does nothing.
+    private var bowtie: some View {
+        Bowtie()
+            .fill(Color.white.opacity(0.28))
+            .frame(width: 24, height: 15)
+            .frame(width: Self.keyW, height: Self.keyH)
+    }
+
+    private func keyButton(_ key: Int, width: CGFloat = EmulatorView.keyW) -> some View {
         let state = emulator.keys[key]
         let lit = state?.isLit == true && emulator.bound.contains(key)
         return Button {
@@ -100,7 +121,7 @@ struct EmulatorView: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(lit ? Color(packedRGB: state?.color ?? 0)
                           : Color.white.opacity(emulator.bound.contains(key) ? 0.10 : 0.04))
-                .frame(width: 52, height: 40)
+                .frame(width: width, height: Self.keyH)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
                         .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.5)
@@ -204,5 +225,29 @@ struct EmulatorView: View {
             }
             .frame(minHeight: 90)
         }
+    }
+}
+
+/// A bowtie: two triangles meeting at a narrow waist, with a knot over the
+/// middle. The same mark the pad carries on the website illustration.
+struct Bowtie: Shape {
+    func path(in rect: CGRect) -> Path {
+        let w = rect.width, h = rect.height
+        let waist = h * 0.30
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: w / 2, y: (h - waist) / 2))
+        path.addLine(to: CGPoint(x: w, y: 0))
+        path.addLine(to: CGPoint(x: w, y: h))
+        path.addLine(to: CGPoint(x: w / 2, y: (h + waist) / 2))
+        path.addLine(to: CGPoint(x: 0, y: h))
+        path.closeSubpath()
+        // the knot
+        path.addRoundedRect(
+            in: CGRect(x: w / 2 - w * 0.09, y: h * 0.24,
+                       width: w * 0.18, height: h * 0.52),
+            cornerSize: CGSize(width: w * 0.04, height: w * 0.04)
+        )
+        return path
     }
 }
