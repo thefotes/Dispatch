@@ -67,7 +67,9 @@ public final class BridgeController: ObservableObject {
 
     // MARK: - Internals
 
-    private let device = WLDevice()
+    private var device = WLDevice()
+    /// Non-nil while the bridge is driving a virtual pad instead of hardware.
+    @Published public private(set) var emulator: PadEmulator?
     private var lifecycle: HerdrEventStream?
     private var statusStreams: [String: HerdrEventStream] = [:]
     private var pollTask: Task<Void, Never>?
@@ -79,6 +81,24 @@ public final class BridgeController: ObservableObject {
 
     public init(config: BridgeConfig = BridgeConfig()) {
         self.config = config
+        wire(device)
+    }
+
+    /// Swap the hardware for a virtual pad, or back. The device is rebuilt
+    /// either way, so the bridge reconnects from scratch rather than trying to
+    /// carry state across a transport it no longer has.
+    public func useEmulator(_ on: Bool) async {
+        guard on != (emulator != nil) else { return }
+        let wasRunning = isRunning
+        if wasRunning { await stop() }
+        let pad = on ? PadEmulator() : nil
+        emulator = pad
+        device = WLDevice(emulator: pad)
+        wire(device)
+        if wasRunning { await start() }
+    }
+
+    private func wire(_ device: WLDevice) {
         device.onDisconnect = { [weak self] _ in
             guard let self else { return }
             self.deviceConnected = false

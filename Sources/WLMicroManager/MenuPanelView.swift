@@ -241,6 +241,24 @@ struct MenuPanelView: View {
                     }
                 }
 
+            Toggle("Emulate the pad", isOn: Binding(
+                get: { bridge.emulator != nil },
+                set: { on in
+                    BridgeSettings.emulate = on
+                    Task {
+                        await bridge.useEmulator(on)
+                        if let emulator = bridge.emulator {
+                            EmulatorWindowController.shared.show(emulator)
+                        } else {
+                            EmulatorWindowController.shared.close()
+                        }
+                    }
+                }
+            ))
+            .toggleStyle(.checkbox)
+            .padding(.horizontal, 14).padding(.top, 4)
+            .help("Drive a virtual pad instead of the hardware")
+
             if let inspectorError {
                 Text(inspectorError)
                     .font(.caption)

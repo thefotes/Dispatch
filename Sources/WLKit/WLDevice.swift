@@ -95,6 +95,10 @@ public final class WLDevice {
     public var onDisconnect: ((String) -> Void)?
 
     public private(set) var info: Info?
+    /// When set, every call is answered by this instead of by the HID bus, and
+    /// nothing touches IOKit. See `PadEmulator`.
+    public let emulator: PadEmulator?
+    private var emulatedConnected = false
     private var manager: IOHIDManager?
     private var device: IOHIDDevice?
     private var inputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: reportSize)
@@ -103,9 +107,9 @@ public final class WLDevice {
     private var pending: [Int: (Any?, String?) -> Void] = [:]
     private var nextID = 1
 
-    public var isConnected: Bool { device != nil }
+    public var isConnected: Bool { device != nil || emulatedConnected }
 
-    public init() {}
+    public init(emulator: PadEmulator? = nil) { self.emulator = emulator }
 
     deinit { inputBuffer.deallocate() }
 
@@ -113,6 +117,23 @@ public final class WLDevice {
 
     public func connect() throws {
         disconnect(reason: nil)
+
+        if let emulator {
+            emulatedConnected = true
+            info = Info(
+                product: "Creator Micro 2 (emulated)",
+                productID: 0x8297,
+                transport: "emulated",
+                serial: "EMULATOR",
+                usagePage: WLDevice.vendorUsagePage,
+                interfaceCount: 1
+            )
+            emulator.onNotify = { [weak self] method, params in
+                guard let self else { return }
+                DispatchQueue.main.async { self.onNotification?(method, params) }
+            }
+            return
+        }
 
         // Must be held for the lifetime of the connection: releasing the
         // manager tears down the devices it opened, and every later SetReport
@@ -170,6 +191,16 @@ public final class WLDevice {
     }
 
     public func disconnect(reason: String?) {
+        if emulator != nil {
+            guard emulatedConnected else { return }
+            emulatedConnected = false
+            emulator?.onNotify = nil
+            info = nil
+            for (_, done) in pending { done(nil, "disconnected") }
+            pending.removeAll()
+            if let reason { onDisconnect?(reason) }
+            return
+        }
         guard let dev = device else { return }
         IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -190,7 +221,7 @@ public final class WLDevice {
 
     @discardableResult
     public func call(_ method: String, params: Any?, completion: ((Any?, String?) -> Void)? = nil) -> Int? {
-        guard let dev = device else {
+        guard emulatedConnected || device != nil else {
             completion?(nil, Failure.notConnected.errorDescription)
             return nil
         }
@@ -198,6 +229,25 @@ public final class WLDevice {
         // Firmware only accepts call ids below 1000.
         let id = nextID
         nextID = nextID % 998 + 1
+
+        if let emulator {
+            onTX?(method, params, id)
+            // Answer on the next turn of the run loop rather than inline: a
+            // real call is never synchronous, and callers that assume it is
+            // would work here and deadlock on hardware.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                let (result, error) = emulator.handle(method, params: params)
+                self.onResponse?(id, result, error)
+                completion?(result, error)
+            }
+            return id
+        }
+
+        guard let dev = device else {
+            completion?(nil, Failure.notConnected.errorDescription)
+            return nil
+        }
 
         var message: [String: Any] = ["method": method, "id": id]
         message["params"] = params ?? NSNull()

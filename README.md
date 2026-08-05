@@ -109,6 +109,33 @@ Run that **from your terminal**, not from Finder: macOS attributes Input
 Monitoring to the responsible process, so a terminal that already has the grant
 passes it on.
 
+## No pad to hand
+
+Tick **Emulate the pad** in the panel and a window opens with a virtual Creator
+Micro 2 in it. The bridge drives its lights exactly as it drives the hardware,
+and clicking a key — or the dial, or the joystick — sends the same
+`v.oai.hid` report back, so the whole loop works with nothing plugged in.
+
+```bash
+WL_EMULATE=1 swift run WLMicroManager    # start emulated, no clicking required
+```
+
+It is a stand-in for the firmware rather than a picture of one, and it
+reproduces the firmware's more awkward habits deliberately, because those are
+the ones that cost time on real hardware:
+
+- it answers `{"ok":1}` to any lighting payload, right or wrong;
+- it boots on the **stock F-key keymap**, so the app has to bind the keys
+  before anything can light — and a key that is not bound to `KV_OAI_AG*`
+  accepts its colour in silence and stays dark;
+- an unbound key reports nothing when pressed, because on the pad it would be
+  sending a keystroke instead.
+
+The window also shows the RPC traffic, and **Reset** puts a factory pad back.
+
+The emulator lives inside the app, so it stands in for the device for Micro
+Manager only — the Inspector is a separate process and still needs hardware.
+
 ## Configuration
 
 Everything works without a config file. To rebind the macro keys or change what
