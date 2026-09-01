@@ -36,10 +36,10 @@ enum MenuBarIcon {
 
         var symbolName: String {
             switch self {
-            case .off: return "keyboard"
-            case .permissionDenied, .deviceMissing: return "keyboard.badge.exclamationmark"
-            case .idle: return "keyboard"
-            case .allIdle, .working, .blocked: return "keyboard.fill"
+            case .off: return IconSymbols.idle
+            case .permissionDenied, .deviceMissing: return IconSymbols.problem
+            case .idle: return IconSymbols.idle
+            case .allIdle, .working, .blocked: return IconSymbols.active
             }
         }
 
@@ -71,7 +71,12 @@ enum MenuBarIcon {
     static func image(for state: State) -> NSImage {
         let symbolSize = NSSize(width: 18, height: 18)
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-        let symbol = NSImage(systemSymbolName: state.symbolName, accessibilityDescription: state.help)?
+        // Falling back to the plain keyboard rather than to a blank image: a
+        // symbol the running system does not have would otherwise leave the
+        // menu bar with a status dot floating on its own, which reads as a
+        // broken app rather than as whatever the state actually is.
+        let symbol = (NSImage(systemSymbolName: state.symbolName, accessibilityDescription: state.help)
+            ?? NSImage(systemSymbolName: IconSymbols.idle, accessibilityDescription: state.help))?
             .withSymbolConfiguration(config)
             ?? NSImage(size: symbolSize)
 
