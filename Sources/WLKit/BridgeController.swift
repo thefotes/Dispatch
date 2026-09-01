@@ -193,12 +193,19 @@ public final class BridgeController: ObservableObject {
             lastError = nil
         } catch {
             deviceConnected = false
-            let message = error.localizedDescription
-            if message.contains("0xE00002C1") || message.contains("Input Monitoring") {
+            // Ask the API that knows about the grant rather than reading the
+            // error code, which says "not permitted" for a wedged pad too.
+            let granted = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+            switch DeviceOpenFailure.classify(accessGranted: granted, message: error.localizedDescription) {
+            case .permissionMissing:
                 permissionDenied = true
-                if !warnedPermission { warnedPermission = true; lastError = message }
-            } else {
-                lastError = message
+                if !warnedPermission {
+                    warnedPermission = true
+                    lastError = DeviceOpenFailure.permissionMissing.message
+                }
+            case .deviceUnavailable(let underlying):
+                permissionDenied = false
+                lastError = DeviceOpenFailure.deviceUnavailable(underlying).message
             }
             scheduleReopen()
             return
