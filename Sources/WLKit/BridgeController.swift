@@ -49,6 +49,13 @@ public final class BridgeController: ObservableObject {
     /// config edit only needs an off/on toggle, not a relaunch.
     public private(set) var keyBindings = KeyBindings.load()
 
+    /// Overrides `keyBindings` without going through `start()`'s config-file
+    /// reload — tests only, so a binding can be exercised without a real
+    /// `config.json` on disk.
+    func setKeyBindingsForTesting(_ bindings: KeyBindings) {
+        keyBindings = bindings
+    }
+
     /// Called when the stack key is pressed. The bridge owns the key, the app
     /// owns the window, so this is where the two meet.
     public var onStackKey: (() -> Void)?
@@ -81,6 +88,9 @@ public final class BridgeController: ObservableObject {
     private var lastFingerprint: String?
     private var issuedIDs = Set<Int>()
     private var warnedPermission = false
+    /// When the wide key (10/11) last reported a press, for `WideKeyDebounce`
+    /// to collapse its two switches' notifications into one logical press.
+    private var lastVoiceKeyPress: DispatchTime?
 
     public init(config: BridgeConfig = BridgeConfig()) {
         self.config = config
@@ -433,6 +443,11 @@ public final class BridgeController: ObservableObject {
     /// has to agree with `Pad`, so keep the dispatch in a single switch.
     public func handleKeyPress(_ index: Int) {
         if onKeyIntercept?(index) == true { return }
+        if Pad.voiceKeyIDs.contains(index) {
+            let now = DispatchTime.now()
+            defer { lastVoiceKeyPress = now }
+            if let last = lastVoiceKeyPress, WideKeyDebounce.isSamePress(last, now) { return }
+        }
         // A config binding wins over any of these keys' built-in role — this
         // is how the config file may repurpose stack, tabs, land, the macro
         // keys, or the wide voice key.
