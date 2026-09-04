@@ -420,7 +420,16 @@ public final class BridgeController: ObservableObject {
             )
         } catch {
             lastError = error.localizedDescription
-            lastFingerprint = nil   // repaint on the next tick
+            // A write failure this deep almost always means the HID session
+            // itself went bad under us, not that this one call was unlucky —
+            // observed after sleep/wake over Bluetooth, where the device
+            // stays "open" but every SetReport fails with a wedged-session
+            // code (0xE00002E2). Retrying the same call against the same
+            // handle every poll never recovers on its own; disconnecting
+            // does, since it routes through the same onDisconnect →
+            // scheduleReopen path a genuinely lost connection already takes,
+            // and reconnecting opens a fresh IOHIDDevice from scratch.
+            device.disconnect(reason: error.localizedDescription)
         }
     }
 
