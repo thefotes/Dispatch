@@ -1,0 +1,142 @@
+import Foundation
+
+/// Wraps `HerdrClient` behind `Provider`. The one implementation Micromanager
+/// ships today; `BridgeController` never imports `HerdrClient` — this is now
+/// the only file that does.
+///
+/// Owns the event-stream bookkeeping that used to live in `BridgeController`:
+/// a lifecycle stream that restarts itself on close, and one dedicated
+/// per-pane status stream, reconciled against whatever `status()` last
+/// fetched (`reconcileStatusStreams` used to need the bridge to hand it a
+/// fresh agent list on every poll; now `status()` triggers its own
+/// reconciliation, so it needs nothing handed to it).
+public final class HerdrProvider: Provider, @unchecked Sendable {
+    private let lock = NSLock()
+    private var onChange: (@Sendable () -> Void)?
+    private var lifecycle: HerdrEventStream?
+    private var statusStreams: [String: HerdrEventStream] = [:]
+    private var stopped = true
+
+    public init() {}
+
+    public func status() async throws -> [HerdrAgent] {
+        let agents = try await HerdrClient.listAgents()
+        reconcileStatusStreams(agents)
+        return agents
+    }
+
+    public func focus(_ target: String) async throws {
+        try await HerdrClient.focusAgent(target)
+    }
+
+    public func dial(_ step: Int, mode: String) async throws {
+        switch mode {
+        case "agent":
+            guard let next = HerdrClient.adjacentAgent(in: try await HerdrClient.listAgents(), step: step),
+                  let target = next.focusTarget
+            else { return }
+            try await HerdrClient.focusAgent(target)
+        case "tab":
+            try await HerdrClient.cycleTabs(step)
+        case "space", "workspace":
+            guard let next = HerdrClient.adjacentWorkspace(in: try await HerdrClient.listWorkspaces(), step: step)
+            else { return }
+            try await HerdrClient.focusWorkspace(next.workspaceID)
+        default:
+            break   // an unrecognised mode does nothing, same as `.effort` never reaching here
+        }
+    }
+
+    public func inject(_ text: String) async throws {
+        guard let agent = try await HerdrClient.focusedAgent(), let pane = agent.paneID else {
+            throw HerdrError.api("Nothing has focus in Herdr right now.")
+        }
+        try await HerdrClient.sendText(paneID: pane, text: text)
+    }
+
+    public func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription {
+        lock.lock()
+        self.onChange = onChange
+        stopped = false
+        lock.unlock()
+        startLifecycleStream()
+        return ProviderSubscription { [weak self] in self?.teardown() }
+    }
+
+    private func teardown() {
+        lock.lock()
+        stopped = true
+        onChange = nil
+        let lifecycleToStop = lifecycle
+        let streamsToStop = statusStreams
+        lifecycle = nil
+        statusStreams.removeAll()
+        lock.unlock()
+        lifecycleToStop?.stop()
+        streamsToStop.values.forEach { $0.stop() }
+    }
+
+    private func notify() {
+        lock.lock(); let callback = onChange; lock.unlock()
+        callback?()
+    }
+
+    private func startLifecycleStream() {
+        let stream = HerdrEventStream(subscriptions: [
+            ["type": "pane.created"],
+            ["type": "pane.closed"],
+            ["type": "pane.exited"],
+            ["type": "pane.agent_detected"],
+        ])
+        stream.onEvent = { [weak self] _ in self?.notify() }
+        stream.onClosed = { [weak self] _ in
+            guard let self else { return }
+            self.lock.lock()
+            let wasStopped = self.stopped
+            self.lifecycle = nil
+            self.lock.unlock()
+            guard !wasStopped else { return }
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                self?.startLifecycleStream()
+            }
+        }
+        lock.lock()
+        guard !stopped else { lock.unlock(); return }
+        lifecycle = stream.start()
+        lock.unlock()
+    }
+
+    /// One dedicated stream per agent pane: a subscription owns its connection
+    /// and cannot be extended after the fact.
+    private func reconcileStatusStreams(_ agents: [HerdrAgent]) {
+        lock.lock()
+        guard !stopped else { lock.unlock(); return }
+        let wanted = Set(agents.compactMap(\.paneID))
+        for (paneID, stream) in statusStreams where !wanted.contains(paneID) {
+            stream.stop()
+            statusStreams.removeValue(forKey: paneID)
+        }
+        let toStart = wanted.filter { statusStreams[$0] == nil }
+        lock.unlock()
+
+        for paneID in toStart {
+            let stream = HerdrEventStream(subscriptions: [
+                ["type": "pane.agent_status_changed", "pane_id": paneID],
+            ])
+            stream.onEvent = { [weak self] _ in self?.notify() }
+            stream.onClosed = { [weak self] _ in
+                guard let self else { return }
+                self.lock.lock(); self.statusStreams.removeValue(forKey: paneID); self.lock.unlock()
+            }
+            lock.lock()
+            if stopped {
+                lock.unlock()
+                stream.stop()
+            } else {
+                statusStreams[paneID] = stream.start()
+                lock.unlock()
+            }
+        }
+    }
+}

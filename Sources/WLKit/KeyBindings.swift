@@ -52,6 +52,19 @@ public struct KeyBindings: Sendable, Equatable {
             default: return nil
             }
         }
+
+        /// The name this mode crosses the `Provider` protocol as. `nil` for
+        /// `.effort`, which never reaches a provider at all — it is a
+        /// Micromanager feature (Claude Code / Codex reasoning effort), not
+        /// something any provider implements.
+        public var wireMode: String? {
+            switch self {
+            case .effort: return nil
+            case .agent: return "agent"
+            case .tab: return "tab"
+            case .space: return "space"
+            }
+        }
     }
 
     /// What a bound key does. `.shortcut` carries the raw config string —
