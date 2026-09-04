@@ -43,6 +43,9 @@ public final class BridgeController: ObservableObject {
     @Published public private(set) var landPanelOpen = false
     /// Whether a Claude voice take is open, for the voice key's light.
     @Published public private(set) var voiceActive = false
+    /// The dial modes the current provider offers, for a future settings UI.
+    /// Set on every `start()`; never includes `"effort"`.
+    @Published public private(set) var dialModes: [ProviderDialMode] = []
 
     public var config: BridgeConfig
     /// Text macros for the spare keys, reloaded on every bridge start so a
@@ -153,6 +156,7 @@ public final class BridgeController: ObservableObject {
         // A mistyped "dial" keeps its fallback; say so where the panel shows
         // the bridge's other errors, the same way an unrecognised shortcut does.
         if let warning = keyBindings.dialWarning { lastError = warning }
+        applyProviderDescription()
 
         await openDevice()
         providerSubscription = provider.subscribe { [weak self] in
@@ -191,6 +195,22 @@ public final class BridgeController: ObservableObject {
         keyEffects = [:]
         aggregateState = nil
         agents = []
+    }
+
+    /// Pulls the provider's state palette, priority, and dial-mode labels
+    /// into `config` — its lighting vocabulary is the provider's, not a
+    /// `BridgeController` default. Re-applied on every `start()`, same as
+    /// `keyBindings`, so a provider swap only needs an off/on toggle.
+    private func applyProviderDescription() {
+        let description = provider.describe()
+        for (state, style) in description.statePalette {
+            config.colors[state] = style.color
+            config.effects[state] = style.effect
+        }
+        if !description.statePriority.isEmpty {
+            config.priority = description.statePriority
+        }
+        dialModes = description.dialModes
     }
 
     // MARK: - Device

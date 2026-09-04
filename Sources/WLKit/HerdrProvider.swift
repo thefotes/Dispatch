@@ -19,6 +19,30 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
 
     public init() {}
 
+    /// Herdr's status vocabulary and the agent/tab/space navigation the dial
+    /// offers — the exact values `BridgeConfig`'s defaults hardcoded before
+    /// this existed, pinned by `HerdrProviderTests`.
+    public func describe() -> ProviderDescription {
+        ProviderDescription(
+            statePalette: [
+                "blocked": ProviderStateStyle(color: 0xFF2D2D, effect: .breath),
+                "working": ProviderStateStyle(color: 0xFFA000, effect: .solid),
+                // "done" is an agent that finished and has not been looked at
+                // yet; "idle" is finished and seen. A real difference, so a
+                // different colour.
+                "done": ProviderStateStyle(color: 0x00B0FF, effect: .solid),
+                "idle": ProviderStateStyle(color: 0x00C853, effect: .solid),
+                "unknown": ProviderStateStyle(color: 0x00C853, effect: .solid),
+            ],
+            statePriority: ["blocked", "working", "unknown", "idle", "done"],
+            dialModes: [
+                ProviderDialMode(id: "agent", label: "Agent"),
+                ProviderDialMode(id: "tab", label: "Tab"),
+                ProviderDialMode(id: "space", label: "Space"),
+            ]
+        )
+    }
+
     public func status() async throws -> [HerdrAgent] {
         let agents = try await HerdrClient.listAgents()
         reconcileStatusStreams(agents)

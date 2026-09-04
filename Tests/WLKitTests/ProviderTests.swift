@@ -9,6 +9,9 @@ private final class FakeProvider: Provider, @unchecked Sendable {
     var dialCalls: [(step: Int, mode: String)] = []
     var injectedTexts: [String] = []
     var injectError: Error?
+    var descriptionToReturn = ProviderDescription()
+
+    func describe() -> ProviderDescription { descriptionToReturn }
 
     func status() async throws -> [HerdrAgent] { agentsToReturn }
 
@@ -95,5 +98,25 @@ final class ProviderTests: XCTestCase {
         let bridge = await makeBridge(fake)
         await bridge.injectPrompt("hi")
         XCTAssertEqual(bridge.lastError, "nothing focused")
+    }
+
+    // MARK: - describe() → BridgeConfig
+
+    /// Starting the bridge pulls the provider's palette and priority into
+    /// `config` — a provider's lighting vocabulary is no longer a
+    /// `BridgeConfig` default `BridgeController` hardcodes.
+    func testStartingAppliesTheProvidersPaletteAndPriorityToConfig() async {
+        let fake = FakeProvider()
+        fake.descriptionToReturn = ProviderDescription(
+            statePalette: ["waiting": ProviderStateStyle(color: 0x123456, effect: .rainbow)],
+            statePriority: ["waiting"],
+            dialModes: [ProviderDialMode(id: "queue", label: "Queue")]
+        )
+        let bridge = await makeBridge(fake)
+        await bridge.start()
+        XCTAssertEqual(bridge.config.colors["waiting"], 0x123456)
+        XCTAssertEqual(bridge.config.effects["waiting"], .rainbow)
+        XCTAssertEqual(bridge.config.priority, ["waiting"])
+        await bridge.stop()
     }
 }

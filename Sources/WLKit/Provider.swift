@@ -11,6 +11,11 @@ import Foundation
 /// share the same UI surface. The seam this phase is after is narrower:
 /// `BridgeController` no longer imports `HerdrClient` directly.
 public protocol Provider: Sendable {
+    /// Static capabilities: the state palette entities report through
+    /// `status()`, and the dial modes this provider understands. Called once
+    /// at bridge start, not on a hot path, so there is no need for it to be
+    /// async.
+    func describe() -> ProviderDescription
     /// Entities for the agent-key row, in display order.
     func status() async throws -> [HerdrAgent]
     /// Focuses one entity, by the id `status()` reported for it.
@@ -25,6 +30,55 @@ public protocol Provider: Sendable {
     /// focus change — debounced by the caller, not here. Call `cancel()` on
     /// the returned token to stop.
     func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription
+}
+
+/// A provider's static capabilities — what `BridgeController` used to get
+/// from a hardcoded `BridgeConfig` default and Herdr-specific knowledge of
+/// `KeyBindings.DialMode`.
+public struct ProviderDescription: Sendable, Equatable {
+    /// Color + effect per state name `status()` can report an entity as.
+    /// Applied over `BridgeConfig`'s palette at bridge start.
+    public var statePalette: [String: ProviderStateStyle]
+    /// Highest priority first: the first state present across all entities
+    /// wins the aggregate underglow. Also applied over `BridgeConfig`.
+    public var statePriority: [String]
+    /// Dial modes this provider understands, in menu order, each with a
+    /// short label — informational today (nothing reads it yet; a settings
+    /// UI is the obvious next reader), never including `"effort"`, which is
+    /// a Micromanager feature and never reaches a provider.
+    public var dialModes: [ProviderDialMode]
+
+    public init(
+        statePalette: [String: ProviderStateStyle] = [:],
+        statePriority: [String] = [],
+        dialModes: [ProviderDialMode] = []
+    ) {
+        self.statePalette = statePalette
+        self.statePriority = statePriority
+        self.dialModes = dialModes
+    }
+}
+
+/// One state's lighting, keyed by the state name `status()` reports.
+public struct ProviderStateStyle: Sendable, Equatable {
+    public var color: Int
+    public var effect: OAI.Effect
+
+    public init(color: Int, effect: OAI.Effect) {
+        self.color = color
+        self.effect = effect
+    }
+}
+
+/// One dial mode a provider offers.
+public struct ProviderDialMode: Sendable, Equatable {
+    public var id: String
+    public var label: String
+
+    public init(id: String, label: String) {
+        self.id = id
+        self.label = label
+    }
 }
 
 /// Cancellation handle for `Provider.subscribe`. Cancelling twice, or letting
