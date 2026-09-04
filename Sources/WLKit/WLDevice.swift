@@ -218,17 +218,19 @@ public final class WLDevice {
             if let reason { onDisconnect?(reason) }
             return
         }
-        // Tear the manager down even when no device was opened: a connect()
-        // that threw after opening the manager leaves it set with device nil,
-        // and skipping this leaks an open IOHIDManager per reconnect retry.
+        // Device first, then manager — the manager must outlive the device it
+        // opened. When device is nil (a connect() that threw after opening
+        // the manager) this still closes the manager, so the 3 s reopen retry
+        // does not accumulate one open manager per attempt.
+        if let dev = device {
+            IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+            IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeNone))
+            device = nil
+        }
         if let mgr = manager {
             IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
             manager = nil
         }
-        guard let dev = device else { return }
-        IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
-        IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeNone))
-        device = nil
         info = nil
         rpcAccumulator = ""
         debugAccumulator = ""
