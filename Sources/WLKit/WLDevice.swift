@@ -144,7 +144,14 @@ public final class WLDevice {
         // IOHIDDevice whose *primary* usage is keyboard, with the vendor
         // collection alongside it in DeviceUsagePairs.
         IOHIDManagerSetDeviceMatching(manager, [kIOHIDVendorIDKey: WLDevice.vendorID] as CFDictionary)
-        IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        let openResult = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        guard openResult == kIOReturnSuccess else {
+            // Close and drop the manager before throwing: an open manager held
+            // here leaks, and every reopen retry (every 3 s) would add another.
+            IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+            self.manager = nil
+            throw Failure.openFailed(openResult)
+        }
 
         guard let set = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>, !set.isEmpty else {
             throw Failure.notFound
@@ -201,14 +208,17 @@ public final class WLDevice {
             if let reason { onDisconnect?(reason) }
             return
         }
-        guard let dev = device else { return }
-        IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
-        IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeNone))
-        device = nil
+        // Tear the manager down even when no device was opened: a connect()
+        // that threw after opening the manager leaves it set with device nil,
+        // and skipping this leaks an open IOHIDManager per reconnect retry.
         if let mgr = manager {
             IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
             manager = nil
         }
+        guard let dev = device else { return }
+        IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeNone))
+        device = nil
         info = nil
         rpcAccumulator = ""
         debugAccumulator = ""
