@@ -51,4 +51,35 @@ final class HerdrTabCycleTests: XCTestCase {
         ]
         XCTAssertNil(HerdrClient.nextTab(in: tabs))
     }
+
+    // MARK: - Direction
+
+    /// The dial turns both ways, so tab cycling has to as well.
+    func testStepsBackwardToThePreviousTab() {
+        let tabs = [
+            HerdrTab(tabID: "t1", number: 1),
+            HerdrTab(tabID: "t2", number: 2, focused: true),
+            HerdrTab(tabID: "t3", number: 3),
+        ]
+        XCTAssertEqual(HerdrClient.adjacentTab(in: tabs, step: -1)?.tabID, "t1")
+    }
+
+    func testWrapsBackwardFromTheFirstTabToTheLast() {
+        let tabs = [
+            HerdrTab(tabID: "t1", number: 1, focused: true),
+            HerdrTab(tabID: "t2", number: 2),
+            HerdrTab(tabID: "t3", number: 3),
+        ]
+        XCTAssertEqual(HerdrClient.adjacentTab(in: tabs, step: -1)?.tabID, "t3")
+    }
+
+    /// The tabs key still works: it is `adjacentTab` with a step of one.
+    func testNextTabIsAdjacentTabForwardOne() {
+        let tabs = [
+            HerdrTab(tabID: "t1", number: 1, focused: true),
+            HerdrTab(tabID: "t2", number: 2),
+        ]
+        XCTAssertEqual(HerdrClient.nextTab(in: tabs)?.tabID,
+                       HerdrClient.adjacentTab(in: tabs, step: 1)?.tabID)
+    }
 }

@@ -192,6 +192,12 @@ public enum Pad {
     public static let boundKeyIDs =
         agentKeyIDs + [stackKeyID, tabCycleKeyID, landKeyID] + voiceKeyIDs + macroKeyIDs
 
+    /// Every key whose job `config.json` can replace: stack, tabs, land, the
+    /// wide key, and the two plain macro keys. Agent keys are never in this
+    /// list — Herdr's own agent list decides those.
+    public static let overridableKeyIDs =
+        [stackKeyID, tabCycleKeyID, landKeyID] + voiceKeyIDs + macroKeyIDs
+
     // MARK: Dial and joystick
 
     /// The dial and joystick emit keycodes like the keys do, so binding them

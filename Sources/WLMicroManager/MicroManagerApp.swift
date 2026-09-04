@@ -43,6 +43,12 @@ struct MicroManagerApp: App {
                     }
                     bridge.onVoiceKey = { voice.handleVoiceKey() }
 
+                    let shortcuts = ShortcutController.shared
+                    shortcuts.onError = { [weak bridge] message in
+                        bridge?.noteError(message)
+                    }
+                    bridge.onShortcut = { spec in shortcuts.post(spec) }
+
                     let tune = TuneController.shared
                     tune.onError = { [weak bridge] message in
                         bridge?.noteError(message)
@@ -50,7 +56,18 @@ struct MicroManagerApp: App {
                     tune.bindings = { [weak bridge] in
                         bridge?.keyBindings ?? KeyBindings()
                     }
-                    bridge.onDial = { step in tune.handleDial(step) }
+                    // `config.json`'s "dial" key decides the knob's job. It is
+                    // re-read on every bridge start, and this closure reads it
+                    // live, so an edit takes effect on the next off/on toggle.
+                    bridge.onDial = { [weak bridge] step in
+                        guard let bridge else { return }
+                        let mode = bridge.keyBindings.dialMode
+                        if mode == .effort {
+                            tune.handleDial(step)
+                        } else {
+                            Task { await bridge.cycleDial(step, mode: mode) }
+                        }
+                    }
                     bridge.onJoystick = { direction in tune.handleJoystick(direction) }
                     // While a land confirmation is up, every key that is not
                     // the land key means "cancel", nothing else.
