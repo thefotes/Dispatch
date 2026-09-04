@@ -42,10 +42,12 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertEqual(bindings.text(for: 11), "right half")
     }
 
-    /// An empty string unbinds: the key goes dark rather than typing nothing.
-    func testEmptyStringUnbindsADefault() {
+    /// An empty string is a no-op, not an unbind — `false` is the unbind.
+    /// Kept this way for anyone upgrading with an existing "" already in
+    /// config.json, from before an empty string meant anything at all.
+    func testEmptyStringIsANoOpNotAnUnbind() {
         let bindings = parse(#"{"keys": {"12": ""}}"#)
-        XCTAssertNil(bindings.text(for: 12))
+        XCTAssertEqual(bindings.text(for: 12), "Run but pull")
         XCTAssertEqual(bindings.text(for: 9), "Open PRs for all active GitButler branches")
     }
 
@@ -85,5 +87,122 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertEqual(bindings.codexModels, ["gpt-5.6-sol", "gpt-5.6-codex"])
         XCTAssertEqual(bindings.claudeModels, KeyBindings.defaultClaudeModels,
                        "a codex-only config leaves the claude side alone")
+    }
+
+    // MARK: - Dial mode
+
+    /// With nothing in the file the dial keeps its original job: effort.
+    func testDialModeDefaultsToEffort() {
+        XCTAssertEqual(KeyBindings().dialMode, .effort)
+        XCTAssertEqual(parse("{}").dialMode, .effort)
+    }
+
+    func testDialModeComesFromTheFile() {
+        XCTAssertEqual(parse(#"{"dial": "agent"}"#).dialMode, .agent)
+        XCTAssertEqual(parse(#"{"dial": "tab"}"#).dialMode, .tab)
+        XCTAssertEqual(parse(#"{"dial": "space"}"#).dialMode, .space)
+        XCTAssertEqual(parse(#"{"dial": "effort"}"#).dialMode, .effort)
+    }
+
+    /// `space` is the pad-facing word; `workspace` is the socket API's. Take both.
+    func testDialModeAcceptsWorkspaceAsAnAliasForSpace() {
+        XCTAssertEqual(parse(#"{"dial": "workspace"}"#).dialMode, .space)
+    }
+
+    func testDialModeIsCaseInsensitive() {
+        XCTAssertEqual(parse(#"{"dial": "AGENT"}"#).dialMode, .agent)
+    }
+
+    /// A typo or the wrong type should not brick the dial — fall back to effort.
+    func testUnknownDialModeFallsBackToEffort() {
+        XCTAssertEqual(parse(#"{"dial": "banana"}"#).dialMode, .effort)
+        XCTAssertEqual(parse(#"{"dial": 5}"#).dialMode, .effort)
+    }
+
+    func testDialModeSurvivesAKeysOnlyConfig() {
+        XCTAssertEqual(parse(#"{"keys": {"9": "Ship it"}}"#).dialMode, .effort)
+    }
+
+    // MARK: - Key actions (text and shortcut)
+
+    func testAKeyCanBeBoundToAShortcut() {
+        let bindings = parse(#"{"keys": {"6": {"shortcut": "cmd+shift+5"}}}"#)
+        XCTAssertEqual(bindings.action(for: 6), .shortcut("cmd+shift+5"))
+        XCTAssertNil(bindings.text(for: 6), "a shortcut binding is not a text binding")
+    }
+
+    /// Stack, tabs, and land used to be fixed; a bound key now overrides them.
+    func testStackTabAndLandKeysAreOverridable() {
+        let bindings = parse(#"""
+            {"keys": {"6": {"shortcut": "cmd+shift+5"}, "7": "note", "8": ""}}
+            """#)
+        XCTAssertEqual(bindings.action(for: 6), .shortcut("cmd+shift+5"))
+        XCTAssertEqual(bindings.action(for: 7), .text("note"))
+        XCTAssertNil(bindings.action(for: 8), "empty string is a no-op — false is what unbinds")
+    }
+
+    func testUnmentionedStackTabAndLandKeysHaveNoActionByDefault() {
+        // nil here means "unmentioned, keep the built-in job" — not the same
+        // as `.off`, which is an explicit override that beats the built-in.
+        XCTAssertNil(KeyBindings().action(for: Pad.stackKeyID))
+        XCTAssertNil(KeyBindings().action(for: Pad.tabCycleKeyID))
+        XCTAssertNil(KeyBindings().action(for: Pad.landKeyID))
+    }
+
+    func testMacroKeyDefaultsComeBackAsTextActions() {
+        XCTAssertEqual(KeyBindings().action(for: 9),
+                       .text("Open PRs for all active GitButler branches"))
+    }
+
+    /// A shortcut object with no recognised field binds nothing, same as a
+    /// malformed value anywhere else in the file — the key stays unmentioned.
+    func testAShortcutObjectMissingItsFieldIsIgnored() {
+        let bindings = parse(#"{"keys": {"6": {}}}"#)
+        XCTAssertNil(bindings.action(for: 6))
+    }
+
+    func testWideKeyShortcutBindsBothHalves() {
+        let bindings = parse(#"{"keys": {"10+11": {"shortcut": "cmd+shift+5"}}}"#)
+        XCTAssertEqual(bindings.action(for: 10), .shortcut("cmd+shift+5"))
+        XCTAssertEqual(bindings.action(for: 11), .shortcut("cmd+shift+5"))
+    }
+
+    /// An empty shortcut string turns the key off too, same rule as text.
+    /// Same no-op rule as a bare empty string.
+    func testEmptyShortcutIsANoOp() {
+        let bindings = parse(#"{"keys": {"9": {"shortcut": ""}}}"#)
+        XCTAssertEqual(bindings.action(for: 9), .text("Open PRs for all active GitButler branches"))
+    }
+
+    /// `false` is the explicit, no-ambiguity way to turn a key off — the
+    /// value to reach for on 6/7/8, whose built-in job would otherwise run.
+    func testFalseExplicitlyTurnsAKeyOff() {
+        let bindings = parse(#"{"keys": {"6": false, "8": false}}"#)
+        XCTAssertEqual(bindings.action(for: 6), .off)
+        XCTAssertEqual(bindings.action(for: 8), .off)
+    }
+
+    /// `.off` beats the built-in even though it is a real, present binding —
+    /// unlike an unmentioned key, it is not nil.
+    func testOffIsARealBindingNotAnAbsentOne() {
+        let bindings = parse(#"{"keys": {"6": false}}"#)
+        XCTAssertNotNil(bindings.action(for: 6))
+        XCTAssertEqual(bindings.action(for: 6), .off)
+    }
+
+    /// `true` has no meaning for a key binding — ignored like any other
+    /// malformed value, leaving the key at its default.
+    func testTrueIsIgnored() {
+        let bindings = parse(#"{"keys": {"6": true}}"#)
+        XCTAssertNil(bindings.action(for: 6))
+    }
+
+    /// `0`/`1` bridge to `Bool` on this platform same as a literal
+    /// true/false, so a naive `as? Bool` check would treat a config
+    /// author's numeric `0` as `false` and turn the key off — verify the
+    /// type check actually tells them apart.
+    func testNumericZeroAndOneAreIgnoredNotTreatedAsBooleans() {
+        XCTAssertNil(parse(#"{"keys": {"8": 0}}"#).action(for: 8))
+        XCTAssertNil(parse(#"{"keys": {"8": 1}}"#).action(for: 8))
     }
 }

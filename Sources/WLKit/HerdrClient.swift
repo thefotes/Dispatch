@@ -100,6 +100,26 @@ public struct HerdrTab: Equatable, Sendable {
     }
 }
 
+public struct HerdrWorkspace: Equatable, Sendable {
+    public var workspaceID: String
+    /// Display position in the sidebar, which is the order workspaces cycle in.
+    public var number: Int
+    public var focused: Bool
+
+    init(json: [String: Any]) {
+        workspaceID = json["workspace_id"] as? String ?? ""
+        number = json["number"] as? Int ?? 0
+        focused = json["focused"] as? Bool ?? false
+    }
+
+    /// For tests.
+    public init(workspaceID: String, number: Int, focused: Bool = false) {
+        self.workspaceID = workspaceID
+        self.number = number
+        self.focused = focused
+    }
+}
+
 public enum HerdrError: LocalizedError {
     case cannotConnect(String, String)
     case timeout(String)
@@ -138,10 +158,25 @@ public enum HerdrClient {
     ) async throws -> [String: Any] {
         try await withCheckedThrowingContinuation { continuation in
             let conn = SocketConnection(path: socketPath())
+            // `finish` races: the socket read-loop queue and the timeout
+            // closure below can both reach it, and resuming a continuation
+            // twice is undefined behavior. Guard it with a lock.
+            let finishLock = NSLock()
             var finished = false
+            // The timeout is kept as a work item so an early finish can cancel
+            // it; otherwise the closure pins `conn` and the request's captured
+            // state on the global queue for the whole timeout past completion —
+            // which the dial's rapid detents turn into a pile of live timers.
+            var timeoutWork: DispatchWorkItem?
             let finish: (Result<[String: Any], Error>) -> Void = { result in
-                guard !finished else { return }
+                finishLock.lock()
+                guard !finished else {
+                    finishLock.unlock()
+                    return
+                }
                 finished = true
+                finishLock.unlock()
+                timeoutWork?.cancel()
                 conn.close()
                 continuation.resume(with: result)
             }
@@ -177,9 +212,11 @@ public enum HerdrClient {
             }
             conn.write(payload + Data("\n".utf8))
 
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+            let work = DispatchWorkItem {
                 finish(.failure(HerdrError.timeout(method)))
             }
+            timeoutWork = work
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: work)
         }
     }
 
@@ -203,6 +240,18 @@ public enum HerdrClient {
 
     public static func focusAgent(_ target: String) async throws {
         _ = try await request("agent.focus", params: ["target": target])
+    }
+
+    /// Workspaces (Herdr's "spaces") in `number` order — the sidebar order.
+    public static func listWorkspaces() async throws -> [HerdrWorkspace] {
+        let result = try await request("workspace.list")
+        let raw = result["workspaces"] as? [[String: Any]] ?? []
+        return raw.map(HerdrWorkspace.init(json:)).sorted { $0.number < $1.number }
+    }
+
+    /// Focuses a workspace; Herdr restores that space's own active tab and pane.
+    public static func focusWorkspace(_ workspaceID: String) async throws {
+        _ = try await request("workspace.focus", params: ["workspace_id": workspaceID])
     }
 
     public static func listTabs(workspaceID: String? = nil) async throws -> [HerdrTab] {
@@ -229,17 +278,17 @@ public enum HerdrClient {
         _ = try await request("pane.send_text", params: ["pane_id": paneID, "text": text])
     }
 
-    /// Focuses the tab after the focused one in its workspace, wrapping at the
-    /// end. Tabs in other workspaces are left alone: cycling is a
-    /// within-window gesture, not a window switcher.
-    public static func cycleTabs() async throws {
-        guard let next = nextTab(in: try await listTabs()) else { return }
+    /// Focuses the tab `step` places from the focused one in its workspace,
+    /// wrapping at either end. Tabs in other workspaces are left alone: cycling
+    /// is a within-window gesture, not a window switcher.
+    public static func cycleTabs(_ step: Int = 1) async throws {
+        guard let next = adjacentTab(in: try await listTabs(), step: step) else { return }
         try await focusTab(next.tabID)
     }
 
-    /// The tab `cycleTabs` would focus, or nil when there is nothing to do —
-    /// no focused tab, or a workspace with a single tab.
-    public static func nextTab(in tabs: [HerdrTab]) -> HerdrTab? {
+    /// The tab `step` places from the focused one, wrapping, or nil when there
+    /// is nothing to do — no focused tab, or a workspace with a single tab.
+    public static func adjacentTab(in tabs: [HerdrTab], step: Int) -> HerdrTab? {
         guard let focused = tabs.first(where: \.focused) else { return nil }
         let siblings = tabs
             .filter { $0.workspaceID == focused.workspaceID }
@@ -247,7 +296,37 @@ public enum HerdrClient {
         guard siblings.count > 1,
               let index = siblings.firstIndex(of: focused)
         else { return nil }
-        return siblings[(index + 1) % siblings.count]
+        return siblings[wrap(index + step, into: siblings.count)]
+    }
+
+    /// The tab the tabs key focuses: one step forward.
+    public static func nextTab(in tabs: [HerdrTab]) -> HerdrTab? {
+        adjacentTab(in: tabs, step: 1)
+    }
+
+    /// The agent `step` places from the focused one in `agent.list` order —
+    /// which is sidebar order and is never re-sorted — wrapping at either end.
+    /// Nil when nothing is focused or there is only one agent.
+    public static func adjacentAgent(in agents: [HerdrAgent], step: Int) -> HerdrAgent? {
+        guard agents.count > 1,
+              let index = agents.firstIndex(where: \.focused)
+        else { return nil }
+        return agents[wrap(index + step, into: agents.count)]
+    }
+
+    /// The workspace `step` places from the focused one in `number` order,
+    /// wrapping. Nil when nothing is focused or there is only one workspace.
+    public static func adjacentWorkspace(in spaces: [HerdrWorkspace], step: Int) -> HerdrWorkspace? {
+        let ordered = spaces.sorted { $0.number < $1.number }
+        guard ordered.count > 1,
+              let index = ordered.firstIndex(where: \.focused)
+        else { return nil }
+        return ordered[wrap(index + step, into: ordered.count)]
+    }
+
+    /// Positive modulo, so a step past either end wraps rather than trapping.
+    private static func wrap(_ index: Int, into count: Int) -> Int {
+        ((index % count) + count) % count
     }
 
     private static let counter = Counter()
