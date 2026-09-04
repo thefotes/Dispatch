@@ -63,7 +63,7 @@ class ReferenceProvider:
                 "tock": {"color": 0x2962FF, "effect": EFFECT_BREATH},
             },
             "statePriority": ["tock", "tick"],
-            "dialModes": [{"id": "seconds", "label": "Seconds"}],
+            "dialModes": [{"id": "seconds", "label": "Seconds", "raisesHost": False}],
         }
 
     def status(self):

@@ -19,8 +19,8 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     public init() {}
 
     /// Herdr's status vocabulary and the agent/tab/space navigation the dial
-    /// offers — the exact values `BridgeConfig`'s defaults hardcoded before
-    /// this existed, pinned by `HerdrProviderTests`.
+    /// offers — pinned against `BridgeConfig`'s own defaults by
+    /// `HerdrProviderTests`, so the two cannot silently drift apart.
     public func describe() async -> ProviderDescription {
         ProviderDescription(
             statePalette: [
@@ -35,9 +35,12 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             ],
             statePriority: ["blocked", "working", "unknown", "idle", "done"],
             dialModes: [
-                ProviderDialMode(id: "agent", label: "Agent"),
-                ProviderDialMode(id: "tab", label: "Tab"),
-                ProviderDialMode(id: "space", label: "Space"),
+                // Agent and space bring the terminal forward, the way an
+                // agent key does; tab does not, since you are already
+                // looking at the pane it stays within.
+                ProviderDialMode(id: "agent", label: "Agent", raisesHost: true),
+                ProviderDialMode(id: "tab", label: "Tab", raisesHost: false),
+                ProviderDialMode(id: "space", label: "Space", raisesHost: true),
             ]
         )
     }

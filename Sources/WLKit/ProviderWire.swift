@@ -12,7 +12,9 @@ enum ProviderWire {
                 ["color": $0.color, "effect": $0.effect.rawValue]
             },
             "statePriority": description.statePriority,
-            "dialModes": description.dialModes.map { ["id": $0.id, "label": $0.label] },
+            "dialModes": description.dialModes.map {
+                ["id": $0.id, "label": $0.label, "raisesHost": $0.raisesHost]
+            },
         ]
     }
 
@@ -30,7 +32,11 @@ enum ProviderWire {
         let priority = json["statePriority"] as? [String] ?? []
         let modes = (json["dialModes"] as? [[String: Any]] ?? []).compactMap { entry -> ProviderDialMode? in
             guard let id = entry["id"] as? String, let label = entry["label"] as? String else { return nil }
-            return ProviderDialMode(id: id, label: label)
+            // Defaults to false for a provider written before this field
+            // existed — "does not raise the host" is the safer guess than
+            // dropping the mode outright over one missing field.
+            let raisesHost = entry["raisesHost"] as? Bool ?? false
+            return ProviderDialMode(id: id, label: label, raisesHost: raisesHost)
         }
         return ProviderDescription(statePalette: palette, statePriority: priority, dialModes: modes)
     }

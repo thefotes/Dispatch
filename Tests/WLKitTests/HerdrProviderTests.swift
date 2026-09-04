@@ -31,4 +31,13 @@ final class HerdrProviderTests: XCTestCase {
         let description = await HerdrProvider().describe()
         XCTAssertEqual(Set(description.dialModes.map(\.id)), ["agent", "tab", "space"])
     }
+
+    /// Agent and space bring the terminal forward, the way an agent key
+    /// does; tab stays within the pane you are already looking at.
+    func testAgentAndSpaceRaiseTheHostButTabDoesNot() async {
+        let modes = await HerdrProvider().describe().dialModes
+        XCTAssertEqual(modes.first { $0.id == "agent" }?.raisesHost, true)
+        XCTAssertEqual(modes.first { $0.id == "space" }?.raisesHost, true)
+        XCTAssertEqual(modes.first { $0.id == "tab" }?.raisesHost, false)
+    }
 }

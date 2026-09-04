@@ -91,7 +91,7 @@ Params: `{}`. Called once, at bridge start.
     "<state name>": {"color": <0xRRGGBB packed int>, "effect": <int, OAI.Effect.rawValue>}
   },
   "statePriority": ["<state name>", "..."],
-  "dialModes": [{"id": "<mode>", "label": "<menu label>"}]
+  "dialModes": [{"id": "<mode>", "label": "<menu label>", "raisesHost": <bool>}]
 }
 ```
 
@@ -101,6 +101,13 @@ Params: `{}`. Called once, at bridge start.
   fields, and `HerdrProvider.describe()` for a real example.
 - `effect` is `OAI.Effect`'s raw `Int`: `0` off, `1` solid, `2` snake, `3`
   rainbow, `4` breath, `5` gradient, `6` shallow breath.
+- `config.json`'s `"dial"` string is resolved against `dialModes`' `id`s at
+  `BridgeController` — this file has no built-in vocabulary of mode names
+  at all; whatever a provider declares here is what a user can select.
+- `raisesHost` says whether landing on that mode should bring the host app
+  forward, the way pressing an agent key does — Herdr's `"agent"`/`"space"`
+  do, `"tab"` does not. Missing on an older provider's response decodes as
+  `false`, not a decode failure.
 - `dialModes` never includes `"effort"` — that mode is a Micromanager
   feature (Claude Code / Codex reasoning effort), handled entirely in the
   app layer, and never reaches a provider at all.

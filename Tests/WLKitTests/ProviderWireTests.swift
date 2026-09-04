@@ -12,7 +12,7 @@ final class ProviderWireTests: XCTestCase {
                 "idle": ProviderStateStyle(color: 0x00C853, effect: .solid),
             ],
             statePriority: ["blocked", "idle"],
-            dialModes: [ProviderDialMode(id: "agent", label: "Agent")]
+            dialModes: [ProviderDialMode(id: "agent", label: "Agent", raisesHost: true)]
         )
         let decoded = ProviderWire.decodeDescription(ProviderWire.encode(original))
         XCTAssertEqual(decoded, original)

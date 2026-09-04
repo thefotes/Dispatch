@@ -29,11 +29,14 @@ import Foundation
 /// unbinds a key outright.
 ///
 /// A top-level `"dial"` string repurposes the knob: `"effort"` (the default)
-/// climbs the reasoning-effort ladder, `"agent"` steps the focused agent,
-/// `"tab"` cycles tabs in the focused workspace, `"space"` (or `"workspace"`)
-/// steps the focused workspace. Anything else keeps `"effort"` and surfaces
-/// itself in `dialWarning`, so a typo shows up the way an unrecognised
-/// shortcut does instead of silently changing nothing.
+/// climbs the reasoning-effort ladder — the one dial behaviour built into
+/// Micromanager itself, handled in the app layer, never reaching a
+/// provider. Any other name is passed through verbatim to whichever
+/// provider is active, resolved against what `Provider.describe()` actually
+/// offers once the bridge starts — this file has no opinion on what names
+/// are valid, since that is entirely up to the provider. An unresolvable
+/// name falls back to `"effort"` and surfaces itself in `BridgeController`,
+/// the same way an unrecognised shortcut does.
 ///
 /// A top-level `"provider"` object swaps the in-process `HerdrProvider` for
 /// one reached over a socket: `{"provider": {"connect": "/path/to.sock"}}`
@@ -42,35 +45,13 @@ import Foundation
 /// ordinary case — keeps the in-process default.
 public struct KeyBindings: Sendable, Equatable {
 
-    /// What a dial detent does. `effort` is handled in the app layer; the rest
-    /// are Herdr navigation and run through `BridgeController.cycleDial`.
-    public enum DialMode: String, Sendable {
-        case effort, agent, tab, space
-
-        /// nil when the string is present but unrecognised, so the caller can
-        /// fall back to `.effort` and say so.
-        init?(config: String?) {
-            switch config?.lowercased() {
-            case "agent": self = .agent
-            case "tab": self = .tab
-            case "space", "workspace": self = .space
-            case "effort": self = .effort
-            default: return nil
-            }
-        }
-
-        /// The name this mode crosses the `Provider` protocol as. `nil` for
-        /// `.effort`, which never reaches a provider at all — it is a
-        /// Micromanager feature (Claude Code / Codex reasoning effort), not
-        /// something any provider implements.
-        public var wireMode: String? {
-            switch self {
-            case .effort: return nil
-            case .agent: return "agent"
-            case .tab: return "tab"
-            case .space: return "space"
-            }
-        }
+    /// What the dial's config selects. `.effort` is the one mode WLKit
+    /// understands natively; `.provider` is an opaque name whose validity
+    /// isn't knowable here — only `BridgeController`, once it has a
+    /// provider's `describe()` in hand, can say whether it means anything.
+    public enum DialSelection: Equatable, Sendable {
+        case effort
+        case provider(String)
     }
 
     /// What a bound key does. `.shortcut` carries the raw config string —
@@ -100,11 +81,14 @@ public struct KeyBindings: Sendable, Equatable {
     }
 
     public private(set) var actions: [Int: KeyAction]
+
     /// The models the joystick cycles through in Claude Code, in order.
     /// Overridable with a top-level `"claude": {"models": [...]}` object.
     public private(set) var claudeModels: [String]
+
     /// The effort ladder the dial climbs in Claude Code.
     public private(set) var claudeEfforts: [String]
+
     /// Codex's own `/model` menu, in the order it lists them, from a
     /// `"codex": {"models": [...]}` object. The joystick steers that menu
     /// rather than owning it, so this is the user's copy of what it offers —
@@ -113,12 +97,14 @@ public struct KeyBindings: Sendable, Equatable {
     public private(set) var codexModels: [String]
 
     /// What the knob does. Set with a top-level `"dial"` string.
-    public private(set) var dialMode: DialMode
+    public private(set) var dialSelection: DialSelection
+
     /// Which provider to use, if not the in-process default.
     public private(set) var providerSpec: ProviderSpec?
 
-    /// Set when `"dial"` was present but unrecognised — a typo, or the wrong
-    /// JSON type. The knob keeps working on `"effort"`; this says why.
+    /// Set when `"dial"` was present but the wrong JSON shape (not a string,
+    /// or an empty one) — a name that is simply unrecognised by the active
+    /// provider is a `BridgeController`-time concern, not this file's.
     public private(set) var dialWarning: String?
 
     public static let defaults: [Int: KeyAction] = [
@@ -133,7 +119,7 @@ public struct KeyBindings: Sendable, Equatable {
         claudeModels: [String] = KeyBindings.defaultClaudeModels,
         claudeEfforts: [String] = KeyBindings.defaultClaudeEfforts,
         codexModels: [String] = [],
-        dialMode: DialMode = .effort,
+        dialSelection: DialSelection = .effort,
         dialWarning: String? = nil,
         providerSpec: ProviderSpec? = nil
     ) {
@@ -141,7 +127,7 @@ public struct KeyBindings: Sendable, Equatable {
         self.claudeModels = claudeModels
         self.claudeEfforts = claudeEfforts
         self.codexModels = codexModels
-        self.dialMode = dialMode
+        self.dialSelection = dialSelection
         self.dialWarning = dialWarning
         self.providerSpec = providerSpec
     }
@@ -194,33 +180,32 @@ public struct KeyBindings: Sendable, Equatable {
         let codex = json["codex"] as? [String: Any]
         let codexModels = (codex?["models"] as? [String])?.filter { !$0.isEmpty }
 
-        let dialMode: DialMode
-        let dialWarning: String?
-        if let raw = json["dial"] as? String {
-            if let mode = DialMode(config: raw) {
-                dialMode = mode
-                dialWarning = nil
-            } else {
-                dialMode = .effort
-                dialWarning = "Unrecognised dial mode \"\(raw)\" — keeping \"effort\"."
-            }
-        } else if json["dial"] != nil {
-            dialMode = .effort
-            dialWarning = "\"dial\" must be a string (\"effort\", \"agent\", \"tab\", or \"space\") — keeping \"effort\"."
-        } else {
-            dialMode = .effort
-            dialWarning = nil
-        }
+        let (dialSelection, dialWarning) = dial(from: json["dial"])
 
         return KeyBindings(
             actions: actions,
             claudeModels: models?.isEmpty == false ? models! : defaultClaudeModels,
             claudeEfforts: efforts?.isEmpty == false ? efforts! : defaultClaudeEfforts,
             codexModels: codexModels ?? [],
-            dialMode: dialMode,
+            dialSelection: dialSelection,
             dialWarning: dialWarning,
             providerSpec: providerSpec(from: json["provider"])
         )
+    }
+
+    /// Shape-level only: is this a non-empty string? Content — whether the
+    /// name means anything — is not decidable here at all, since that
+    /// depends on which provider ends up active.
+    private static func dial(from value: Any?) -> (DialSelection, String?) {
+        guard let value else { return (.effort, nil) }
+        guard let raw = value as? String else {
+            return (.effort, "\"dial\" must be a string — keeping \"effort\".")
+        }
+        let name = raw.lowercased()
+        guard !name.isEmpty else {
+            return (.effort, "\"dial\" must not be empty — keeping \"effort\".")
+        }
+        return name == "effort" ? (.effort, nil) : (.provider(name), nil)
     }
 
     /// `{"connect": "path"}`, `{"launch": "cmd"}` (optionally with `"args"`),

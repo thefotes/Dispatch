@@ -183,11 +183,14 @@ stack/tabs/land. To unbind a key outright, back to nothing, bind it to
 keeps its default, matching how older configs behaved.
 
 `"dial"` sets what the knob does. `"effort"` (the default) climbs the
-reasoning-effort ladder for the focused agent; `"agent"` steps focus through
-the agents in sidebar order; `"tab"` cycles the tabs of the focused workspace;
-`"space"` (or `"workspace"`) steps through workspaces. All four wrap at the
-ends and follow the turn direction. An unrecognised value falls back to
-`"effort"`.
+reasoning-effort ladder for the focused agent — the one mode built into
+Micromanager itself. Any other name is handed to the active provider
+as-is; with the default Herdr provider that's `"agent"` (steps focus
+through the agents in sidebar order), `"tab"` (cycles the tabs of the
+focused workspace), or `"space"`/`"workspace"` (steps through workspaces),
+all wrapping and following the turn direction. A name the active provider
+doesn't recognise falls back to `"effort"` and says so in the panel, the
+same way an unrecognised shortcut does.
 
 `codex.models` is your copy of what Codex's own `/model` menu offers, in its
 order — the joystick steers that menu rather than owning it, so there is nothing

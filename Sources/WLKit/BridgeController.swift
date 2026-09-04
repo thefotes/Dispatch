@@ -46,6 +46,11 @@ public final class BridgeController: ObservableObject {
     /// The dial modes the current provider offers, for a future settings UI.
     /// Set on every `start()`; never includes `"effort"`.
     @Published public private(set) var dialModes: [ProviderDialMode] = []
+    /// `config.json`'s `"dial"` selection, resolved against the current
+    /// provider's `dialModes` — nil for `.effort`, or when the configured
+    /// name isn't one the provider actually offers (see `dialWarning`-style
+    /// reporting in `applyProviderDescription`). What `cycleDial` acts on.
+    @Published public private(set) var resolvedDialMode: ProviderDialMode?
 
     public var config: BridgeConfig
     /// Text macros for the spare keys, reloaded on every bridge start so a
@@ -54,9 +59,15 @@ public final class BridgeController: ObservableObject {
 
     /// Overrides `keyBindings` without going through `start()`'s config-file
     /// reload — tests only, so a binding can be exercised without a real
-    /// `config.json` on disk.
+    /// `config.json` on disk. Call after `start()`, not before: `start()`
+    /// reloads from disk itself and would clobber this. Re-resolves the
+    /// dial immediately against whatever `dialModes` the provider already
+    /// described, so a test doesn't need a second `start()`/`stop()` cycle.
     func setKeyBindingsForTesting(_ bindings: KeyBindings) {
         keyBindings = bindings
+        let (resolved, warning) = Self.resolveDialSelection(bindings.dialSelection, offeredBy: dialModes)
+        resolvedDialMode = resolved
+        if let warning { lastError = warning }
     }
 
     /// Called when the stack key is pressed. The bridge owns the key, the app
@@ -211,6 +222,25 @@ public final class BridgeController: ObservableObject {
             config.priority = description.statePriority
         }
         dialModes = description.dialModes
+
+        let (resolved, warning) = Self.resolveDialSelection(keyBindings.dialSelection, offeredBy: dialModes)
+        resolvedDialMode = resolved
+        if let warning { lastError = warning }
+    }
+
+    /// Pure so it is testable without a provider: a `.provider` name that
+    /// matches one of `modes` resolves to it; anything else — including
+    /// `.effort`, and a name no provider offered — resolves to nil, with a
+    /// warning only for the "should have matched but didn't" case.
+    static func resolveDialSelection(
+        _ selection: KeyBindings.DialSelection,
+        offeredBy modes: [ProviderDialMode]
+    ) -> (mode: ProviderDialMode?, warning: String?) {
+        guard case .provider(let name) = selection else { return (nil, nil) }
+        if let match = modes.first(where: { $0.id == name }) { return (match, nil) }
+        let available = modes.isEmpty ? "none" : modes.map(\.id).joined(separator: ", ")
+        let warning = "The dial's mode \"\(name)\" isn't offered by this provider (available: \(available)) — keeping the reasoning-effort ladder."
+        return (nil, warning)
     }
 
     // MARK: - Device
@@ -504,11 +534,12 @@ public final class BridgeController: ObservableObject {
         }
     }
 
-    /// The dial as a Herdr navigator. `step` is +1 / -1 from the encoder
-    /// detents; `.effort` is handled in the app layer and never reaches here
-    /// — every other mode is just its wire name, so the provider never sees
-    /// a Swift enum. `agent`/`space` bring the terminal forward, the way an
-    /// agent key does; `tab` stays within the pane you are already looking at.
+    /// The dial as a provider navigator. `step` is +1 / -1 from the encoder
+    /// detents; `.effort` never reaches here, since `resolvedDialMode` is nil
+    /// for it and the app layer routes that case to reasoning effort instead.
+    /// Whether landing on `resolvedDialMode` brings the host app forward is
+    /// the provider's own call (`ProviderDialMode.raisesHost`), not a name
+    /// this file recognises.
     ///
     /// A fast turn fires one unstructured task per detent, and two overlapping
     /// round-trips can both snapshot the same "currently focused" entity
@@ -517,21 +548,21 @@ public final class BridgeController: ObservableObject {
     /// serialises the steps, so each sees the state the last one produced.
     private var dialChain: Task<Void, Never>?
 
-    public func cycleDial(_ step: Int, mode: KeyBindings.DialMode) async {
-        guard let wireMode = mode.wireMode else { return }
+    public func cycleDial(_ step: Int) async {
+        guard let target = resolvedDialMode else { return }
         let previous = dialChain ?? Task {}
         let task = Task { [weak self] in
             await previous.value
-            await self?.runDial(step, mode: mode, wireMode: wireMode)
+            await self?.runDial(step, target: target)
         }
         dialChain = task
         await task.value
     }
 
-    private func runDial(_ step: Int, mode: KeyBindings.DialMode, wireMode: String) async {
+    private func runDial(_ step: Int, target: ProviderDialMode) async {
         do {
-            try await provider.dial(step, mode: wireMode)
-            if mode == .agent || mode == .space { raiseTerminal() }
+            try await provider.dial(step, mode: target.id)
+            if target.raisesHost { raiseTerminal() }
         } catch {
             lastError = error.localizedDescription
         }

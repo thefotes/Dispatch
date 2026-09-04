@@ -51,7 +51,7 @@ final class ProviderBridgeRoundTripTests: XCTestCase {
         fake.descriptionToReturn = ProviderDescription(
             statePalette: ["blocked": ProviderStateStyle(color: 0xFF2D2D, effect: .breath)],
             statePriority: ["blocked"],
-            dialModes: [ProviderDialMode(id: "agent", label: "Agent")]
+            dialModes: [ProviderDialMode(id: "agent", label: "Agent", raisesHost: true)]
         )
         let (remote, server, _) = try makePair(fake)
         defer { server.stop() }

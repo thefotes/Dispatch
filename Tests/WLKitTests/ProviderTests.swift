@@ -20,25 +20,58 @@ final class ProviderTests: XCTestCase {
         XCTAssertEqual(fake.dialCalls.map(\.step), [1])
     }
 
-    /// The dial's Herdr-navigation modes each map to the string the protocol
-    /// carries them as — not a Swift enum crossing the seam.
-    func testDialModesMapToProviderStrings() async {
+    /// `config.json`'s `"dial"` name crosses to the provider as whatever
+    /// string it was — no closed Swift enum in the middle, and no vocabulary
+    /// this file (or `KeyBindings`) has any opinion about.
+    func testAResolvedProviderDialModeCrossesAsItsOwnWireName() async {
         let fake = FakeProvider()
+        fake.descriptionToReturn = ProviderDescription(
+            dialModes: [ProviderDialMode(id: "queue", label: "Queue", raisesHost: false)]
+        )
         let bridge = await makeBridge(fake)
-        await bridge.cycleDial(1, mode: .agent)
-        await bridge.cycleDial(-1, mode: .tab)
-        await bridge.cycleDial(1, mode: .space)
-        XCTAssertEqual(fake.dialCalls.map(\.mode), ["agent", "tab", "space"])
-        XCTAssertEqual(fake.dialCalls.map(\.step), [1, -1, 1])
+        await bridge.start()
+        bridge.setKeyBindingsForTesting(KeyBindings(dialSelection: .provider("queue")))
+
+        await bridge.cycleDial(1)
+        await bridge.cycleDial(-1)
+
+        XCTAssertEqual(fake.dialCalls.map(\.mode), ["queue", "queue"])
+        XCTAssertEqual(fake.dialCalls.map(\.step), [1, -1])
+        await bridge.stop()
     }
 
-    /// `.effort` is a Micromanager feature, not a Herdr one — it must never
-    /// reach the provider at all.
-    func testEffortDialModeNeverReachesTheProvider() async {
+    /// `.effort` is never a provider mode — it must never reach `dial()` at
+    /// all, since `resolvedDialMode` stays nil for it.
+    func testEffortNeverReachesTheProvider() async {
         let fake = FakeProvider()
         let bridge = await makeBridge(fake)
-        await bridge.cycleDial(1, mode: .effort)
+        await bridge.start()
+        bridge.setKeyBindingsForTesting(KeyBindings(dialSelection: .effort))
+
+        await bridge.cycleDial(1)
+
         XCTAssertTrue(fake.dialCalls.isEmpty)
+        await bridge.stop()
+    }
+
+    /// A configured name the provider doesn't offer falls back to effort —
+    /// same "don't brick the pad over a typo" rule an unrecognised shortcut
+    /// follows — and says why, the way an unrecognised shortcut does too.
+    func testAnUnofferedDialModeFallsBackToEffortAndWarns() async {
+        let fake = FakeProvider()
+        fake.descriptionToReturn = ProviderDescription(
+            dialModes: [ProviderDialMode(id: "queue", label: "Queue", raisesHost: false)]
+        )
+        let bridge = await makeBridge(fake)
+        await bridge.start()
+        bridge.setKeyBindingsForTesting(KeyBindings(dialSelection: .provider("banana")))
+
+        XCTAssertNil(bridge.resolvedDialMode)
+        XCTAssertEqual(bridge.lastError, "The dial's mode \"banana\" isn't offered by this provider (available: queue) — keeping the reasoning-effort ladder.")
+
+        await bridge.cycleDial(1)
+        XCTAssertTrue(fake.dialCalls.isEmpty)
+        await bridge.stop()
     }
 
     func testInjectPromptCallsProviderInject() async {
@@ -79,7 +112,7 @@ final class ProviderTests: XCTestCase {
         fake.descriptionToReturn = ProviderDescription(
             statePalette: ["waiting": ProviderStateStyle(color: 0x123456, effect: .rainbow)],
             statePriority: ["waiting"],
-            dialModes: [ProviderDialMode(id: "queue", label: "Queue")]
+            dialModes: [ProviderDialMode(id: "queue", label: "Queue", raisesHost: false)]
         )
         let bridge = await makeBridge(fake)
         await bridge.start()
@@ -87,5 +120,36 @@ final class ProviderTests: XCTestCase {
         XCTAssertEqual(bridge.config.effects["waiting"], .rainbow)
         XCTAssertEqual(bridge.config.priority, ["waiting"])
         await bridge.stop()
+    }
+
+    // MARK: - resolveDialSelection (pure)
+
+    private let sampleModes = [
+        ProviderDialMode(id: "agent", label: "Agent", raisesHost: true),
+        ProviderDialMode(id: "tab", label: "Tab", raisesHost: false),
+    ]
+
+    func testEffortResolvesToNilWithNoWarning() {
+        let (mode, warning) = BridgeController.resolveDialSelection(.effort, offeredBy: sampleModes)
+        XCTAssertNil(mode)
+        XCTAssertNil(warning)
+    }
+
+    func testAMatchingNameResolvesToThatMode() {
+        let (mode, warning) = BridgeController.resolveDialSelection(.provider("tab"), offeredBy: sampleModes)
+        XCTAssertEqual(mode, sampleModes[1])
+        XCTAssertNil(warning)
+    }
+
+    func testAnUnmatchedNameResolvesToNilWithAWarningListingWhatIsAvailable() {
+        let (mode, warning) = BridgeController.resolveDialSelection(.provider("banana"), offeredBy: sampleModes)
+        XCTAssertNil(mode)
+        XCTAssertEqual(warning, "The dial's mode \"banana\" isn't offered by this provider (available: agent, tab) — keeping the reasoning-effort ladder.")
+    }
+
+    func testAnUnmatchedNameAgainstNoModesSaysNoneAreAvailable() {
+        let (mode, warning) = BridgeController.resolveDialSelection(.provider("anything"), offeredBy: [])
+        XCTAssertNil(mode)
+        XCTAssertEqual(warning, "The dial's mode \"anything\" isn't offered by this provider (available: none) — keeping the reasoning-effort ladder.")
     }
 }
