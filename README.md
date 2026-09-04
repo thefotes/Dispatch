@@ -222,6 +222,12 @@ change needs a full relaunch, not just an off/on toggle — unlike the rest of
 this file, it is read once at launch. Unmentioned (the ordinary case) keeps
 the in-process default.
 
+Writing your own provider — in Swift or anything else — is documented in
+**[docs/provider-protocol.md](docs/provider-protocol.md)**, alongside
+[`examples/reference-provider.py`](examples/reference-provider.py): a
+complete second implementation in dependency-free Python, under 150 lines,
+proving the protocol is not Swift-specific.
+
 | variable | what it overrides |
 |---|---|
 | `WL_TERMINAL_BUNDLE_ID` | the terminal to raise (default Ghostty) |
