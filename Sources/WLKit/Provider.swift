@@ -13,9 +13,9 @@ import Foundation
 public protocol Provider: Sendable {
     /// Static capabilities: the state palette entities report through
     /// `status()`, and the dial modes this provider understands. Called once
-    /// at bridge start, not on a hot path, so there is no need for it to be
-    /// async.
-    func describe() -> ProviderDescription
+    /// at bridge start, not on a hot path — async so a remote provider can
+    /// answer over the wire without a sync-over-async bridge.
+    func describe() async -> ProviderDescription
     /// Entities for the agent-key row, in display order.
     func status() async throws -> [HerdrAgent]
     /// Focuses one entity, by the id `status()` reported for it.

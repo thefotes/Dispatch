@@ -22,7 +22,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     /// Herdr's status vocabulary and the agent/tab/space navigation the dial
     /// offers — the exact values `BridgeConfig`'s defaults hardcoded before
     /// this existed, pinned by `HerdrProviderTests`.
-    public func describe() -> ProviderDescription {
+    public func describe() async -> ProviderDescription {
         ProviderDescription(
             statePalette: [
                 "blocked": ProviderStateStyle(color: 0xFF2D2D, effect: .breath),

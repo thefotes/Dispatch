@@ -11,7 +11,7 @@ private final class FakeProvider: Provider, @unchecked Sendable {
     var injectError: Error?
     var descriptionToReturn = ProviderDescription()
 
-    func describe() -> ProviderDescription { descriptionToReturn }
+    func describe() async -> ProviderDescription { descriptionToReturn }
 
     func status() async throws -> [HerdrAgent] { agentsToReturn }
 

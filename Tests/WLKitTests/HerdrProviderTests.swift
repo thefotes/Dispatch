@@ -7,8 +7,8 @@ import XCTest
 /// exactly, not just "look reasonable."
 final class HerdrProviderTests: XCTestCase {
 
-    func testDescribesTheSameStatePaletteBridgeConfigUsedToHardcode() {
-        let description = HerdrProvider().describe()
+    func testDescribesTheSameStatePaletteBridgeConfigUsedToHardcode() async {
+        let description = await HerdrProvider().describe()
         let cfg = BridgeConfig()
         for state in ["blocked", "working", "done", "idle", "unknown"] {
             XCTAssertEqual(description.statePalette[state]?.color, cfg.colors[state], state)
@@ -16,19 +16,19 @@ final class HerdrProviderTests: XCTestCase {
         }
     }
 
-    func testDescribesTheSameStatePriorityBridgeConfigUsedToHardcode() {
-        XCTAssertEqual(HerdrProvider().describe().statePriority, BridgeConfig().priority)
+    func testDescribesTheSameStatePriorityBridgeConfigUsedToHardcode() async {
+        let description = await HerdrProvider().describe()
+        XCTAssertEqual(description.statePriority, BridgeConfig().priority)
     }
 
     /// "effort" is a Micromanager feature, never a provider one.
-    func testDialModesNeverIncludeEffort() {
-        XCTAssertFalse(HerdrProvider().describe().dialModes.map(\.id).contains("effort"))
+    func testDialModesNeverIncludeEffort() async {
+        let description = await HerdrProvider().describe()
+        XCTAssertFalse(description.dialModes.map(\.id).contains("effort"))
     }
 
-    func testDialModesAreAgentTabAndSpace() {
-        XCTAssertEqual(
-            Set(HerdrProvider().describe().dialModes.map(\.id)),
-            ["agent", "tab", "space"]
-        )
+    func testDialModesAreAgentTabAndSpace() async {
+        let description = await HerdrProvider().describe()
+        XCTAssertEqual(Set(description.dialModes.map(\.id)), ["agent", "tab", "space"])
     }
 }
