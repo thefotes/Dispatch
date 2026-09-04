@@ -158,10 +158,19 @@ public enum HerdrClient {
     ) async throws -> [String: Any] {
         try await withCheckedThrowingContinuation { continuation in
             let conn = SocketConnection(path: socketPath())
+            // `finish` races: the socket read-loop queue and the timeout
+            // closure below can both reach it, and resuming a continuation
+            // twice is undefined behavior. Guard it with a lock.
+            let finishLock = NSLock()
             var finished = false
             let finish: (Result<[String: Any], Error>) -> Void = { result in
-                guard !finished else { return }
+                finishLock.lock()
+                guard !finished else {
+                    finishLock.unlock()
+                    return
+                }
                 finished = true
+                finishLock.unlock()
                 conn.close()
                 continuation.resume(with: result)
             }
