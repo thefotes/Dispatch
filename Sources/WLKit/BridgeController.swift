@@ -47,9 +47,11 @@ public final class BridgeController: ObservableObject {
     /// Set on every `start()`; never includes `"effort"`.
     @Published public private(set) var dialModes: [ProviderDialMode] = []
     /// `config.json`'s `"dial"` selection, resolved against the current
-    /// provider's `dialModes` — nil for `.effort`, or when the configured
-    /// name isn't one the provider actually offers (see `dialWarning`-style
-    /// reporting in `applyProviderDescription`). What `cycleDial` acts on.
+    /// provider's `dialModes`. nil means "no provider mode" — either
+    /// `"effort"` was configured (Micromanager's own reasoning-effort
+    /// ladder, the app layer's job, never a provider's), or the configured
+    /// name wasn't one this provider actually offers, reported through
+    /// `lastError` by `resolveDialSelection`. What `cycleDial` acts on.
     @Published public private(set) var resolvedDialMode: ProviderDialMode?
 
     public var config: BridgeConfig
@@ -228,10 +230,8 @@ public final class BridgeController: ObservableObject {
         if let warning { lastError = warning }
     }
 
-    /// Pure so it is testable without a provider: a `.provider` name that
-    /// matches one of `modes` resolves to it; anything else — including
-    /// `.effort`, and a name no provider offered — resolves to nil, with a
-    /// warning only for the "should have matched but didn't" case.
+    /// What `resolvedDialMode` becomes, pure so it is testable without a
+    /// provider. Warns only when a name should have matched and didn't.
     static func resolveDialSelection(
         _ selection: KeyBindings.DialSelection,
         offeredBy modes: [ProviderDialMode]
@@ -534,12 +534,11 @@ public final class BridgeController: ObservableObject {
         }
     }
 
-    /// The dial as a provider navigator. `step` is +1 / -1 from the encoder
-    /// detents; `.effort` never reaches here, since `resolvedDialMode` is nil
-    /// for it and the app layer routes that case to reasoning effort instead.
-    /// Whether landing on `resolvedDialMode` brings the host app forward is
-    /// the provider's own call (`ProviderDialMode.raisesHost`), not a name
-    /// this file recognises.
+    /// The dial as a provider navigator: acts on `resolvedDialMode` (see its
+    /// doc — this is never called for `.effort`). `step` is +1 / -1 from the
+    /// encoder detents. Whether the mode brings the host app forward is the
+    /// provider's own call (`ProviderDialMode.raisesHost`), not a name this
+    /// file recognises.
     ///
     /// A fast turn fires one unstructured task per detent, and two overlapping
     /// round-trips can both snapshot the same "currently focused" entity

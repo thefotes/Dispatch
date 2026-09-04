@@ -195,8 +195,11 @@ public struct KeyBindings: Sendable, Equatable {
 
     /// Shape-level only: is this a non-empty string? Content — whether the
     /// name means anything — is not decidable here at all, since that
-    /// depends on which provider ends up active.
-    private static func dial(from value: Any?) -> (DialSelection, String?) {
+    /// depends on which provider ends up active. `value` is `Any?` because
+    /// that's what `JSONSerialization` handed back for `json["dial"]` —
+    /// same as `keyAction(from:)` and `providerSpec(from:)` below, the only
+    /// honest type at this boundary.
+    private static func dial(from value: Any?) -> (selection: DialSelection, warning: String?) {
         guard let value else { return (.effort, nil) }
         guard let raw = value as? String else {
             return (.effort, "\"dial\" must be a string — keeping \"effort\".")

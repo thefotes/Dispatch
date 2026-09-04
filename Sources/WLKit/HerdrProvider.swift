@@ -11,7 +11,7 @@ import Foundation
 /// agent list.
 public final class HerdrProvider: Provider, @unchecked Sendable {
     private let lock = NSLock()
-    private var onChange: (@Sendable () -> Void)?
+    private let changeNotifier = ProviderChangeNotifier()
     private var lifecycle: HerdrEventStream?
     private var statusStreams: [String: HerdrEventStream] = [:]
     private var stopped = true
@@ -82,17 +82,15 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
 
     public func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription {
         lock.lock()
-        self.onChange = onChange
         stopped = false
         lock.unlock()
         startLifecycleStream()
-        return ProviderSubscription { [weak self] in self?.teardown() }
+        return changeNotifier.subscribe(onChange) { [weak self] in self?.teardown() }
     }
 
     private func teardown() {
         lock.lock()
         stopped = true
-        onChange = nil
         let lifecycleToStop = lifecycle
         let streamsToStop = statusStreams
         lifecycle = nil
@@ -102,11 +100,6 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
         streamsToStop.values.forEach { $0.stop() }
     }
 
-    private func notify() {
-        lock.lock(); let callback = onChange; lock.unlock()
-        callback?()
-    }
-
     private func startLifecycleStream() {
         let stream = HerdrEventStream(subscriptions: [
             ["type": "pane.created"],
@@ -114,7 +107,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             ["type": "pane.exited"],
             ["type": "pane.agent_detected"],
         ])
-        stream.onEvent = { [weak self] _ in self?.notify() }
+        stream.onEvent = { [weak self] _ in self?.changeNotifier.notify() }
         stream.onClosed = { [weak self] _ in
             guard let self else { return }
             self.lock.lock()
@@ -150,7 +143,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             let stream = HerdrEventStream(subscriptions: [
                 ["type": "pane.agent_status_changed", "pane_id": paneID],
             ])
-            stream.onEvent = { [weak self] _ in self?.notify() }
+            stream.onEvent = { [weak self] _ in self?.changeNotifier.notify() }
             stream.onClosed = { [weak self] _ in
                 guard let self else { return }
                 self.lock.lock(); self.statusStreams.removeValue(forKey: paneID); self.lock.unlock()

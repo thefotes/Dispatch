@@ -68,11 +68,10 @@ struct MicroManagerApp: App {
                     tune.bindings = { [weak bridge] in
                         bridge?.keyBindings ?? KeyBindings()
                     }
-                    // `config.json`'s "dial" key decides the knob's job.
-                    // `resolvedDialMode` is set once the provider's describe()
-                    // lands in start(), so an edit takes effect on the next
-                    // off/on toggle. nil means effort — the one dial mode
-                    // this file, not any provider, is responsible for.
+                    // `resolvedDialMode` (see its doc in BridgeController)
+                    // is set once the provider's describe() lands in
+                    // start(), so a config edit takes effect on the next
+                    // off/on toggle.
                     bridge.onDial = { [weak bridge] step in
                         guard let bridge else { return }
                         if bridge.resolvedDialMode == nil {
