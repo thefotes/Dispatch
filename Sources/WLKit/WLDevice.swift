@@ -140,11 +140,28 @@ public final class WLDevice {
         // then fails with kIOReturnNotOpen.
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         self.manager = manager
-        // Match on vendor only: over Bluetooth the pad presents a single
-        // IOHIDDevice whose *primary* usage is keyboard, with the vendor
-        // collection alongside it in DeviceUsagePairs.
-        IOHIDManagerSetDeviceMatching(manager, [kIOHIDVendorIDKey: WLDevice.vendorID] as CFDictionary)
-        IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        // Match on vendor plus the vendor usage pair. Vendor alone opens every
+        // Espressif-vendor HID device on the bus — other ESP32 gadgets, second
+        // pads — and each extra non-exclusive open on a keyboard collection
+        // raises the odds of HID contention. Over Bluetooth the pad presents a
+        // single IOHIDDevice whose *primary* usage is keyboard, with the vendor
+        // collection alongside it in DeviceUsagePairs, so the pair still
+        // matches it.
+        IOHIDManagerSetDeviceMatching(manager, [
+            kIOHIDVendorIDKey: WLDevice.vendorID,
+            kIOHIDDeviceUsagePairsKey: [
+                [kIOHIDDeviceUsagePageKey: WLDevice.vendorUsagePage,
+                 kIOHIDDeviceUsageKey: WLDevice.vendorUsage],
+            ],
+        ] as CFDictionary)
+        let openResult = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        guard openResult == kIOReturnSuccess else {
+            // Close and drop the manager before throwing: an open manager held
+            // here leaks, and every reopen retry (every 3 s) would add another.
+            IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+            self.manager = nil
+            throw Failure.openFailed(openResult)
+        }
 
         guard let set = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>, !set.isEmpty else {
             throw Failure.notFound
@@ -201,10 +218,15 @@ public final class WLDevice {
             if let reason { onDisconnect?(reason) }
             return
         }
-        guard let dev = device else { return }
-        IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
-        IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeNone))
-        device = nil
+        // Device first, then manager — the manager must outlive the device it
+        // opened. When device is nil (a connect() that threw after opening
+        // the manager) this still closes the manager, so the 3 s reopen retry
+        // does not accumulate one open manager per attempt.
+        if let dev = device {
+            IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+            IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeNone))
+            device = nil
+        }
         if let mgr = manager {
             IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
             manager = nil

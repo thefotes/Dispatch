@@ -56,6 +56,9 @@ public final class BridgeController: ObservableObject {
     public var onLandKey: (() -> Void)?
     /// Called when either half of the wide voice key is pressed.
     public var onVoiceKey: (() -> Void)?
+    /// Called for a key bound to a shortcut, once it has parsed cleanly.
+    /// Posting the event is app-layer (needs AppKit and Accessibility).
+    public var onShortcut: ((ShortcutSpec) -> Void)?
     /// Called per dial detent: +1 clockwise, -1 counter-clockwise.
     public var onDial: ((Int) -> Void)?
     /// Called when the joystick enters a cardinal sector.
@@ -134,6 +137,9 @@ public final class BridgeController: ObservableObject {
         lastError = nil
         contendingClient = false
         keyBindings = KeyBindings.load()
+        // A mistyped "dial" keeps its fallback; say so where the panel shows
+        // the bridge's other errors, the same way an unrecognised shortcut does.
+        if let warning = keyBindings.dialWarning { lastError = warning }
 
         await openDevice()
         startLifecycleStream()
@@ -339,22 +345,29 @@ public final class BridgeController: ObservableObject {
         reconcileStatusStreams(fetched)
 
         let state = StatusMapper.aggregate(fetched, config)
-        // Macro and voice keys share ids, so the binding decides each key's
-        // light: configured text wins, the wide key falls back to voice.
-        let flexKeys = (Pad.macroKeyIDs + Pad.voiceKeyIDs).map { key -> OAI.Thread in
-            if keyBindings.text(for: key) != nil {
+        // Every overridable key shares this light: a binding (text or
+        // shortcut) wins and paints the generic macro colour; an unbound key
+        // falls back to whatever it does by default.
+        let flexKeys = Pad.overridableKeyIDs.map { key -> OAI.Thread in
+            switch keyBindings.action(for: key) {
+            case .text, .shortcut:
                 return StatusMapper.macroThread(id: key, config)
+            case .off:
+                return OAI.Thread(id: key, brightness: 0, effect: .off)
+            case nil:
+                switch key {
+                case Pad.stackKeyID: return StatusMapper.stackThread(open: stackPanelOpen, config)
+                case Pad.tabCycleKeyID: return StatusMapper.tabCycleThread(config)
+                case Pad.landKeyID: return StatusMapper.landThread(open: landPanelOpen, config)
+                default:
+                    guard Pad.voiceKeyIDs.contains(key) else {
+                        return OAI.Thread(id: key, brightness: 0, effect: .off)
+                    }
+                    return StatusMapper.voiceThread(id: key, active: voiceActive, config)
+                }
             }
-            if Pad.voiceKeyIDs.contains(key) {
-                return StatusMapper.voiceThread(id: key, active: voiceActive, config)
-            }
-            return OAI.Thread(id: key, brightness: 0, effect: .off)
         }
-        let threads = StatusMapper.threads(for: fetched, config)
-            + [StatusMapper.stackThread(open: stackPanelOpen, config),
-               StatusMapper.tabCycleThread(config),
-               StatusMapper.landThread(open: landPanelOpen, config)]
-            + flexKeys
+        let threads = StatusMapper.threads(for: fetched, config) + flexKeys
 
         // Fingerprint the whole rendered picture, not just the aggregate, so
         // one agent changing still repaints when the worst state has not.
@@ -420,26 +433,45 @@ public final class BridgeController: ObservableObject {
     /// has to agree with `Pad`, so keep the dispatch in a single switch.
     public func handleKeyPress(_ index: Int) {
         if onKeyIntercept?(index) == true { return }
+        // A config binding wins over any of these keys' built-in role — this
+        // is how the config file may repurpose stack, tabs, land, the macro
+        // keys, or the wide voice key.
+        if Pad.overridableKeyIDs.contains(index), let action = keyBindings.action(for: index) {
+            perform(action)
+            return
+        }
         if index == Pad.stackKeyID {
             onStackKey?()
         } else if index == Pad.tabCycleKeyID {
             Task { await cycleTabs() }
         } else if index == Pad.landKeyID {
             onLandKey?()
-        } else if Pad.macroKeyIDs.contains(index) || Pad.voiceKeyIDs.contains(index) {
-            // A configured text macro wins over the key's built-in role, which
-            // is how the config file may repurpose the wide voice key.
-            if let text = keyBindings.text(for: index) {
-                Task { await injectPrompt(text) }
-            } else if Pad.voiceKeyIDs.contains(index) {
-                onVoiceKey?()
-            }
+        } else if Pad.voiceKeyIDs.contains(index) {
+            onVoiceKey?()
         } else if index == Pad.dialUpID || index == Pad.dialDownID {
             onDial?(index == Pad.dialUpID ? 1 : -1)
         } else if let direction = Pad.JoystickDirection(keyID: index) {
             onJoystick?(direction)
         } else if let slot = Pad.agentSlot(for: index) {
             Task { await focusSlot(slot) }
+        }
+    }
+
+    /// Runs a key's bound action. A shortcut is validated here rather than at
+    /// config-load time, so a typo surfaces as a panel error on the press that
+    /// hits it, not a silently dropped binding.
+    private func perform(_ action: KeyBindings.KeyAction) {
+        switch action {
+        case .off:
+            break   // explicitly inert — beats the built-in job on purpose
+        case .text(let text):
+            Task { await injectPrompt(text) }
+        case .shortcut(let spec):
+            guard let parsed = ShortcutSpec.parse(spec) else {
+                lastError = "Unrecognised shortcut \"\(spec)\"."
+                return
+            }
+            onShortcut?(parsed)
         }
     }
 
@@ -474,10 +506,76 @@ public final class BridgeController: ObservableObject {
 
     /// Advances the focused workspace to its next tab, wrapping.
     public func cycleTabs() async {
+        await cycleTabsBy(1)
+    }
+
+    /// The dial as a Herdr navigator. `step` is +1 / -1 from the encoder
+    /// detents; `.effort` is handled in the app layer and never reaches here.
+    ///
+    /// A fast turn fires one unstructured task per detent, and two overlapping
+    /// round-trips can both snapshot the same "currently focused" agent before
+    /// either focus call lands — several detents net one step, and whichever
+    /// response lands last wins. Chaining onto the previous task serialises
+    /// the steps, so each sees the state the last one produced.
+    private var dialChain: Task<Void, Never>?
+
+    public func cycleDial(_ step: Int, mode: KeyBindings.DialMode) async {
+        let previous = dialChain ?? Task {}
+        let task = Task { [weak self] in
+            await previous.value
+            await self?.runDial(step, mode: mode)
+        }
+        dialChain = task
+        await task.value
+    }
+
+    private func runDial(_ step: Int, mode: KeyBindings.DialMode) async {
+        switch mode {
+        case .effort: break
+        case .agent:  await cycleAgent(step)
+        case .tab:    await cycleTabsBy(step)
+        case .space:  await cycleWorkspace(step)
+        }
+    }
+
+    /// Focuses an agent/workspace/tab and brings the terminal forward — the
+    /// one error-and-raise shape every navigation entry point shares, so a
+    /// future one cannot forget the raise.
+    private func focusAndRaise(_ body: () async throws -> Void) async {
         do {
-            try await HerdrClient.cycleTabs()
+            try await body()
+            raiseTerminal()
         } catch {
             lastError = error.localizedDescription
+        }
+    }
+
+    private func cycleTabsBy(_ step: Int) async {
+        do {
+            try await HerdrClient.cycleTabs(step)
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    /// Steps focus to the next/previous agent, in the same reading order the
+    /// keys use, and brings the terminal forward as an agent key would.
+    private func cycleAgent(_ step: Int) async {
+        await focusAndRaise {
+            guard let next = HerdrClient.adjacentAgent(
+                in: try await HerdrClient.listAgents(), step: step
+            ), let target = next.focusTarget else { return }
+            try await HerdrClient.focusAgent(target)
+        }
+    }
+
+    /// Steps focus to the next/previous workspace in sidebar order.
+    private func cycleWorkspace(_ step: Int) async {
+        await focusAndRaise {
+            guard let next = HerdrClient.adjacentWorkspace(
+                in: try await HerdrClient.listWorkspaces(), step: step
+            ) else { return }
+            try await HerdrClient.focusWorkspace(next.workspaceID)
         }
     }
 
@@ -506,11 +604,8 @@ public final class BridgeController: ObservableObject {
     public func focusSlot(_ index: Int) async {
         guard index >= 0, index < agents.count else { return }
         guard let target = agents[index].focusTarget else { return }
-        do {
+        await focusAndRaise {
             try await HerdrClient.focusAgent(target)
-            raiseTerminal()
-        } catch {
-            lastError = error.localizedDescription
         }
     }
 

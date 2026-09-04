@@ -48,21 +48,13 @@ final class VoiceController {
             throw VoiceFailure.accessibilityDenied
         }
 
-        let source = CGEventSource(stateID: .hidSystemState)
-        guard
-            let down = CGEvent(keyboardEventSource: source,
-                               virtualKey: Self.triggerKey, keyDown: true),
-            let up = CGEvent(keyboardEventSource: source,
-                             virtualKey: Self.triggerKey, keyDown: false)
+        // The tap is the one-modifier case of SyntheticChord: right command
+        // down, then up, with the user's physically held modifiers preserved
+        // across the release. Skip the primitive and listeners see a command
+        // key that never releases, or one whose release drops a real key the
+        // user was holding mid-chord.
+        guard SyntheticChord.post(chord: [(Self.triggerKey, .maskCommand)], base: nil, onError: { _ in })
         else { throw VoiceFailure.eventFailed }
-
-        // A modifier carries its own flag: set on the way down, cleared on the
-        // way up. Skip that and listeners see a command key that never
-        // releases, which leaves the whole machine holding a modifier down.
-        down.flags = .maskCommand
-        up.flags = []
-        down.post(tap: .cghidEventTap)
-        up.post(tap: .cghidEventTap)
     }
 
     enum VoiceFailure: LocalizedError {

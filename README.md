@@ -49,7 +49,7 @@ forward** — Herdr selects the pane but leaves the window where it was, so an
 agent key pressed from a browser used to move a cursor you could not see. Set
 `WL_TERMINAL_BUNDLE_ID` if your panes do not live in Ghostty.
 
-**Row 3** is actions:
+**Row 3** is actions — all four are overridable from `config.json`, stack/tabs/land included:
 
 | key | what it does |
 |---|---|
@@ -62,8 +62,10 @@ agent key pressed from a browser used to move a cursor you could not see. Set
 Superwhisper — and one more
 macro key.
 
-**The dial** tunes reasoning effort. **The joystick** switches model: it puts
-the model list on screen, north and south move, east confirms, west cancels.
+**The dial** tunes reasoning effort by default; the `"dial"` config key can
+point it at Herdr navigation instead — stepping the focused agent, tab, or
+workspace. **The joystick** switches model: it puts the model list on screen,
+north and south move, east confirms, west cancels.
 
 ### The stack key
 
@@ -148,18 +150,44 @@ the dial and joystick offer, drop a `config.json` into
   "keys": {
     "9":     "Open PRs for all active GitButler branches",
     "12":    "Run but pull",
-    "10+11": "Summarise what you are working on"
+    "10+11": "Summarise what you are working on",
+    "6":     { "shortcut": "cmd+shift+5" },
+    "7":     { "shortcut": "f13" }
   },
+  "dial":   "effort",
   "claude": { "models": ["fable", "opus"], "efforts": ["low", "high"] },
   "codex":  { "models": ["gpt-5.6-sol", "gpt-5.6-codex"] }
 }
 ```
 
 A bound string is injected into the focused agent's prompt, unsubmitted — you
-still read it and press enter. `"10+11"` addresses the wide key as one; `"10"`
-and `"11"` address its halves. Keys the file does not mention keep their
-defaults, and an empty string unbinds a key outright. Binding the wide key to
-text replaces its right-command tap.
+still read it and press enter. A key can be bound to a keyboard shortcut
+instead — `{ "shortcut": "cmd+shift+5" }` — which is synthesised system-wide
+regardless of what Herdr is doing: launch an app's own hotkey, take a
+screenshot, trigger Mission Control, anything a physical key combo can do.
+Modifiers (`cmd`/`command`, `shift`, `opt`/`option`/`alt`, `ctrl`/`control`) go
+in any order, `+`-joined, with exactly one base key — a letter, digit, named
+punctuation key (`equal`, `minus`, `comma`, …), or a named key (`space`,
+`tab`, `return`, `escape`, `delete`, `up`/`down`/`left`/`right`, `f1`–`f19`).
+An unrecognised shortcut string does nothing and reports itself as an error
+the next time you press that key. A synthesised shortcut needs the
+**Accessibility** permission, same as the wide key's right-command tap.
+
+`"10+11"` addresses the wide key as one; `"10"` and `"11"` address its
+halves. **Every spare key is overridable this way, including the stack (6),
+tabs (7), and land (8) keys** — binding one replaces its built-in job
+entirely. Keys the file does not mention keep their defaults: 9 and 12 type
+their text macros, the wide key taps right-command, and 6/7/8 stay
+stack/tabs/land. To unbind a key outright, back to nothing, bind it to
+`false`. An empty string (or `{"shortcut": ""}`) is a no-op — the key
+keeps its default, matching how older configs behaved.
+
+`"dial"` sets what the knob does. `"effort"` (the default) climbs the
+reasoning-effort ladder for the focused agent; `"agent"` steps focus through
+the agents in sidebar order; `"tab"` cycles the tabs of the focused workspace;
+`"space"` (or `"workspace"`) steps through workspaces. All four wrap at the
+ends and follow the turn direction. An unrecognised value falls back to
+`"effort"`.
 
 `codex.models` is your copy of what Codex's own `/model` menu offers, in its
 order — the joystick steers that menu rather than owning it, so there is nothing

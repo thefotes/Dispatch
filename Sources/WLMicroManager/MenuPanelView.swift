@@ -101,30 +101,22 @@ struct MenuPanelView: View {
     private func keyView(_ index: Int) -> some View {
         let color = bridge.keyColors[index]
         let isBound = Pad.boundKeyIDs.contains(index)
-        let isStackKey = index == Pad.stackKeyID
-        let isTabCycleKey = index == Pad.tabCycleKeyID
-        let isLandKey = index == Pad.landKeyID
-        let macroText = bridge.keyBindings.text(for: index)
-        let isVoiceKey = macroText == nil && Pad.voiceKeyIDs.contains(index)
+        // A binding overrides the key's built-in role — same rule
+        // `BridgeController.handleKeyPress` uses, so the two stay in sync.
+        let action = Pad.overridableKeyIDs.contains(index) ? bridge.keyBindings.action(for: index) : nil
+        let isStackKey = index == Pad.stackKeyID && action == nil
+        let isTabCycleKey = index == Pad.tabCycleKeyID && action == nil
+        let isLandKey = index == Pad.landKeyID && action == nil
+        let isVoiceKey = action == nil && Pad.voiceKeyIDs.contains(index)
         // Key index and agent slot are different orderings — the top row is
         // wired right to left — so the slot lookup goes through the pad map.
         let slot = Pad.agentSlot(for: index)
         let agent = slot.flatMap { $0 < bridge.agents.count ? bridge.agents[$0] : nil }
 
         return Button {
-            if isStackKey {
-                StackPanelController.shared.toggle()
-            } else if isTabCycleKey {
-                Task { await bridge.cycleTabs() }
-            } else if isLandKey {
-                LandPanelController.shared.handleLandKey()
-            } else if let macroText {
-                Task { await bridge.injectPrompt(macroText) }
-            } else if isVoiceKey {
-                VoiceController.shared.handleVoiceKey()
-            } else if let slot, agent != nil {
-                Task { await bridge.focusSlot(slot) }
-            }
+            // The same dispatch a physical press goes through, so a click
+            // here can never disagree with what the key actually does.
+            bridge.handleKeyPress(index)
         } label: {
             RoundedRectangle(cornerRadius: 5)
                 .fill(color ?? Color.secondary.opacity(isBound ? 0.16 : 0.07))
@@ -136,10 +128,10 @@ struct MenuPanelView: View {
         }
         .buttonStyle(.plain)
         .disabled(agent == nil && !isStackKey && !isTabCycleKey && !isLandKey
-                  && macroText == nil && !isVoiceKey)
+                  && (action == nil || action == .off) && !isVoiceKey)
         .help(helpText(index, agent: agent, isStackKey: isStackKey,
                        isTabCycleKey: isTabCycleKey, isLandKey: isLandKey,
-                       macroText: macroText, isVoiceKey: isVoiceKey))
+                       action: action, isVoiceKey: isVoiceKey))
     }
 
     private func helpText(
@@ -148,13 +140,18 @@ struct MenuPanelView: View {
         isStackKey: Bool,
         isTabCycleKey: Bool,
         isLandKey: Bool,
-        macroText: String?,
+        action: KeyBindings.KeyAction?,
         isVoiceKey: Bool
     ) -> String {
         if isStackKey { return "GitButler stack for the focused agent" }
         if isTabCycleKey { return "Cycle tabs in the focused Herdr window" }
         if isLandKey { return "Land the focused agent's branches onto the target" }
-        if let macroText { return "Type: \(macroText)" }
+        switch action {
+        case .text(let text): return "Type: \(text)"
+        case .shortcut(let spec): return "Shortcut: \(spec)"
+        case .off: return "Unbound"
+        case nil: break
+        }
         if isVoiceKey { return "Right command — start or stop Superwhisper" }
         if let agent { return "\(agent.shortName) — \(agent.status)" }
         return "Key \(index)"
