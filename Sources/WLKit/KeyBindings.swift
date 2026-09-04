@@ -31,7 +31,9 @@ import Foundation
 /// A top-level `"dial"` string repurposes the knob: `"effort"` (the default)
 /// climbs the reasoning-effort ladder, `"agent"` steps the focused agent,
 /// `"tab"` cycles tabs in the focused workspace, `"space"` (or `"workspace"`)
-/// steps the focused workspace. Anything else falls back to `"effort"`.
+/// steps the focused workspace. Anything else keeps `"effort"` and surfaces
+/// itself in `dialWarning`, so a typo shows up the way an unrecognised
+/// shortcut does instead of silently changing nothing.
 public struct KeyBindings: Sendable, Equatable {
 
     /// What a dial detent does. `effort` is handled in the app layer; the rest
@@ -39,12 +41,15 @@ public struct KeyBindings: Sendable, Equatable {
     public enum DialMode: String, Sendable {
         case effort, agent, tab, space
 
-        init(config: String?) {
+        /// nil when the string is present but unrecognised, so the caller can
+        /// fall back to `.effort` and say so.
+        init?(config: String?) {
             switch config?.lowercased() {
             case "agent": self = .agent
             case "tab": self = .tab
             case "space", "workspace": self = .space
-            default: self = .effort
+            case "effort": self = .effort
+            default: return nil
             }
         }
     }
@@ -80,6 +85,10 @@ public struct KeyBindings: Sendable, Equatable {
     /// What the knob does. Set with a top-level `"dial"` string.
     public private(set) var dialMode: DialMode
 
+    /// Set when `"dial"` was present but unrecognised — a typo, or the wrong
+    /// JSON type. The knob keeps working on `"effort"`; this says why.
+    public private(set) var dialWarning: String?
+
     public static let defaults: [Int: KeyAction] = [
         9: .text("Open PRs for all active GitButler branches"),
         12: .text("Run but pull"),
@@ -92,13 +101,15 @@ public struct KeyBindings: Sendable, Equatable {
         claudeModels: [String] = KeyBindings.defaultClaudeModels,
         claudeEfforts: [String] = KeyBindings.defaultClaudeEfforts,
         codexModels: [String] = [],
-        dialMode: DialMode = .effort
+        dialMode: DialMode = .effort,
+        dialWarning: String? = nil
     ) {
         self.actions = actions
         self.claudeModels = claudeModels
         self.claudeEfforts = claudeEfforts
         self.codexModels = codexModels
         self.dialMode = dialMode
+        self.dialWarning = dialWarning
     }
 
     /// The action bound to a key, or nil when the key does whatever it does
@@ -148,12 +159,32 @@ public struct KeyBindings: Sendable, Equatable {
         let efforts = (claude?["efforts"] as? [String])?.filter { !$0.isEmpty }
         let codex = json["codex"] as? [String: Any]
         let codexModels = (codex?["models"] as? [String])?.filter { !$0.isEmpty }
+
+        let dialMode: DialMode
+        let dialWarning: String?
+        if let raw = json["dial"] as? String {
+            if let mode = DialMode(config: raw) {
+                dialMode = mode
+                dialWarning = nil
+            } else {
+                dialMode = .effort
+                dialWarning = "Unrecognised dial mode \"\(raw)\" — keeping \"effort\"."
+            }
+        } else if json["dial"] != nil {
+            dialMode = .effort
+            dialWarning = "\"dial\" must be a string (\"effort\", \"agent\", \"tab\", or \"space\") — keeping \"effort\"."
+        } else {
+            dialMode = .effort
+            dialWarning = nil
+        }
+
         return KeyBindings(
             actions: actions,
             claudeModels: models?.isEmpty == false ? models! : defaultClaudeModels,
             claudeEfforts: efforts?.isEmpty == false ? efforts! : defaultClaudeEfforts,
             codexModels: codexModels ?? [],
-            dialMode: DialMode(config: json["dial"] as? String)
+            dialMode: dialMode,
+            dialWarning: dialWarning
         )
     }
 
