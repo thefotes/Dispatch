@@ -163,6 +163,11 @@ public enum HerdrClient {
             // twice is undefined behavior. Guard it with a lock.
             let finishLock = NSLock()
             var finished = false
+            // The timeout is kept as a work item so an early finish can cancel
+            // it; otherwise the closure pins `conn` and the request's captured
+            // state on the global queue for the whole timeout past completion —
+            // which the dial's rapid detents turn into a pile of live timers.
+            var timeoutWork: DispatchWorkItem?
             let finish: (Result<[String: Any], Error>) -> Void = { result in
                 finishLock.lock()
                 guard !finished else {
@@ -171,6 +176,7 @@ public enum HerdrClient {
                 }
                 finished = true
                 finishLock.unlock()
+                timeoutWork?.cancel()
                 conn.close()
                 continuation.resume(with: result)
             }
@@ -206,9 +212,11 @@ public enum HerdrClient {
             }
             conn.write(payload + Data("\n".utf8))
 
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+            let work = DispatchWorkItem {
                 finish(.failure(HerdrError.timeout(method)))
             }
+            timeoutWork = work
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: work)
         }
     }
 
