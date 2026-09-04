@@ -137,6 +137,9 @@ public final class BridgeController: ObservableObject {
         lastError = nil
         contendingClient = false
         keyBindings = KeyBindings.load()
+        // A mistyped "dial" keeps its fallback; say so where the panel shows
+        // the bridge's other errors, the same way an unrecognised shortcut does.
+        if let warning = keyBindings.dialWarning { lastError = warning }
 
         await openDevice()
         startLifecycleStream()
