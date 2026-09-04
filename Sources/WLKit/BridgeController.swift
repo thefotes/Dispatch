@@ -512,7 +512,25 @@ public final class BridgeController: ObservableObject {
 
     /// The dial as a Herdr navigator. `step` is +1 / -1 from the encoder
     /// detents; `.effort` is handled in the app layer and never reaches here.
+    ///
+    /// A fast turn fires one unstructured task per detent, and two overlapping
+    /// round-trips can both snapshot the same "currently focused" agent before
+    /// either focus call lands — several detents net one step, and whichever
+    /// response lands last wins. Chaining onto the previous task serialises
+    /// the steps, so each sees the state the last one produced.
+    private var dialChain: Task<Void, Never>?
+
     public func cycleDial(_ step: Int, mode: KeyBindings.DialMode) async {
+        let previous = dialChain ?? Task {}
+        let task = Task { [weak self] in
+            await previous.value
+            await self?.runDial(step, mode: mode)
+        }
+        dialChain = task
+        await task.value
+    }
+
+    private func runDial(_ step: Int, mode: KeyBindings.DialMode) async {
         switch mode {
         case .effort: break
         case .agent:  await cycleAgent(step)
