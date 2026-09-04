@@ -1,36 +1,6 @@
 import XCTest
 @testable import WLKit
 
-/// A provider `BridgeController` never touches Herdr through — records every
-/// call so these tests can assert on dispatch, not on a live socket.
-private final class FakeProvider: Provider, @unchecked Sendable {
-    var agentsToReturn: [HerdrAgent] = []
-    var focusCalls: [String] = []
-    var dialCalls: [(step: Int, mode: String)] = []
-    var injectedTexts: [String] = []
-    var injectError: Error?
-    var descriptionToReturn = ProviderDescription()
-
-    func describe() async -> ProviderDescription { descriptionToReturn }
-
-    func status() async throws -> [HerdrAgent] { agentsToReturn }
-
-    func focus(_ target: String) async throws { focusCalls.append(target) }
-
-    func dial(_ step: Int, mode: String) async throws {
-        dialCalls.append((step, mode))
-    }
-
-    func inject(_ text: String) async throws {
-        if let injectError { throw injectError }
-        injectedTexts.append(text)
-    }
-
-    func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription {
-        ProviderSubscription {}
-    }
-}
-
 /// `BridgeController` used to import `HerdrClient` directly; these pin that
 /// it now only ever reaches Herdr through the `Provider` seam, by proving
 /// every dispatch path calls a fake instead.

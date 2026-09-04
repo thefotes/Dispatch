@@ -34,6 +34,12 @@ import Foundation
 /// steps the focused workspace. Anything else keeps `"effort"` and surfaces
 /// itself in `dialWarning`, so a typo shows up the way an unrecognised
 /// shortcut does instead of silently changing nothing.
+///
+/// A top-level `"provider"` object swaps the in-process `HerdrProvider` for
+/// one reached over a socket: `{"provider": {"connect": "/path/to.sock"}}`
+/// for one already running, or `{"provider": {"launch": "cmd", "args":
+/// [...]}}` for one Micromanager should start itself. Unmentioned — the
+/// ordinary case — keeps the in-process default.
 public struct KeyBindings: Sendable, Equatable {
 
     /// What a dial detent does. `effort` is handled in the app layer; the rest
@@ -82,6 +88,17 @@ public struct KeyBindings: Sendable, Equatable {
         case off
     }
 
+    /// Which `Provider` the bridge should use instead of the in-process
+    /// `HerdrProvider` default. Set with a top-level `"provider"` object:
+    /// `{"connect": "/path/to.sock"}` for one already running (Herdr's own
+    /// pattern — it always runs a server), or `{"launch": "cmd", "args":
+    /// [...]}` for one Micromanager should start and own the lifecycle of.
+    /// Unmentioned — the ordinary case — means the in-process default.
+    public enum ProviderSpec: Equatable, Sendable {
+        case connect(socketPath: String)
+        case launch(command: String, args: [String])
+    }
+
     public private(set) var actions: [Int: KeyAction]
     /// The models the joystick cycles through in Claude Code, in order.
     /// Overridable with a top-level `"claude": {"models": [...]}` object.
@@ -97,6 +114,8 @@ public struct KeyBindings: Sendable, Equatable {
 
     /// What the knob does. Set with a top-level `"dial"` string.
     public private(set) var dialMode: DialMode
+    /// Which provider to use, if not the in-process default.
+    public private(set) var providerSpec: ProviderSpec?
 
     /// Set when `"dial"` was present but unrecognised — a typo, or the wrong
     /// JSON type. The knob keeps working on `"effort"`; this says why.
@@ -115,7 +134,8 @@ public struct KeyBindings: Sendable, Equatable {
         claudeEfforts: [String] = KeyBindings.defaultClaudeEfforts,
         codexModels: [String] = [],
         dialMode: DialMode = .effort,
-        dialWarning: String? = nil
+        dialWarning: String? = nil,
+        providerSpec: ProviderSpec? = nil
     ) {
         self.actions = actions
         self.claudeModels = claudeModels
@@ -123,6 +143,7 @@ public struct KeyBindings: Sendable, Equatable {
         self.codexModels = codexModels
         self.dialMode = dialMode
         self.dialWarning = dialWarning
+        self.providerSpec = providerSpec
     }
 
     /// The action bound to a key, or nil when the key does whatever it does
@@ -197,8 +218,25 @@ public struct KeyBindings: Sendable, Equatable {
             claudeEfforts: efforts?.isEmpty == false ? efforts! : defaultClaudeEfforts,
             codexModels: codexModels ?? [],
             dialMode: dialMode,
-            dialWarning: dialWarning
+            dialWarning: dialWarning,
+            providerSpec: providerSpec(from: json["provider"])
         )
+    }
+
+    /// `{"connect": "path"}`, `{"launch": "cmd"}` (optionally with `"args"`),
+    /// or anything else — missing, malformed, both fields present — falls
+    /// back to nil, the in-process default. `connect` wins if a config
+    /// mistakenly sets both.
+    private static func providerSpec(from value: Any?) -> ProviderSpec? {
+        guard let object = value as? [String: Any] else { return nil }
+        if let path = object["connect"] as? String, !path.isEmpty {
+            return .connect(socketPath: path)
+        }
+        if let command = object["launch"] as? String, !command.isEmpty {
+            let args = (object["args"] as? [String]) ?? []
+            return .launch(command: command, args: args)
+        }
+        return nil
     }
 
     /// A key's value is a bare string (a text macro; an empty one is a no-op,

@@ -8,12 +8,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // also sets LSUIElement; this covers `swift run` during development.
         NSApplication.shared.setActivationPolicy(.accessory)
     }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Only does anything when config.json's "provider" is a `"launch"`
+        // spec — otherwise there is no subprocess to clean up.
+        ProviderFactory.terminateLaunchedProcess()
+    }
 }
 
 @main
 struct MicroManagerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @StateObject private var bridge = BridgeController()
+    @StateObject private var bridge: BridgeController
+
+    init() {
+        // The provider is a constructor argument, not something `start()`
+        // re-reads — has to be decided before the bridge exists.
+        _bridge = StateObject(wrappedValue: BridgeController(provider: ProviderFactory.make()))
+    }
 
     var body: some Scene {
         MenuBarExtra {

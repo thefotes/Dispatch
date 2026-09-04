@@ -193,11 +193,41 @@ ends and follow the turn direction. An unrecognised value falls back to
 order — the joystick steers that menu rather than owning it, so there is nothing
 to read it from.
 
+### Providers
+
+Herdr is not wired into the app directly: `BridgeController` talks to a small
+`Provider` protocol (agent status, focus, dial navigation, prompt injection),
+and Herdr is the one implementation shipped today (`HerdrProvider`), running
+in-process by default. A `"provider"` object in `config.json` swaps it for one
+reached over a socket instead — the same JSON-RPC-over-Unix-socket shape
+Herdr's own API already uses:
+
+```json
+{ "provider": { "connect": "/path/to/a/running/bridge.sock" } }
+```
+
+for a provider already running (Herdr's own pattern — it always runs a
+server), or
+
+```json
+{ "provider": { "launch": "provider-bridge", "args": [] } }
+```
+
+for one Micromanager should start itself and terminate on quit. This repo
+ships `provider-bridge`, a standalone binary that wraps `HerdrProvider` behind
+a socket server — proof the protocol does not need to run in-process, useful
+for running Micromanager and its Herdr integration as separate processes, or
+as a template for a non-Herdr provider written in any language. A `"provider"`
+change needs a full relaunch, not just an off/on toggle — unlike the rest of
+this file, it is read once at launch. Unmentioned (the ordinary case) keeps
+the in-process default.
+
 | variable | what it overrides |
 |---|---|
 | `WL_TERMINAL_BUNDLE_ID` | the terminal to raise (default Ghostty) |
 | `WL_BUT_PATH` | the GitButler binary, skipping the search |
 | `HERDR_SOCKET_PATH` | the Herdr socket |
+| `WL_PROVIDER_BRIDGE_SOCKET` | where `provider-bridge` listens / `RemoteProvider` connects |
 | `WL_SIGN_IDENTITY` | the signing identity `bundle.sh` uses |
 
 ## Why it must be bundled and signed

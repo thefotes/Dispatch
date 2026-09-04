@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "WLKit", targets: ["WLKit"]),
         .executable(name: "WLInspector", targets: ["WLInspector"]),
         .executable(name: "WLMicroManager", targets: ["WLMicroManager"]),
+        .executable(name: "WLProviderBridge", targets: ["WLProviderBridge"]),
     ],
     targets: [
         // Device transport, vendor protocol, Herdr client and the bridge engine.
@@ -19,6 +20,13 @@ let package = Package(
 
         // Menu-bar app: runs the bridge in the background.
         .executableTarget(name: "WLMicroManager", dependencies: ["WLKit"], path: "Sources/WLMicroManager"),
+
+        // Standalone companion binary: HerdrProvider behind a
+        // ProviderBridgeServer, so a provider can run out of process from
+        // Micromanager itself. Optional — WLMicroManager still ships
+        // HerdrProvider in-process by default; this is for `config.json`'s
+        // `"provider": {"connect": ...}` / `{"launch": ...}`.
+        .executableTarget(name: "WLProviderBridge", dependencies: ["WLKit"], path: "Sources/WLProviderBridge"),
 
         // Fixtures are read from the source directory via #filePath rather than
         // from the test bundle, so they are excluded rather than declared as

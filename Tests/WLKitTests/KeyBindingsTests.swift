@@ -205,4 +205,47 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertNil(parse(#"{"keys": {"8": 0}}"#).action(for: 8))
         XCTAssertNil(parse(#"{"keys": {"8": 1}}"#).action(for: 8))
     }
+
+    // MARK: - Provider spec
+
+    func testMissingProviderMeansTheInProcessDefault() {
+        XCTAssertNil(KeyBindings().providerSpec)
+        XCTAssertNil(parse("{}").providerSpec)
+    }
+
+    func testConnectSpecifiesASocketPathToDialInto() {
+        let bindings = parse(#"{"provider": {"connect": "/tmp/bridge.sock"}}"#)
+        XCTAssertEqual(bindings.providerSpec, .connect(socketPath: "/tmp/bridge.sock"))
+    }
+
+    func testLaunchSpecifiesACommandAndArgs() {
+        let bindings = parse(#"{"provider": {"launch": "provider-bridge", "args": ["--foo"]}}"#)
+        XCTAssertEqual(bindings.providerSpec, .launch(command: "provider-bridge", args: ["--foo"]))
+    }
+
+    func testLaunchWithoutArgsDefaultsToNone() {
+        let bindings = parse(#"{"provider": {"launch": "provider-bridge"}}"#)
+        XCTAssertEqual(bindings.providerSpec, .launch(command: "provider-bridge", args: []))
+    }
+
+    /// A config that sets both wins on `connect` rather than picking
+    /// arbitrarily or refusing to parse.
+    func testBothFieldsPresentPrefersConnect() {
+        let bindings = parse(#"{"provider": {"connect": "/tmp/a.sock", "launch": "cmd"}}"#)
+        XCTAssertEqual(bindings.providerSpec, .connect(socketPath: "/tmp/a.sock"))
+    }
+
+    func testEmptyConnectPathIsIgnored() {
+        let bindings = parse(#"{"provider": {"connect": ""}}"#)
+        XCTAssertNil(bindings.providerSpec)
+    }
+
+    func testMalformedProviderValueIsIgnored() {
+        XCTAssertNil(parse(#"{"provider": "connect"}"#).providerSpec)
+        XCTAssertNil(parse(#"{"provider": {}}"#).providerSpec)
+    }
+
+    func testProviderSpecSurvivesAKeysOnlyConfig() {
+        XCTAssertNil(parse(#"{"keys": {"9": "Ship it"}}"#).providerSpec)
+    }
 }
