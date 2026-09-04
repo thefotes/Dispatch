@@ -23,9 +23,18 @@ public final class ProviderBridgeServer: @unchecked Sendable {
         self.socketPath = socketPath
     }
 
-    /// Binds and starts accepting connections on a background queue.
+    /// Binds and starts accepting connections on a background queue. Throws
+    /// rather than unlinking a socket path something is already listening
+    /// on — plain `unlink` cannot tell a stale file (safe to remove) apart
+    /// from a live server's (would silently steal the path out from under
+    /// it, leaving the first server running but unreachable). Connecting as
+    /// a client first can: a stale file refuses the connection, a live
+    /// server accepts it.
     public func start() throws {
-        unlink(socketPath)   // a stale file from a crashed previous run
+        if Self.somethingIsListening(at: socketPath) {
+            throw HerdrError.cannotConnect(socketPath, "a provider is already listening here")
+        }
+        unlink(socketPath)   // a stale file from a crashed previous run, or nothing at all
 
         let handle = socket(AF_UNIX, SOCK_STREAM, 0)
         guard handle >= 0 else {
@@ -174,6 +183,34 @@ public final class ProviderBridgeServer: @unchecked Sendable {
 
         semaphore.wait()
         subscription.cancel()
+    }
+
+    // MARK: - Liveness probe
+
+    /// True only when a `connect()` to `path` actually succeeds — the one
+    /// reliable way to tell a live listener apart from a stale socket file
+    /// (which refuses the connection) or nothing at all (which fails to
+    /// resolve). Closes the probe connection immediately either way.
+    private static func somethingIsListening(at path: String) -> Bool {
+        let handle = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard handle >= 0 else { return false }
+        defer { Darwin.close(handle) }
+
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        let maxLength = MemoryLayout.size(ofValue: addr.sun_path)
+        guard path.utf8.count < maxLength else { return false }
+        _ = withUnsafeMutablePointer(to: &addr.sun_path) { pathPtr in
+            path.withCString { source in
+                strncpy(UnsafeMutableRawPointer(pathPtr).assumingMemoryBound(to: CChar.self), source, maxLength - 1)
+            }
+        }
+
+        let size = socklen_t(MemoryLayout<sockaddr_un>.size)
+        let result = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(handle, $0, size) }
+        }
+        return result == 0
     }
 
     // MARK: - Line I/O

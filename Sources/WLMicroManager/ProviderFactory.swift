@@ -49,9 +49,20 @@ enum ProviderFactory {
             // in-process default beats a bridge that can never connect.
             return HerdrProvider()
         }
-        // A moment for it to create the socket before the first connect;
-        // RemoteProvider's own per-request timeout covers the rest.
-        Thread.sleep(forTimeInterval: 0.3)
-        return RemoteProvider(socketPath: ProviderBridgePaths.defaultSocketPath())
+        // Wait for the socket file to actually exist rather than guessing a
+        // fixed delay — a fast-starting provider does not pay for a delay it
+        // did not need, and a slow one still gets a real chance instead of
+        // RemoteProvider's first request just timing out. Capped, so a
+        // provider that never starts does not hang launch indefinitely.
+        let path = ProviderBridgePaths.defaultSocketPath()
+        waitForSocket(at: path)
+        return RemoteProvider(socketPath: path)
+    }
+
+    private static func waitForSocket(at path: String, pollInterval: TimeInterval = 0.05, cap: TimeInterval = 2) {
+        let deadline = Date().addingTimeInterval(cap)
+        while !FileManager.default.fileExists(atPath: path), Date() < deadline {
+            Thread.sleep(forTimeInterval: pollInterval)
+        }
     }
 }

@@ -18,12 +18,17 @@ public final class RemoteProvider: Provider, @unchecked Sendable {
     /// A remote `describe()` that fails (bridge not reachable yet, still
     /// starting up) answers with an empty description rather than throwing —
     /// `describe()` has no throwing variant, since a provider with nothing to
-    /// say is a valid, if uninteresting, answer.
+    /// say is a valid, if uninteresting, answer. The failure still goes to
+    /// stderr, since silent-forever is a bad answer to a misconfigured
+    /// `"connect"` path — `BridgeController.lastError` is not reachable from
+    /// here (`describe()` predates it, called before a bridge exists).
     public func describe() async -> ProviderDescription {
-        guard let result = try? await request("provider.describe", params: [:]) else {
+        do {
+            return ProviderWire.decodeDescription(try await request("provider.describe", params: [:]))
+        } catch {
+            FileHandle.standardError.write(Data("RemoteProvider: describe() failed at \(socketPath): \(error)\n".utf8))
             return ProviderDescription()
         }
-        return ProviderWire.decodeDescription(result)
     }
 
     public func status() async throws -> [HerdrAgent] {
@@ -63,10 +68,22 @@ public final class RemoteProvider: Provider, @unchecked Sendable {
     private func request(_ method: String, params: [String: Any]) async throws -> [String: Any] {
         try await withCheckedThrowingContinuation { continuation in
             let conn = SocketConnection(path: socketPath)
+            // `finish` races: the connection's callbacks and the timeout
+            // closure below can both reach it from different threads, and
+            // resuming a continuation twice is undefined behavior — same
+            // hazard `HerdrClient.request` has, guarded the same way.
+            let finishLock = NSLock()
             var finished = false
+            // Kept as a work item so an early finish can cancel it —
+            // otherwise it pins `conn` and this request's captured state on
+            // the global queue for the whole timeout past completion.
+            var timeoutWork: DispatchWorkItem?
             let finish: (Result<[String: Any], Error>) -> Void = { result in
-                guard !finished else { return }
+                finishLock.lock()
+                guard !finished else { finishLock.unlock(); return }
                 finished = true
+                finishLock.unlock()
+                timeoutWork?.cancel()
                 conn.close()
                 continuation.resume(with: result)
             }
@@ -97,9 +114,9 @@ public final class RemoteProvider: Provider, @unchecked Sendable {
             }
             conn.write(payload + Data("\n".utf8))
 
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                finish(.failure(HerdrError.timeout(method)))
-            }
+            let work = DispatchWorkItem { finish(.failure(HerdrError.timeout(method))) }
+            timeoutWork = work
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: work)
         }
     }
 }

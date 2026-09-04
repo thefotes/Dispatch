@@ -16,6 +16,36 @@ final class ProviderBridgeRoundTripTests: XCTestCase {
         return (RemoteProvider(socketPath: path, timeout: 3), server, path)
     }
 
+    /// `start()` used to unlink unconditionally, so a second server on the
+    /// same path silently stole the socket file out from under a live one —
+    /// the first kept running but became unreachable. `start()` must now
+    /// refuse instead, and the first server must still answer afterward.
+    func testStartingASecondServerOnALivePathRefusesRatherThanHijackingIt() async throws {
+        let first = FakeProvider()
+        let (remote, server, path) = try makePair(first)
+        defer { server.stop() }
+
+        let second = ProviderBridgeServer(provider: FakeProvider(), socketPath: path)
+        XCTAssertThrowsError(try second.start())
+
+        // The original server is still the one answering.
+        _ = try await remote.status()
+    }
+
+    /// A stale socket file left behind by a crashed previous run — nothing
+    /// listening on it — must not block a fresh `start()`.
+    func testStartingOverAStaleSocketFileStillWorks() throws {
+        let path = "/tmp/pbt-\(UUID().uuidString.prefix(8)).sock"
+        // A plain file at the path, not a socket anything is listening on —
+        // stands in for a stale file from a process that never cleaned up.
+        FileManager.default.createFile(atPath: path, contents: Data())
+        defer { try? FileManager.default.removeItem(atPath: path) }
+
+        let server = ProviderBridgeServer(provider: FakeProvider(), socketPath: path)
+        defer { server.stop() }
+        XCTAssertNoThrow(try server.start())
+    }
+
     func testDescribeRoundTrips() async throws {
         let fake = FakeProvider()
         fake.descriptionToReturn = ProviderDescription(
