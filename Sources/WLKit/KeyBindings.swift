@@ -196,7 +196,14 @@ public struct KeyBindings: Sendable, Equatable {
     /// alone"). Anything else — `true`, a shortcut object missing its field,
     /// a number — binds nothing, same as leaving the key unmentioned.
     private static func keyAction(from value: Any) -> KeyAction? {
-        if let flag = value as? Bool { return flag ? nil : .off }
+        // `value as? Bool` alone is not enough: Foundation bridges a JSON `0`
+        // or `1` to `Bool` too on this platform, so a config author's numeric
+        // `0` would silently turn a key off instead of being ignored like any
+        // other number. CFGetTypeID tells an actual JSON true/false (backed
+        // by CFBoolean) apart from a bridged NSNumber.
+        if CFGetTypeID(value as CFTypeRef) == CFBooleanGetTypeID(), let flag = value as? Bool {
+            return flag ? nil : .off
+        }
         if let text = value as? String { return text.isEmpty ? nil : .text(text) }
         if let object = value as? [String: Any], let shortcut = object["shortcut"] as? String {
             return shortcut.isEmpty ? nil : .shortcut(shortcut)

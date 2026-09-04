@@ -196,4 +196,13 @@ final class KeyBindingsTests: XCTestCase {
         let bindings = parse(#"{"keys": {"6": true}}"#)
         XCTAssertNil(bindings.action(for: 6))
     }
+
+    /// `0`/`1` bridge to `Bool` on this platform same as a literal
+    /// true/false, so a naive `as? Bool` check would treat a config
+    /// author's numeric `0` as `false` and turn the key off — verify the
+    /// type check actually tells them apart.
+    func testNumericZeroAndOneAreIgnoredNotTreatedAsBooleans() {
+        XCTAssertNil(parse(#"{"keys": {"8": 0}}"#).action(for: 8))
+        XCTAssertNil(parse(#"{"keys": {"8": 1}}"#).action(for: 8))
+    }
 }
