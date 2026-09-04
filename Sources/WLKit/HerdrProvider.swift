@@ -1,15 +1,14 @@
 import Foundation
 
 /// Wraps `HerdrClient` behind `Provider`. The one implementation Micromanager
-/// ships today; `BridgeController` never imports `HerdrClient` — this is now
-/// the only file that does.
+/// ships today, and the only file that imports `HerdrClient` — `BridgeController`
+/// depends on `Provider` only.
 ///
-/// Owns the event-stream bookkeeping that used to live in `BridgeController`:
-/// a lifecycle stream that restarts itself on close, and one dedicated
-/// per-pane status stream, reconciled against whatever `status()` last
-/// fetched (`reconcileStatusStreams` used to need the bridge to hand it a
-/// fresh agent list on every poll; now `status()` triggers its own
-/// reconciliation, so it needs nothing handed to it).
+/// Owns the event-stream bookkeeping: a lifecycle stream that restarts
+/// itself on close, and one dedicated per-pane status stream, reconciled
+/// against whatever `status()` last fetched — `status()` triggers its own
+/// reconciliation on every call, so nothing else needs to hand it a fresh
+/// agent list.
 public final class HerdrProvider: Provider, @unchecked Sendable {
     private let lock = NSLock()
     private var onChange: (@Sendable () -> Void)?

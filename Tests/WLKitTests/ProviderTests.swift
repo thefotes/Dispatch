@@ -1,9 +1,8 @@
 import XCTest
 @testable import WLKit
 
-/// `BridgeController` used to import `HerdrClient` directly; these pin that
-/// it now only ever reaches Herdr through the `Provider` seam, by proving
-/// every dispatch path calls a fake instead.
+/// `BridgeController` only ever reaches Herdr through the `Provider` seam —
+/// these pin that by proving every dispatch path calls a fake instead.
 @MainActor
 final class ProviderTests: XCTestCase {
 

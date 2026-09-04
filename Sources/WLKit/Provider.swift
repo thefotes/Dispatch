@@ -1,15 +1,13 @@
 import Foundation
 
 /// What Micromanager needs from an external tool to drive the pad's
-/// agent-key row, dial, and macro keys — the generic seam `HerdrClient` used
-/// to be hardcoded behind. `BridgeController` depends on this protocol only;
-/// `HerdrProvider` is the one implementation shipped today, and nothing in
-/// this file mentions Herdr.
+/// agent-key row, dial, and macro keys. `BridgeController` depends on this
+/// protocol only, never on a concrete backend; `HerdrProvider` is the
+/// implementation shipped today, and nothing in this file mentions Herdr.
 ///
-/// The entity type is still `HerdrAgent` for now — that generalises alongside
-/// `StatusMapper`'s state palette in a later pass, since the two changes
-/// share the same UI surface. The seam this phase is after is narrower:
-/// `BridgeController` no longer imports `HerdrClient` directly.
+/// The one Herdr-specific leak: entities are typed as `HerdrAgent` rather
+/// than something fully generic, since it is also `StatusMapper`'s input and
+/// the two share the same UI surface.
 public protocol Provider: Sendable {
     /// Static capabilities: the state palette entities report through
     /// `status()`, and the dial modes this provider understands. Called once
@@ -32,9 +30,8 @@ public protocol Provider: Sendable {
     func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription
 }
 
-/// A provider's static capabilities — what `BridgeController` used to get
-/// from a hardcoded `BridgeConfig` default and Herdr-specific knowledge of
-/// `KeyBindings.DialMode`.
+/// A provider's static capabilities: its lighting palette and the dial
+/// modes it supports.
 public struct ProviderDescription: Sendable, Equatable {
     /// Color + effect per state name `status()` can report an entity as.
     /// Applied over `BridgeConfig`'s palette at bridge start.

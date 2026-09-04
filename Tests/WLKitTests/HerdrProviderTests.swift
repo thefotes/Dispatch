@@ -1,10 +1,10 @@
 import XCTest
 @testable import WLKit
 
-/// Pins `HerdrProvider.describe()` to the values `BridgeConfig`'s defaults
-/// hardcoded before phase 2 — the migration is only safe if nothing repaints
-/// differently, so the numbers here must match `StatusMapper`'s old literals
-/// exactly, not just "look reasonable."
+/// Pins `HerdrProvider.describe()` to `BridgeConfig`'s own hardcoded
+/// defaults — the two are independently defined, so the numbers here must
+/// match `StatusMapper`'s literals exactly, not just "look reasonable," or
+/// the pad repaints differently depending on which one wins.
 final class HerdrProviderTests: XCTestCase {
 
     func testDescribesTheSameStatePaletteBridgeConfigUsedToHardcode() async {
