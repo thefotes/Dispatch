@@ -506,11 +506,7 @@ public final class BridgeController: ObservableObject {
 
     /// Advances the focused workspace to its next tab, wrapping.
     public func cycleTabs() async {
-        do {
-            try await HerdrClient.cycleTabs()
-        } catch {
-            lastError = error.localizedDescription
-        }
+        await cycleTabsBy(1)
     }
 
     /// The dial as a Herdr navigator. `step` is +1 / -1 from the encoder
@@ -542,6 +538,18 @@ public final class BridgeController: ObservableObject {
         }
     }
 
+    /// Focuses an agent/workspace/tab and brings the terminal forward — the
+    /// one error-and-raise shape every navigation entry point shares, so a
+    /// future one cannot forget the raise.
+    private func focusAndRaise(_ body: () async throws -> Void) async {
+        do {
+            try await body()
+            raiseTerminal()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
     private func cycleTabsBy(_ step: Int) async {
         do {
             try await HerdrClient.cycleTabs(step)
@@ -553,27 +561,21 @@ public final class BridgeController: ObservableObject {
     /// Steps focus to the next/previous agent, in the same reading order the
     /// keys use, and brings the terminal forward as an agent key would.
     private func cycleAgent(_ step: Int) async {
-        do {
+        await focusAndRaise {
             guard let next = HerdrClient.adjacentAgent(
                 in: try await HerdrClient.listAgents(), step: step
             ), let target = next.focusTarget else { return }
             try await HerdrClient.focusAgent(target)
-            raiseTerminal()
-        } catch {
-            lastError = error.localizedDescription
         }
     }
 
     /// Steps focus to the next/previous workspace in sidebar order.
     private func cycleWorkspace(_ step: Int) async {
-        do {
+        await focusAndRaise {
             guard let next = HerdrClient.adjacentWorkspace(
                 in: try await HerdrClient.listWorkspaces(), step: step
             ) else { return }
             try await HerdrClient.focusWorkspace(next.workspaceID)
-            raiseTerminal()
-        } catch {
-            lastError = error.localizedDescription
         }
     }
 
@@ -602,11 +604,8 @@ public final class BridgeController: ObservableObject {
     public func focusSlot(_ index: Int) async {
         guard index >= 0, index < agents.count else { return }
         guard let target = agents[index].focusTarget else { return }
-        do {
+        await focusAndRaise {
             try await HerdrClient.focusAgent(target)
-            raiseTerminal()
-        } catch {
-            lastError = error.localizedDescription
         }
     }
 
