@@ -42,10 +42,12 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertEqual(bindings.text(for: 11), "right half")
     }
 
-    /// An empty string unbinds: the key goes dark rather than typing nothing.
-    func testEmptyStringUnbindsADefault() {
+    /// An empty string is a no-op, not an unbind — `false` is the unbind.
+    /// Kept this way for anyone upgrading with an existing "" already in
+    /// config.json, from before an empty string meant anything at all.
+    func testEmptyStringIsANoOpNotAnUnbind() {
         let bindings = parse(#"{"keys": {"12": ""}}"#)
-        XCTAssertNil(bindings.text(for: 12))
+        XCTAssertEqual(bindings.text(for: 12), "Run but pull")
         XCTAssertEqual(bindings.text(for: 9), "Open PRs for all active GitButler branches")
     }
 
@@ -136,7 +138,7 @@ final class KeyBindingsTests: XCTestCase {
             """#)
         XCTAssertEqual(bindings.action(for: 6), .shortcut("cmd+shift+5"))
         XCTAssertEqual(bindings.action(for: 7), .text("note"))
-        XCTAssertEqual(bindings.action(for: 8), .off, "empty string turns the key off outright")
+        XCTAssertNil(bindings.action(for: 8), "empty string is a no-op — false is what unbinds")
     }
 
     func testUnmentionedStackTabAndLandKeysHaveNoActionByDefault() {
@@ -166,9 +168,10 @@ final class KeyBindingsTests: XCTestCase {
     }
 
     /// An empty shortcut string turns the key off too, same rule as text.
-    func testEmptyShortcutTurnsAKeyOff() {
+    /// Same no-op rule as a bare empty string.
+    func testEmptyShortcutIsANoOp() {
         let bindings = parse(#"{"keys": {"9": {"shortcut": ""}}}"#)
-        XCTAssertEqual(bindings.action(for: 9), .off)
+        XCTAssertEqual(bindings.action(for: 9), .text("Open PRs for all active GitButler branches"))
     }
 
     /// `false` is the explicit, no-ambiguity way to turn a key off — the
