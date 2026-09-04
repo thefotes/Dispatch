@@ -23,7 +23,9 @@ import Foundation
 /// its halves separately. Keys the file does not mention keep their
 /// defaults — 9 and 12 default to the text macros below, the wide key
 /// defaults to the voice key, and 6/7/8 default to stack/tabs/land. Binding
-/// any of those overrides its default; an empty string (or `{"shortcut":""}`)
+/// any of those overrides its default. An empty string (or
+/// `{"shortcut":""}`) is a no-op, indistinguishable from the key being
+/// unmentioned, matching older configs where it behaved that way; `false`
 /// unbinds a key outright.
 ///
 /// A top-level `"dial"` string repurposes the knob: `"effort"` (the default)
@@ -155,7 +157,8 @@ public struct KeyBindings: Sendable, Equatable {
         )
     }
 
-    /// A key's value is a bare string (a text macro, or `""` to turn it off),
+    /// A key's value is a bare string (a text macro; an empty one is a no-op,
+    /// matching the pre-`.off` behaviour so existing configs keep working),
     /// an object with a `"shortcut"` string (same empty-string rule), or
     /// `false` (turns it off outright — the unambiguous choice for a
     /// stack/tabs/land key, where an empty string could read as "leave it
@@ -163,9 +166,9 @@ public struct KeyBindings: Sendable, Equatable {
     /// a number — binds nothing, same as leaving the key unmentioned.
     private static func keyAction(from value: Any) -> KeyAction? {
         if let flag = value as? Bool { return flag ? nil : .off }
-        if let text = value as? String { return text.isEmpty ? .off : .text(text) }
+        if let text = value as? String { return text.isEmpty ? nil : .text(text) }
         if let object = value as? [String: Any], let shortcut = object["shortcut"] as? String {
-            return shortcut.isEmpty ? .off : .shortcut(shortcut)
+            return shortcut.isEmpty ? nil : .shortcut(shortcut)
         }
         return nil
     }

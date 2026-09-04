@@ -178,8 +178,9 @@ halves. **Every spare key is overridable this way, including the stack (6),
 tabs (7), and land (8) keys** — binding one replaces its built-in job
 entirely. Keys the file does not mention keep their defaults: 9 and 12 type
 their text macros, the wide key taps right-command, and 6/7/8 stay
-stack/tabs/land. An empty string (or `{"shortcut": ""}`) unbinds a key
-outright, back to nothing.
+stack/tabs/land. To unbind a key outright, back to nothing, bind it to
+`false`. An empty string (or `{"shortcut": ""}`) is a no-op — the key
+keeps its default, matching how older configs behaved.
 
 `"dial"` sets what the knob does. `"effort"` (the default) climbs the
 reasoning-effort ladder for the focused agent; `"agent"` steps focus through
