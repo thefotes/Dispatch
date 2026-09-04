@@ -44,26 +44,43 @@ final class ShortcutController {
         // its own trigger, as OpenSuperWhisper's hotkey settings do. So each
         // modifier gets a real keydown/keyup here too, building the flag set
         // up one key at a time the way an actual chord's reports would.
+        // Snapshot the user's physically held modifiers before posting anything:
+        // the chord's own downs will show up in this state from here on, and
+        // the chord's ups must never clear a modifier the user is still
+        // holding — a synthetic keyup with no flag drops the real key until it
+        // is pressed again.
+        let physical = CGEventSource.flagsState(.hidSystemState)
         var held: CGEventFlags = []
         let chords = ShortcutSpec.Modifiers.chord.filter { spec.modifiers.contains($0.modifier) }
 
+        // Build every modifier down before posting any: posting a down whose
+        // matching up fails to construct would leave a stuck modifier.
+        var downs: [CGEvent] = []
         for (_, code, flag) in chords {
             held.insert(flag)
-            let down = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true)
-            down?.flags = held
-            down?.post(tap: .cghidEventTap)
+            guard let down = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true) else {
+                onError?("Could not synthesise that shortcut.")
+                return
+            }
+            down.flags = held.union(physical)
+            downs.append(down)
         }
 
-        baseDown.flags = held
-        baseUp.flags = held   // still held on release — the modifier ups come after
+        baseDown.flags = held.union(physical)
+        baseUp.flags = held.union(physical)   // still held on release — the modifier ups come after
+
+        for down in downs { down.post(tap: .cghidEventTap) }
         baseDown.post(tap: .cghidEventTap)
         baseUp.post(tap: .cghidEventTap)
 
         for (_, code, flag) in chords.reversed() {
             held.remove(flag)
-            let up = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false)
-            up?.flags = held
-            up?.post(tap: .cghidEventTap)
+            guard let up = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false) else { continue }
+            // The physical snapshot keeps any modifier the user is genuinely
+            // holding on the up event's flags, so the release only clears what
+            // this chord itself pressed.
+            up.flags = held.union(physical)
+            up.post(tap: .cghidEventTap)
         }
     }
 }

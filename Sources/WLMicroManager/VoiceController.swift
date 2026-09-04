@@ -59,8 +59,14 @@ final class VoiceController {
         // A modifier carries its own flag: set on the way down, cleared on the
         // way up. Skip that and listeners see a command key that never
         // releases, which leaves the whole machine holding a modifier down.
-        down.flags = .maskCommand
-        up.flags = []
+        //
+        // But the up event must not clear more than this press set: snapshot
+        // what the user is physically holding first, and carry those flags
+        // through the release. Without this, tapping the voice key mid-chord
+        // (cmd-tab, cmd-c in progress) drops the user's real command key.
+        let physical = CGEventSource.flagsState(.hidSystemState)
+        down.flags = physical.union(.maskCommand)
+        up.flags = physical
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
     }
