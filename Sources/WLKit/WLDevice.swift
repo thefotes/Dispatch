@@ -140,10 +140,20 @@ public final class WLDevice {
         // then fails with kIOReturnNotOpen.
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         self.manager = manager
-        // Match on vendor only: over Bluetooth the pad presents a single
-        // IOHIDDevice whose *primary* usage is keyboard, with the vendor
-        // collection alongside it in DeviceUsagePairs.
-        IOHIDManagerSetDeviceMatching(manager, [kIOHIDVendorIDKey: WLDevice.vendorID] as CFDictionary)
+        // Match on vendor plus the vendor usage pair. Vendor alone opens every
+        // Espressif-vendor HID device on the bus — other ESP32 gadgets, second
+        // pads — and each extra non-exclusive open on a keyboard collection
+        // raises the odds of HID contention. Over Bluetooth the pad presents a
+        // single IOHIDDevice whose *primary* usage is keyboard, with the vendor
+        // collection alongside it in DeviceUsagePairs, so the pair still
+        // matches it.
+        IOHIDManagerSetDeviceMatching(manager, [
+            kIOHIDVendorIDKey: WLDevice.vendorID,
+            kIOHIDDeviceUsagePairsKey: [
+                [kIOHIDDeviceUsagePageKey: WLDevice.vendorUsagePage,
+                 kIOHIDDeviceUsageKey: WLDevice.vendorUsage],
+            ],
+        ] as CFDictionary)
         let openResult = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         guard openResult == kIOReturnSuccess else {
             // Close and drop the manager before throwing: an open manager held
