@@ -8,6 +8,16 @@ import Foundation
 /// original check only recognised the older 0xE00002C1, so on current systems a
 /// permissions failure fell through and the menu simply said it was looking for
 /// the pad, which sends you hunting for a cable when the answer is a checkbox.
+///
+/// The advice these messages give is load-bearing, and the device case is the
+/// one that costs hours if it is vague. Verified 2026-09-05 on a session that
+/// stayed wedged through *all* of: power-cycling the pad, toggling the Mac's
+/// Bluetooth radio, forgetting and re-pairing the BLE bond, killing every app
+/// that holds the pad, switching from Bluetooth to USB, and unplugging and
+/// replugging the cable — a real re-enumeration, confirmed by a changed
+/// `LocationID`. Only a restart cleared it. So "reseat it" alone is not enough
+/// to say; the message has to name the restart, or the reader keeps reseating.
+/// See the `0xE00002E2` trap in `docs/hacking.md` for the full write-up.
 public enum DeviceOpenFailure: Equatable {
     case permissionMissing
     case deviceUnavailable(String)
@@ -27,7 +37,7 @@ public enum DeviceOpenFailure: Equatable {
         case .permissionMissing:
             return "Input Monitoring is not granted. System Settings › Privacy & Security › Input Monitoring, then switch the manager off and on."
         case .deviceUnavailable(let underlying):
-            return "The pad did not open. Something else may be holding it, or it needs a reconnect - unplug it, wait a moment, plug it back in. (\(underlying))"
+            return "The pad did not open. In order: quit Work Louder Input and the Codex app, which hold this same pad; then unplug it, wait a moment, plug it back in; then restart the Mac. A wedged HID session survives replugging and re-pairing, so if the first two do nothing, go straight to the restart rather than trying them again. (\(underlying))"
         }
     }
 }

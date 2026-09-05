@@ -32,6 +32,7 @@ uses.
 11. [Turning everything off](#11-turning-everything-off)
 12. [Reference](#12-reference)
 13. [Traps](#13-traps)
+14. [When the pad stops responding](#14-when-the-pad-stops-responding)
 
 ---
 
@@ -75,14 +76,24 @@ macOS refuses to let anything seize a keyboard. A seizing open fails with
 const hid = new HID.HID(info.path, { nonExclusive: true });
 ```
 
-**Match on the usage pair, not the primary usage.** Over Bluetooth the pad is a
-*single* device whose primary usage is keyboard (`usagePage 1, usage 6`), with
-the vendor collection listed alongside in its usage pairs. Over USB each
-interface is its own device, so picking the first vendor-id match lands you on
-the keyboard and every write is silently dropped. `node-hid`'s `devices()` list
-is already flattened per usage pair, so the filter above is correct; if you use
-IOKit directly, check `DeviceUsagePairs` — see `WLDevice.hasVendorCollection` in
-`Sources/WLKit/WLDevice.swift`.
+**Match on the usage pair, not the primary usage.** On both transports the pad
+is a *single* device whose primary usage is keyboard (`usagePage 1, usage 6`),
+with the vendor collection listed only alongside it in the usage pairs. Picking
+the first vendor-id match and checking its primary usage finds nothing on
+`0xFF00`, and picking it blind lands you on the keyboard.
+
+The reason is worth knowing, because it looks like a bug the first time you meet
+it: **macOS makes one HID device object per USB *interface*, not per top-level
+collection.** This pad declares all four of its collections — boot keyboard,
+two consumer, and the vendor channel — on one interface, so one device object
+carrying a keyboard primary usage is the correct and expected shape. Nothing is
+missing and nothing needs to be "split". Confirmed by descriptor and by
+`ioreg`: a single `IOUSBHostInterface`, `bInterfaceNumber 0`, `bInterfaceClass
+3`, and report id 6 writes to that keyboard-primary device succeed.
+
+`node-hid`'s `devices()` list is already flattened per usage pair, so the filter
+above is correct; if you use IOKit directly, check `DeviceUsagePairs` — see
+`WLDevice.hasVendorCollection` in `Sources/WLKit/WLDevice.swift`.
 
 ---
 
@@ -670,6 +681,9 @@ connection. Let it go out of scope and the devices it opened are torn down with
 it; every later `IOHIDDeviceSetReport` fails with `kIOReturnNotOpen`
 (`0xE00002CD`) even though the open reported success.
 
+**`0xE00002E2` is `kIOReturnNotPermitted`, and only a restart clears it.** This
+one is worth a section of its own — see [§14](#14-when-the-pad-stops-responding).
+
 **You are not the only client.** Opening shared means you also receive *other*
 applications' responses. A response carrying an id you never issued is a
 reliable tell that something else is driving the pad — Work Louder's Input app
@@ -681,6 +695,96 @@ this firmware genuinely does not have it. Older Creator Micro 2 firmware
 (v0.4.0, v0.6.0-rc.8) registered the methods as no-op stubs — accepted
 everything, lit nothing. `docs/per-key-rgb-investigation.md` is the write-up
 from before it worked, kept because the elimination process is the useful part.
+
+---
+
+## 14. When the pad stops responding
+
+The failure this section is about: the pad is lit and the Mac lists it, but the
+dial and keys do nothing and every write fails with **`0xE00002E2`**. Typically
+after a sleep/wake.
+
+### Decode the error code first
+
+`0xE00002E2` is **`kIOReturnNotPermitted`**. It is *not* `kIOReturnOverrun`,
+which is `0xE00002E8`. Getting this wrong is expensive: "overrun" reads as a
+size problem, which sends you decoding report descriptors and counting report
+bytes, and the descriptor is fine. IOKit codes run sequentially from
+`kIOReturnError = 0xE00002BC`, so you can always settle it by counting:
+
+| code | name |
+|---|---|
+| `0xE00002C1` | `kIOReturnNotPrivileged` — a *seizing* open (see [§2](#2-find-the-interface)) |
+| `0xE00002CD` | `kIOReturnNotOpen` — you dropped the `IOHIDManager` |
+| `0xE00002E2` | `kIOReturnNotPermitted` — **this one** |
+| `0xE00002E8` | `kIOReturnOverrun` — an actual size problem |
+
+### It means one of two things
+
+`kIOReturnNotPermitted` covers both a **missing Input Monitoring grant** and a
+**wedged HID session**, so the code alone cannot tell you which. Ask the API
+that actually knows:
+
+```swift
+IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+```
+
+Granted, and still `0xE00002E2`? Then it is a wedged session, and no amount of
+permission fiddling will help. `DeviceOpenFailure` in
+`Sources/WLKit/DeviceOpenFailure.swift` is this fork in the road as code.
+
+### The recovery ladder
+
+Verified 2026-09-05. Everything above the last rung **failed**, so do not spend
+the morning re-trying the cheap ones:
+
+| | tried | result |
+|---|---|---|
+| 1 | Quit other clients (Work Louder Input, Codex app) | worth doing first — cheap, and they really do fight you |
+| 2 | Power-cycle the pad | no change |
+| 3 | Toggle the Mac's Bluetooth radio | no change |
+| 4 | Forget and re-pair the BLE bond | no change — rules out a stale bond or MTU |
+| 5 | Switch transport, Bluetooth → USB | no change — **rules out anything BLE-specific** |
+| 6 | Unplug and replug the cable | no change, even with a changed `LocationID` confirming a real re-enumeration |
+| 7 | **Restart the Mac** | **fixed it** |
+
+The lesson in one line: **a wedged HID session is kernel-side state that
+survives re-enumeration on either transport.** Reseating the device feels like
+the obvious fix and cannot clear it. Once you have confirmed the grant is in
+place and one replug has not helped, go to the restart.
+
+### Confirming it is actually fixed
+
+Do not go by whether the LEDs came back — they light without any working
+session. Check the write path directly, in ascending order of cost:
+
+```bash
+# 1. Does the vendor write path work at all?
+#    Expect IOHIDDeviceOpen and SetReport to both return 0x00000000.
+swift test --filter LiveDeviceTests   # reads the real keymap off the device
+
+# 2. What does the OS think it has?
+ioreg -a -c IOHIDDevice -r > /tmp/hid.plist
+python3 -c "
+import plistlib
+for d in plistlib.load(open('/tmp/hid.plist','rb')):
+    if d.get('VendorID') == 12346:
+        print({k: d.get(k) for k in ['Product','Transport','PrimaryUsagePage','DeviceUsagePairs']})
+"
+```
+
+One entry, `PrimaryUsagePage: 1`, with `65280` present in `DeviceUsagePairs`, is
+**correct** — see [§2](#2-find-the-interface). Do not read the absence of a
+separate `0xFF00` device as the fault; there has never been one.
+
+Two things that are *not* evidence of a problem:
+
+- **A Bluetooth entry reading "Not Connected" while the pad is on USB.** That is
+  just the BLE side idle. Check `Transport` in `ioreg` for what is actually
+  carrying traffic.
+- **`DeviceOpenedByEventSystem = True`.** The system event daemon holds every
+  keyboard-ish device open. It is not what is blocking you; the pad is opened
+  shared.
 
 ---
 

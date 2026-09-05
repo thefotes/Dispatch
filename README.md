@@ -270,6 +270,23 @@ two at once means they overwrite each other. The panel detects this — the devi
 is opened shared, so we receive other clients' replies, and a response id we
 never issued is a reliable tell.
 
+## When the pad stops responding
+
+Lit but inert — the dial and keys do nothing, usually after a sleep/wake. The
+panel will name the error; if it ends in `0xE00002E2`, that is
+`kIOReturnNotPermitted`, which means either Input Monitoring is not granted or
+the HID session has wedged.
+
+If Input Monitoring is already granted, it is a wedged session, and **only
+restarting the Mac clears it**. Power-cycling the pad, toggling Bluetooth,
+re-pairing, switching to USB and replugging the cable have all been tried and
+none of them work — the state survives re-enumeration on either transport. Quit
+Work Louder Input and the Codex app first in case one of them is simply holding
+the pad, try one replug, then restart.
+
+Full write-up, including how to confirm the fix took:
+**[docs/hacking.md §14](docs/hacking.md#14-when-the-pad-stops-responding)**.
+
 ## Development
 
 ```bash

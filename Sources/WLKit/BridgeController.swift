@@ -437,8 +437,10 @@ public final class BridgeController: ObservableObject {
             // A write failure this deep almost always means the HID session
             // itself went bad under us, not that this one call was unlucky —
             // observed after sleep/wake over Bluetooth, where the device
-            // stays "open" but every SetReport fails with a wedged-session
-            // code (0xE00002E2). Retrying the same call against the same
+            // stays "open" but every SetReport fails with 0xE00002E2
+            // (kIOReturnNotPermitted — *not* kIOReturnOverrun, which is
+            // 0xE00002E8; misreading it as a size error sends you off
+            // decoding report descriptors). Retrying the same call against the same
             // handle every poll never recovers on its own; disconnecting
             // does, since it routes through the same onDisconnect →
             // scheduleReopen path a genuinely lost connection already takes,

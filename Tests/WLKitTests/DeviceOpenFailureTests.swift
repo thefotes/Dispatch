@@ -29,9 +29,21 @@ final class DeviceOpenFailureTests: XCTestCase {
     /// code on its own has already proved useless to a reader.
     func testTheDeviceMessageSuggestsSomethingToDo() {
         let advice = DeviceOpenFailure.deviceUnavailable(notPermitted).message
-        XCTAssertTrue(advice.contains("reconnect") || advice.contains("unplug"),
-                      "a wedged pad is fixed by reseating it, so say so: \(advice)")
+        XCTAssertTrue(advice.contains("unplug"),
+                      "reseating is the cheap thing to try first, so say so: \(advice)")
         XCTAssertTrue(advice.contains(notPermitted), "keep the raw error for anyone diagnosing")
+    }
+
+    /// Reseating is where the advice used to stop, and stopping there is what
+    /// cost a morning on 2026-09-05: the session stayed wedged through a
+    /// power-cycle, a Bluetooth toggle, a fresh BLE pairing, a switch to USB
+    /// and a full cable replug, and only a restart cleared it. Someone who has
+    /// replugged twice needs to be told the next rung exists, so the ladder has
+    /// to reach the restart.
+    func testTheDeviceMessageNamesTheRestartAsTheLastResort() {
+        let advice = DeviceOpenFailure.deviceUnavailable(notPermitted).message
+        XCTAssertTrue(advice.contains("restart"),
+                      "replugging does not clear a wedged HID session; the restart is the fix: \(advice)")
     }
 
     func testThePermissionMessageNamesTheSettingToLookFor() {
