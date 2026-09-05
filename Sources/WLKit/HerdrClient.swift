@@ -391,7 +391,7 @@ public final class HerdrEventStream {
         let envelope: [String: Any] = [
             "id": "wl_sub",
             "method": "events.subscribe",
-            "params": ["subscriptions": subscriptions],
+            "params": ["subscriptions": subscriptions]
         ]
         if let payload = try? JSONSerialization.data(withJSONObject: envelope) {
             conn.write(payload + Data("\n".utf8))

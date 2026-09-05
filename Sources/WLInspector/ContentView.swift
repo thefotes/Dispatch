@@ -203,7 +203,7 @@ struct RawCallView: View {
         ("Announce host app", "host.focused_app", "{\"name\":\"WLInspector\",\"bundle_id\":\"cc.worklouder.inspector\"}"),
         ("Device status", "device.status", ""),
         ("Firmware version", "sys.version", ""),
-        ("List files", "fs.list", "{\"checksum\":false,\"rec\":true}"),
+        ("List files", "fs.list", "{\"checksum\":false,\"rec\":true}")
     ]
 
     var body: some View {

@@ -55,7 +55,7 @@ final class HerdrWorkspaceCycleTests: XCTestCase {
         let spaces = [
             HerdrWorkspace(workspaceID: "w1", number: 1, focused: true),
             HerdrWorkspace(workspaceID: "w2", number: 2),
-            HerdrWorkspace(workspaceID: "w3", number: 3),
+            HerdrWorkspace(workspaceID: "w3", number: 3)
         ]
         XCTAssertEqual(HerdrClient.adjacentWorkspace(in: spaces, step: 1)?.workspaceID, "w2")
     }
@@ -63,7 +63,7 @@ final class HerdrWorkspaceCycleTests: XCTestCase {
     func testStepsBackwardWithANegativeStep() {
         let spaces = [
             HerdrWorkspace(workspaceID: "w1", number: 1),
-            HerdrWorkspace(workspaceID: "w2", number: 2, focused: true),
+            HerdrWorkspace(workspaceID: "w2", number: 2, focused: true)
         ]
         XCTAssertEqual(HerdrClient.adjacentWorkspace(in: spaces, step: -1)?.workspaceID, "w1")
     }
@@ -71,7 +71,7 @@ final class HerdrWorkspaceCycleTests: XCTestCase {
     func testWrapsFromTheLastWorkspaceToTheFirst() {
         let spaces = [
             HerdrWorkspace(workspaceID: "w1", number: 1),
-            HerdrWorkspace(workspaceID: "w2", number: 2, focused: true),
+            HerdrWorkspace(workspaceID: "w2", number: 2, focused: true)
         ]
         XCTAssertEqual(HerdrClient.adjacentWorkspace(in: spaces, step: 1)?.workspaceID, "w1")
     }
@@ -81,7 +81,7 @@ final class HerdrWorkspaceCycleTests: XCTestCase {
         let spaces = [
             HerdrWorkspace(workspaceID: "w3", number: 3),
             HerdrWorkspace(workspaceID: "w1", number: 1, focused: true),
-            HerdrWorkspace(workspaceID: "w2", number: 2),
+            HerdrWorkspace(workspaceID: "w2", number: 2)
         ]
         XCTAssertEqual(HerdrClient.adjacentWorkspace(in: spaces, step: 1)?.workspaceID, "w2")
     }
@@ -89,7 +89,7 @@ final class HerdrWorkspaceCycleTests: XCTestCase {
     func testNoFocusedWorkspaceDoesNothing() {
         let spaces = [
             HerdrWorkspace(workspaceID: "w1", number: 1),
-            HerdrWorkspace(workspaceID: "w2", number: 2),
+            HerdrWorkspace(workspaceID: "w2", number: 2)
         ]
         XCTAssertNil(HerdrClient.adjacentWorkspace(in: spaces, step: 1))
     }

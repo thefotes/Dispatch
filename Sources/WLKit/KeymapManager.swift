@@ -18,7 +18,7 @@ public enum KeymapManager {
         "KV_OAI_AG03", "KV_OAI_AG04", "KV_OAI_AG05",
         "KV_OAI_AG06", "KV_OAI_AG07", "KV_OAI_AG08",
         "KV_OAI_AG09", "KV_OAI_AG10", "KV_OAI_AG11",
-        "KV_OAI_AG12",
+        "KV_OAI_AG12"
     ]
 
     /// The dial: clockwise, counter-clockwise. Its press keeps whatever it
@@ -31,7 +31,7 @@ public enum KeymapManager {
         (0.25, "KV_OAI_AG15"),
         (0.50, "KV_OAI_AG16"),
         (0.75, "KV_OAI_AG17"),
-        (0.00, "KV_OAI_AG18"),
+        (0.00, "KV_OAI_AG18")
     ]
 
     /// A sector's centre angle, handling the one that wraps through zero.

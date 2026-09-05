@@ -145,7 +145,7 @@ public enum Pad {
         [0, 1],
         [2, 3, 4, 5],
         [6, 7, 8, 9],
-        [10, 11, 12],
+        [10, 11, 12]
     ]
     public static let keyCount = 13
     /// The firmware's keycode table goes to AG19, so clear the whole id space
@@ -162,7 +162,7 @@ public enum Pad {
         [1, 0],
         [2, 3, 4, 5],
         [6, 7, 8, 9],
-        [10, 11, 12],
+        [10, 11, 12]
     ]
 
     /// The agent slot a key answers for, or nil for non-agent keys.

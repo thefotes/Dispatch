@@ -109,7 +109,7 @@ public struct KeyBindings: Sendable, Equatable {
 
     public static let defaults: [Int: KeyAction] = [
         9: .text("Open PRs for all active GitButler branches"),
-        12: .text("Run but pull"),
+        12: .text("Run but pull")
     ]
     public static let defaultClaudeModels = ["fable", "opus", "sonnet", "haiku"]
     public static let defaultClaudeEfforts = ["low", "medium", "high", "xhigh", "max"]

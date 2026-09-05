@@ -7,7 +7,7 @@ final class GitButlerLandPlanTests: XCTestCase {
         let object: [String: Any] = [
             "stacks": stacks.map { branches in
                 ["branches": branches]
-            },
+            }
         ]
         return try JSONSerialization.data(withJSONObject: object)
     }
@@ -16,7 +16,7 @@ final class GitButlerLandPlanTests: XCTestCase {
     func testBottomBranchLandsFirst() throws {
         let data = try json(stacks: [[
             ["name": "top", "branchStatus": "completelyUnpushed"],
-            ["name": "bottom", "branchStatus": "completelyUnpushed"],
+            ["name": "bottom", "branchStatus": "completelyUnpushed"]
         ]])
         XCTAssertEqual(try GitButler.parseLandPlan(data), ["bottom", "top"])
     }
@@ -24,7 +24,7 @@ final class GitButlerLandPlanTests: XCTestCase {
     func testIntegratedBranchesAreSkipped() throws {
         let data = try json(stacks: [[
             ["name": "top", "branchStatus": "unpushedCommits"],
-            ["name": "landed", "branchStatus": "integrated"],
+            ["name": "landed", "branchStatus": "integrated"]
         ]])
         XCTAssertEqual(try GitButler.parseLandPlan(data), ["top"])
     }
@@ -33,9 +33,9 @@ final class GitButlerLandPlanTests: XCTestCase {
         let data = try json(stacks: [
             [
                 ["name": "a-top", "branchStatus": "completelyUnpushed"],
-                ["name": "a-bottom", "branchStatus": "completelyUnpushed"],
+                ["name": "a-bottom", "branchStatus": "completelyUnpushed"]
             ],
-            [["name": "b", "branchStatus": "completelyUnpushed"]],
+            [["name": "b", "branchStatus": "completelyUnpushed"]]
         ])
         XCTAssertEqual(try GitButler.parseLandPlan(data), ["a-bottom", "a-top", "b"])
     }

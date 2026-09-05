@@ -39,7 +39,7 @@ public enum GitButler {
         "/usr/local/bin/but",
         "~/.cargo/bin/but",
         "~/.local/bin/but",
-        "/usr/bin/but",
+        "/usr/bin/but"
     ]
 
     private static let cache = BinaryCache()
@@ -85,7 +85,7 @@ public enum GitButler {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
 
-        let path = String(decoding: data, as: UTF8.self)
+        let path = (String(bytes: data, encoding: .utf8) ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) else { return nil }
         return path
@@ -182,7 +182,7 @@ public enum GitButler {
         environment["TERM"] = "xterm-256color"
         environment["PATH"] = [
             (binary as NSString).deletingLastPathComponent,
-            environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin",
+            environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
         ].joined(separator: ":")
         process.environment = environment
 
@@ -208,7 +208,7 @@ public enum GitButler {
         watchdog.cancel()
 
         return StatusOutput(
-            text: String(decoding: data, as: UTF8.self),
+            text: String(bytes: data, encoding: .utf8) ?? "",
             succeeded: process.terminationStatus == 0,
             directory: directory
         )

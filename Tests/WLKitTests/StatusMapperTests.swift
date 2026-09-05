@@ -19,7 +19,7 @@ final class StatusMapperTests: XCTestCase {
         let state = StatusMapper.aggregate([
             agent("idle", pane: "w1:p1"),
             agent("working", pane: "w1:p2"),
-            agent("blocked", pane: "w1:p3"),
+            agent("blocked", pane: "w1:p3")
         ])
         XCTAssertEqual(state, "blocked")
         XCTAssertEqual(StatusMapper.zone(for: state)?.color, 0xFF2D2D)
@@ -44,7 +44,7 @@ final class StatusMapperTests: XCTestCase {
 
     func testEachAgentGetsItsOwnKeyInReadingOrder() {
         let threads = StatusMapper.threads(for: [
-            agent("working"), agent("blocked"), agent("idle"),
+            agent("working"), agent("blocked"), agent("idle")
         ])
         XCTAssertEqual(threads.count, 6, "one entry per agent key")
         // The pad's top row is wired right to left, so reading order starts
@@ -160,7 +160,7 @@ extension StatusMapperTests {
     func testDoneAndIdleAgentsGetDifferentKeys() {
         let threads = StatusMapper.threads(for: [
             HerdrAgent(status: "done", paneID: "w1:p1"),
-            HerdrAgent(status: "idle", paneID: "w1:p2"),
+            HerdrAgent(status: "idle", paneID: "w1:p2")
         ])
         XCTAssertEqual(threads[0].color, 0x00B0FF)
         XCTAssertEqual(threads[1].color, 0x00C853)

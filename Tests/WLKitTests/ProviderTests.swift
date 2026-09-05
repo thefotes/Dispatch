@@ -67,7 +67,8 @@ final class ProviderTests: XCTestCase {
         bridge.setKeyBindingsForTesting(KeyBindings(dialSelection: .provider("banana")))
 
         XCTAssertNil(bridge.resolvedDialMode)
-        XCTAssertEqual(bridge.lastError, "The dial's mode \"banana\" isn't offered by this provider (available: queue) — keeping the reasoning-effort ladder.")
+        XCTAssertEqual(bridge.lastError, "The dial's mode \"banana\" isn't offered by this provider "
+            + "(available: queue) — keeping the reasoning-effort ladder.")
 
         await bridge.cycleDial(1)
         XCTAssertTrue(fake.dialCalls.isEmpty)
@@ -126,7 +127,7 @@ final class ProviderTests: XCTestCase {
 
     private let sampleModes = [
         ProviderDialMode(id: "agent", label: "Agent", raisesHost: true),
-        ProviderDialMode(id: "tab", label: "Tab", raisesHost: false),
+        ProviderDialMode(id: "tab", label: "Tab", raisesHost: false)
     ]
 
     func testEffortResolvesToNilWithNoWarning() {
@@ -144,12 +145,14 @@ final class ProviderTests: XCTestCase {
     func testAnUnmatchedNameResolvesToNilWithAWarningListingWhatIsAvailable() {
         let (mode, warning) = BridgeController.resolveDialSelection(.provider("banana"), offeredBy: sampleModes)
         XCTAssertNil(mode)
-        XCTAssertEqual(warning, "The dial's mode \"banana\" isn't offered by this provider (available: agent, tab) — keeping the reasoning-effort ladder.")
+        XCTAssertEqual(warning, "The dial's mode \"banana\" isn't offered by this provider "
+            + "(available: agent, tab) — keeping the reasoning-effort ladder.")
     }
 
     func testAnUnmatchedNameAgainstNoModesSaysNoneAreAvailable() {
         let (mode, warning) = BridgeController.resolveDialSelection(.provider("anything"), offeredBy: [])
         XCTAssertNil(mode)
-        XCTAssertEqual(warning, "The dial's mode \"anything\" isn't offered by this provider (available: none) — keeping the reasoning-effort ladder.")
+        XCTAssertEqual(warning, "The dial's mode \"anything\" isn't offered by this provider "
+            + "(available: none) — keeping the reasoning-effort ladder.")
     }
 }

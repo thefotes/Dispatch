@@ -247,7 +247,7 @@ public final class PadEmulator: ObservableObject {
                             ["KC_F13", "KC_F14"],
                             ["KC_F15", "KC_F16", "KC_F17", "KC_F18"],
                             ["KC_F19", "KC_F20", "KC_F21", "KC_F22"],
-                            ["KC_F23", "KC_NONE", "KC_F24"],
+                            ["KC_F23", "KC_NONE", "KC_F24"]
                         ],
                         "encoders": [["KC_VOLU", "KC_VOLD", "KC_MPLY"]],
                         "joystick": [
@@ -260,12 +260,12 @@ public final class PadEmulator: ObservableObject {
                                 ["k": "KC_P4", "a1": 0.6875, "a2": 0.8125],
                                 ["k": "KC_P5", "a1": 0.8125, "a2": 0.9375],
                                 ["k": "KC_P6", "a1": 0.9375, "a2": 0.0625],
-                                ["k": "KC_P7", "a1": 0.0625, "a2": 0.1875],
-                            ],
-                        ],
-                    ],
-                ]],
-            ]],
+                                ["k": "KC_P7", "a1": 0.0625, "a2": 0.1875]
+                            ]
+                        ]
+                    ]
+                ]]
+            ]]
         ]
     }
 }

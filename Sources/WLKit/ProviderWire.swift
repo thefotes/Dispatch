@@ -14,7 +14,7 @@ enum ProviderWire {
             "statePriority": description.statePriority,
             "dialModes": description.dialModes.map {
                 ["id": $0.id, "label": $0.label, "raisesHost": $0.raisesHost]
-            },
+            }
         ]
     }
 

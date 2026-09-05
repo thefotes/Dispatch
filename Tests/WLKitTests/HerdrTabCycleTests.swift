@@ -7,7 +7,7 @@ final class HerdrTabCycleTests: XCTestCase {
         let tabs = [
             HerdrTab(tabID: "t1", number: 1, focused: true),
             HerdrTab(tabID: "t2", number: 2),
-            HerdrTab(tabID: "t3", number: 3),
+            HerdrTab(tabID: "t3", number: 3)
         ]
         XCTAssertEqual(HerdrClient.nextTab(in: tabs)?.tabID, "t2")
     }
@@ -15,7 +15,7 @@ final class HerdrTabCycleTests: XCTestCase {
     func testWrapsFromTheLastTabToTheFirst() {
         let tabs = [
             HerdrTab(tabID: "t1", number: 1),
-            HerdrTab(tabID: "t2", number: 2, focused: true),
+            HerdrTab(tabID: "t2", number: 2, focused: true)
         ]
         XCTAssertEqual(HerdrClient.nextTab(in: tabs)?.tabID, "t1")
     }
@@ -25,7 +25,7 @@ final class HerdrTabCycleTests: XCTestCase {
         let tabs = [
             HerdrTab(tabID: "t3", number: 3),
             HerdrTab(tabID: "t1", number: 1, focused: true),
-            HerdrTab(tabID: "t2", number: 2),
+            HerdrTab(tabID: "t2", number: 2)
         ]
         XCTAssertEqual(HerdrClient.nextTab(in: tabs)?.tabID, "t2")
     }
@@ -35,7 +35,7 @@ final class HerdrTabCycleTests: XCTestCase {
             HerdrTab(tabID: "a1", workspaceID: "a", number: 1),
             HerdrTab(tabID: "a2", workspaceID: "a", number: 2, focused: true),
             HerdrTab(tabID: "b1", workspaceID: "b", number: 1),
-            HerdrTab(tabID: "b2", workspaceID: "b", number: 2),
+            HerdrTab(tabID: "b2", workspaceID: "b", number: 2)
         ]
         XCTAssertEqual(HerdrClient.nextTab(in: tabs)?.tabID, "a1")
     }
@@ -47,7 +47,7 @@ final class HerdrTabCycleTests: XCTestCase {
     func testNoFocusedTabDoesNothing() {
         let tabs = [
             HerdrTab(tabID: "t1", number: 1),
-            HerdrTab(tabID: "t2", number: 2),
+            HerdrTab(tabID: "t2", number: 2)
         ]
         XCTAssertNil(HerdrClient.nextTab(in: tabs))
     }
@@ -59,7 +59,7 @@ final class HerdrTabCycleTests: XCTestCase {
         let tabs = [
             HerdrTab(tabID: "t1", number: 1),
             HerdrTab(tabID: "t2", number: 2, focused: true),
-            HerdrTab(tabID: "t3", number: 3),
+            HerdrTab(tabID: "t3", number: 3)
         ]
         XCTAssertEqual(HerdrClient.adjacentTab(in: tabs, step: -1)?.tabID, "t1")
     }
@@ -68,7 +68,7 @@ final class HerdrTabCycleTests: XCTestCase {
         let tabs = [
             HerdrTab(tabID: "t1", number: 1, focused: true),
             HerdrTab(tabID: "t2", number: 2),
-            HerdrTab(tabID: "t3", number: 3),
+            HerdrTab(tabID: "t3", number: 3)
         ]
         XCTAssertEqual(HerdrClient.adjacentTab(in: tabs, step: -1)?.tabID, "t3")
     }
@@ -77,7 +77,7 @@ final class HerdrTabCycleTests: XCTestCase {
     func testNextTabIsAdjacentTabForwardOne() {
         let tabs = [
             HerdrTab(tabID: "t1", number: 1, focused: true),
-            HerdrTab(tabID: "t2", number: 2),
+            HerdrTab(tabID: "t2", number: 2)
         ]
         XCTAssertEqual(HerdrClient.nextTab(in: tabs)?.tabID,
                        HerdrClient.adjacentTab(in: tabs, step: 1)?.tabID)

@@ -241,7 +241,8 @@ public final class BridgeController: ObservableObject {
         guard case .provider(let name) = selection else { return (nil, nil) }
         if let match = modes.first(where: { $0.id == name }) { return (match, nil) }
         let available = modes.isEmpty ? "none" : modes.map(\.id).joined(separator: ", ")
-        let warning = "The dial's mode \"\(name)\" isn't offered by this provider (available: \(available)) — keeping the reasoning-effort ladder."
+        let warning = "The dial's mode \"\(name)\" isn't offered by this provider "
+            + "(available: \(available)) — keeping the reasoning-effort ladder."
         return (nil, warning)
     }
 
