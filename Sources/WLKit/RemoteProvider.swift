@@ -47,6 +47,10 @@ public final class RemoteProvider: Provider, @unchecked Sendable {
         _ = try await request("provider.inject", params: ["text": text])
     }
 
+    public func joystick(_ direction: String) async throws {
+        _ = try await request("provider.joystick", params: ["direction": direction])
+    }
+
     public func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription {
         let conn = SocketConnection(path: socketPath)
         var receivedAck = false

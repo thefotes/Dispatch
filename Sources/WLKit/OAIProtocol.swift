@@ -212,7 +212,10 @@ public enum Pad {
     public static let joySouthID = 17   // sector centred on 0.75
     public static let joyEastID = 18    // sector centred on 0.0
 
-    public enum JoystickDirection {
+    /// Compass-named, since the names cross the provider seam as strings —
+    /// providers map them onto whatever their own vocabulary is (Herdr's
+    /// `pane.focus_direction`, for one, speaks left/right/up/down).
+    public enum JoystickDirection: String {
         case north, south, east, west
 
         public init?(keyID: Int) {

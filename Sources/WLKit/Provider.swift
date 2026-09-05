@@ -30,10 +30,25 @@ public protocol Provider: Sendable {
     /// Injects text into whatever "focused" means for this provider.
     func inject(_ text: String) async throws
 
+    /// Moves focus one pane over — the joystick's cardinal sectors, named
+    /// as the compass strings `"north"`, `"south"`, `"east"`, `"west"`.
+    /// Optional: the default below does nothing, and the app only routes
+    /// deflections here when `describe()` also reports
+    /// `joystickNavigation`, so a provider without pane navigation still
+    /// builds and leaves the joystick to the app layer.
+    func joystick(_ direction: String) async throws
+
     /// Subscribes to change notifications — a new entity, a status flip, a
     /// focus change — debounced by the caller, not here. Call `cancel()` on
     /// the returned token to stop.
     func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription
+}
+
+/// Defaults for the methods a provider may legitimately not have anything
+/// to say to. Existential dispatch picks a concrete implementation when
+/// there is one, so an overriding provider never runs these.
+public extension Provider {
+    func joystick(_ direction: String) async throws {}
 }
 
 /// A provider's static capabilities: its lighting palette and the dial
@@ -56,14 +71,22 @@ public struct ProviderDescription: Sendable, Equatable {
     /// in the app layer and never reaches a provider.
     public var dialModes: [ProviderDialMode]
 
+    /// True when this provider implements `joystick(_:)` navigation and the
+    /// app should hand joystick deflections to it instead of running its own
+    /// model-cycling. Default `false`, so providers written before the field
+    /// existed keep the old behaviour.
+    public var joystickNavigation: Bool
+
     public init(
         statePalette: [String: ProviderStateStyle] = [:],
         statePriority: [String] = [],
-        dialModes: [ProviderDialMode] = []
+        dialModes: [ProviderDialMode] = [],
+        joystickNavigation: Bool = false
     ) {
         self.statePalette = statePalette
         self.statePriority = statePriority
         self.dialModes = dialModes
+        self.joystickNavigation = joystickNavigation
     }
 }
 

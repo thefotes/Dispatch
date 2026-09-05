@@ -41,7 +41,8 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
                 ProviderDialMode(id: "agent", label: "Agent", raisesHost: true),
                 ProviderDialMode(id: "tab", label: "Tab", raisesHost: false),
                 ProviderDialMode(id: "space", label: "Space", raisesHost: true),
-            ]
+            ],
+            joystickNavigation: true
         )
     }
 
@@ -78,6 +79,23 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             throw HerdrError.api("Nothing has focus in Herdr right now.")
         }
         try await HerdrClient.sendText(paneID: pane, text: text)
+    }
+
+    /// One joystick deflection, one pane over. The pad speaks compass
+    /// points; Herdr's `pane.focus_direction` speaks left/right/up/down —
+    /// the same moves its own prefix+h/j/k/l make. An unrecognised
+    /// direction does nothing, matching `dial`'s treatment of an unknown
+    /// mode.
+    public func joystick(_ direction: String) async throws {
+        let heading: String
+        switch direction {
+        case "north": heading = "up"
+        case "south": heading = "down"
+        case "east": heading = "right"
+        case "west": heading = "left"
+        default: return
+        }
+        try await HerdrClient.focusPane(direction: heading)
     }
 
     public func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription {

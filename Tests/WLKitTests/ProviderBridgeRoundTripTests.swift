@@ -89,6 +89,15 @@ final class ProviderBridgeRoundTripTests: XCTestCase {
         XCTAssertEqual(fake.dialCalls.map(\.mode), ["space"])
     }
 
+    func testJoystickForwardsTheDirection() async throws {
+        let fake = FakeProvider()
+        let (remote, server, _) = try makePair(fake)
+        defer { server.stop() }
+
+        try await remote.joystick("north")
+        XCTAssertEqual(fake.joystickCalls, ["north"])
+    }
+
     func testInjectForwardsTheText() async throws {
         let fake = FakeProvider()
         let (remote, server, _) = try makePair(fake)

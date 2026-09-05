@@ -53,6 +53,11 @@ public final class BridgeController: ObservableObject {
     /// name wasn't one this provider actually offers, reported through
     /// `lastError` by `resolveDialSelection`. What `cycleDial` acts on.
     @Published public private(set) var resolvedDialMode: ProviderDialMode?
+    /// Whether the active provider handles joystick deflections itself —
+    /// pane navigation, for Herdr. Set on every `start()` from `describe()`.
+    /// False leaves the joystick to the app layer (model cycling), the same
+    /// way `.effort` leaves the dial there.
+    @Published public private(set) var joystickNavigation = false
 
     public var config: BridgeConfig
     /// Text macros for the spare keys, reloaded on every bridge start so a
@@ -226,6 +231,7 @@ public final class BridgeController: ObservableObject {
             config.priority = description.statePriority
         }
         dialModes = description.dialModes
+        joystickNavigation = description.joystickNavigation
 
         let (resolved, warning) = Self.resolveDialSelection(keyBindings.dialSelection, offeredBy: dialModes)
         resolvedDialMode = resolved
@@ -573,6 +579,39 @@ public final class BridgeController: ObservableObject {
         do {
             try await provider.dial(step, mode: target.id)
             if target.raisesHost { raiseTerminal() }
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    /// One joystick deflection, to a provider that offers navigation (see
+    /// `joystickNavigation`). Never called for a provider that doesn't —
+    /// the app keeps its own joystick behaviour then, the way `.effort`
+    /// keeps the dial.
+    ///
+    /// Serialised exactly like `cycleDial`: a fast roll fires one
+    /// unstructured task per sector, and two overlapping round-trips could
+    /// resolve "one pane over" against the same starting focus, netting one
+    /// move out of several. Chaining makes each deflection see the state
+    /// the last one produced.
+    ///
+    /// No `raiseTerminal()`: pane navigation stays within the terminal you
+    /// are already looking at, the way the `tab` dial mode does.
+    private var joystickChain: Task<Void, Never>?
+
+    public func moveJoystick(_ direction: Pad.JoystickDirection) async {
+        let previous = joystickChain ?? Task {}
+        let task = Task { [weak self] in
+            await previous.value
+            await self?.runJoystick(direction)
+        }
+        joystickChain = task
+        await task.value
+    }
+
+    private func runJoystick(_ direction: Pad.JoystickDirection) async {
+        do {
+            try await provider.joystick(direction.rawValue)
         } catch {
             lastError = error.localizedDescription
         }

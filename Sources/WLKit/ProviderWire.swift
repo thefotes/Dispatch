@@ -15,6 +15,7 @@ enum ProviderWire {
             "dialModes": description.dialModes.map {
                 ["id": $0.id, "label": $0.label, "raisesHost": $0.raisesHost]
             },
+            "joystickNavigation": description.joystickNavigation,
         ]
     }
 
@@ -38,7 +39,16 @@ enum ProviderWire {
             let raisesHost = entry["raisesHost"] as? Bool ?? false
             return ProviderDialMode(id: id, label: label, raisesHost: raisesHost)
         }
-        return ProviderDescription(statePalette: palette, statePriority: priority, dialModes: modes)
+        return ProviderDescription(
+            statePalette: palette,
+            statePriority: priority,
+            dialModes: modes,
+            // False for a provider written before this field existed — the
+            // app keeps running its own joystick behaviour, which is the
+            // safer guess than claiming navigation a provider never
+            // promised.
+            joystickNavigation: json["joystickNavigation"] as? Bool ?? false
+        )
     }
 
     static func encode(_ agents: [HerdrAgent]) -> [String: Any] {

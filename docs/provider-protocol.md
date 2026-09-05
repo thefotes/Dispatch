@@ -91,7 +91,8 @@ Params: `{}`. Called once, at bridge start.
     "<state name>": {"color": <0xRRGGBB packed int>, "effect": <int, OAI.Effect.rawValue>}
   },
   "statePriority": ["<state name>", "..."],
-  "dialModes": [{"id": "<mode>", "label": "<menu label>", "raisesHost": <bool>}]
+  "dialModes": [{"id": "<mode>", "label": "<menu label>", "raisesHost": <bool>}],
+  "joystickNavigation": <bool>
 }
 ```
 
@@ -111,6 +112,10 @@ Params: `{}`. Called once, at bridge start.
 - `dialModes` never includes `"effort"` — that mode is a Micromanager
   feature (Claude Code / Codex reasoning effort), handled entirely in the
   app layer, and never reaches a provider at all.
+- `joystickNavigation` is optional and defaults to `false`. When `true`,
+  Micromanager hands joystick deflections to `provider.joystick` (below)
+  instead of running its own model-cycling behaviour. Herdr's provider
+  sets it — moving pane focus is something Herdr can actually do.
 - A malformed or unreachable response is not fatal: `RemoteProvider`
   answers an empty `ProviderDescription()` rather than throwing, since
   `describe()` has no throwing variant in the Swift protocol.
@@ -161,6 +166,13 @@ Params: `{"text": "<the configured macro string>"}`. Result: `{}`. Put this
 text wherever "the focused thing's input" is — unsubmitted, so a human
 still reviews it before it goes anywhere.
 
+### `provider.joystick`
+
+Params: `{"direction": "<north|south|east|west>"}`. Result: `{}`. One
+joystick deflection — move focus one pane over in that direction. Only
+called when `describe()` reported `"joystickNavigation": true`; an older
+provider that never answers this method is never asked.
+
 ## 5. `events.subscribe`
 
 Params: `{}`. Unlike the others, **the connection stays open.**
@@ -193,7 +205,7 @@ line above works unmodified against either one.
 
 ## 7. Writing your own
 
-The whole surface is six methods and one envelope shape. The reference
+The whole surface is seven methods and one envelope shape. The reference
 provider is under 150 lines of dependency-free Python — a template you can
 copy and modify, not a toy that stops working past a demo. To try it:
 

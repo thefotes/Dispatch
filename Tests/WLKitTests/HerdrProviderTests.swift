@@ -40,4 +40,11 @@ final class HerdrProviderTests: XCTestCase {
         XCTAssertEqual(modes.first { $0.id == "space" }?.raisesHost, true)
         XCTAssertEqual(modes.first { $0.id == "tab" }?.raisesHost, false)
     }
+
+    /// Herdr can move pane focus, so the app hands the joystick to it
+    /// instead of running its own model cycling.
+    func testDescribesJoystickNavigation() async {
+        let description = await HerdrProvider().describe()
+        XCTAssertTrue(description.joystickNavigation)
+    }
 }

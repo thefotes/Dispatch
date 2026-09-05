@@ -57,6 +57,10 @@ class ReferenceProvider:
                 notify()
 
     def describe(self):
+        # No "joystickNavigation": the toy has no panes to move between, so
+        # Micromanager keeps its own joystick behaviour and never calls
+        # provider.joystick here — the method exists only so the protocol's
+        # optional surface is answered if something asks.
         return {
             "statePalette": {
                 "tick": {"color": 0x00C853, "effect": EFFECT_SOLID},
@@ -81,6 +85,10 @@ class ReferenceProvider:
 
     def inject(self, params):
         print(f"[reference-provider] inject: {params.get('text')!r}", file=sys.stderr)
+        return {}
+
+    def joystick(self, params):
+        print(f"[reference-provider] joystick: {params.get('direction')}", file=sys.stderr)
         return {}
 
     def subscribe(self, notify):
@@ -124,6 +132,8 @@ def handle_connection(conn, provider):
                 result = provider.dial(params)
             elif method == "provider.inject":
                 result = provider.inject(params)
+            elif method == "provider.joystick":
+                result = provider.joystick(params)
             else:
                 raise ValueError(f"unknown method {method}")
             write_line(conn, {"id": request_id, "result": result})

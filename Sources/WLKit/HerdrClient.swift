@@ -266,6 +266,16 @@ public enum HerdrClient {
         _ = try await request("tab.focus", params: ["tab_id": tabID])
     }
 
+    /// Moves pane focus one pane over within the focused pane's own split
+    /// tree — `direction` is `"left"`, `"right"`, `"up"`, or `"down"`, the
+    /// same vocabulary Herdr's `pane.focus_direction` (its prefix+h/j/k/l)
+    /// speaks. Herdr answers with the resulting layout whether or not focus
+    /// actually moved — a lone pane has no neighbour, which is a plain
+    /// `no_neighbor` answer, not an error.
+    public static func focusPane(direction: String) async throws {
+        _ = try await request("pane.focus_direction", params: ["direction": direction])
+    }
+
     /// Injects key chords into a pane, crossterm-style names ("ctrl+alt+v",
     /// "f13", "enter"). The pane's terminal encodes them as if typed.
     public static func sendKeys(paneID: String, keys: [String]) async throws {

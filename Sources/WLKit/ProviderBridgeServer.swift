@@ -152,6 +152,12 @@ public final class ProviderBridgeServer: @unchecked Sendable {
             }
             try await provider.inject(text)
             return [:]
+        case "provider.joystick":
+            guard let direction = params["direction"] as? String else {
+                throw HerdrError.badResponse("provider.joystick needs a direction")
+            }
+            try await provider.joystick(direction)
+            return [:]
         default:
             throw HerdrError.badResponse("unknown provider-bridge method \(method)")
         }
