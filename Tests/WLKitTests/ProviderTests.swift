@@ -81,33 +81,15 @@ final class ProviderTests: XCTestCase {
         XCTAssertEqual(fake.injectedTexts, ["hello"])
     }
 
-    /// A deflection crosses as the joystick's own compass name — the
-    /// provider maps it onto whatever its vocabulary is.
-    func testAMoveJoystickCrossesAsTheCompassName() async {
+    /// A deflection reaches the provider as the typed direction — the
+    /// provider maps it onto whatever its own vocabulary is.
+    func testAMoveJoystickReachesTheProvider() async {
         let fake = FakeProvider()
-        fake.descriptionToReturn = ProviderDescription(joystickNavigation: true)
         let bridge = await makeBridge(fake)
         await bridge.start()
         await bridge.moveJoystick(.west)
         await bridge.moveJoystick(.south)
-        XCTAssertEqual(fake.joystickCalls, ["west", "south"])
-        await bridge.stop()
-    }
-
-    /// `joystickNavigation` is the provider's say-so, published so the app
-    /// can route deflections — provider navigation when true, model
-    /// cycling when false.
-    func testJoystickNavigationComesFromDescribe() async {
-        let fake = FakeProvider()
-        let bridge = await makeBridge(fake)
-        await bridge.start()
-        XCTAssertFalse(bridge.joystickNavigation)
-
-        fake.descriptionToReturn = ProviderDescription(joystickNavigation: true)
-        let on = await makeBridge(fake)
-        await on.start()
-        XCTAssertTrue(on.joystickNavigation)
-        await on.stop()
+        XCTAssertEqual(fake.joystickCalls, [.west, .south])
         await bridge.stop()
     }
 

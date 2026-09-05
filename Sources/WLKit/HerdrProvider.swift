@@ -41,8 +41,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
                 ProviderDialMode(id: "agent", label: "Agent", raisesHost: true),
                 ProviderDialMode(id: "tab", label: "Tab", raisesHost: false),
                 ProviderDialMode(id: "space", label: "Space", raisesHost: true),
-            ],
-            joystickNavigation: true
+            ]
         )
     }
 
@@ -81,21 +80,19 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
         try await HerdrClient.sendText(paneID: pane, text: text)
     }
 
-    /// One joystick deflection, one pane over. The pad speaks compass
-    /// points; Herdr's `pane.focus_direction` speaks left/right/up/down —
-    /// the same moves its own prefix+h/j/k/l make. An unrecognised
-    /// direction does nothing, matching `dial`'s treatment of an unknown
-    /// mode.
-    public func joystick(_ direction: String) async throws {
-        let heading: String
-        switch direction {
-        case "north": heading = "up"
-        case "south": heading = "down"
-        case "east": heading = "right"
-        case "west": heading = "left"
-        default: return
+    /// One joystick deflection, one pane over — Herdr's `pane.focus_direction`,
+    /// the same moves its own prefix+h/j/k/l make. A deflection with nowhere
+    /// to go (a lone pane, or the edge of the layout) is a no-op, not an
+    /// error: Herdr answers it with a plain `no_neighbor` result, and if a
+    /// Herdr version ever words it as an error instead, that too is
+    /// swallowed here — a deflection into empty space should never surface
+    /// `lastError`.
+    public func joystick(_ direction: Pad.JoystickDirection) async throws {
+        do {
+            try await HerdrClient.focusPane(direction: HerdrClient.PaneDirection(direction))
+        } catch HerdrError.api(let message) where message.contains("no_neighbor") || message.contains("no neighbor") {
+            return
         }
-        try await HerdrClient.focusPane(direction: heading)
     }
 
     public func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription {

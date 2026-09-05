@@ -23,14 +23,6 @@ final class ProviderWireTests: XCTestCase {
         XCTAssertEqual(decoded, ProviderDescription())
     }
 
-    /// A provider written before the field existed decodes as "no joystick
-    /// navigation" — the app keeps its own behaviour rather than routing
-    /// deflections to a provider that never promised any.
-    func testJoystickNavigationDefaultsToFalseForAnOlderProvider() {
-        let decoded = ProviderWire.decodeDescription(["dialModes": [] as [[String: Any]]])
-        XCTAssertFalse(decoded.joystickNavigation)
-    }
-
     func testAgentListRoundTrips() {
         let original = [
             HerdrAgent(agent: "claude", status: "working", paneID: "p1", tabID: "t1",

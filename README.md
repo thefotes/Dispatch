@@ -66,8 +66,7 @@ macro key.
 point it at Herdr navigation instead — stepping the focused agent, tab, or
 workspace. **The joystick** moves pane focus, the same moves Herdr's own
 prefix+h/j/k/l make: north is up, south is down, east is right, west is
-left. (Providers that can't move panes leave the joystick to the app layer,
-which cycles model instead.)
+left.
 
 ### The stack key
 
@@ -193,13 +192,6 @@ focused workspace), or `"space"`/`"workspace"` (steps through workspaces),
 all wrapping and following the turn direction. A name the active provider
 doesn't recognise falls back to `"effort"` and says so in the panel, the
 same way an unrecognised shortcut does.
-
-`codex.models` is your copy of what Codex's own `/model` menu offers, in its
-order — the joystick steers that menu rather than owning it, so there is nothing
-to read it from. This is the app-layer joystick fallback: with the default
-Herdr provider the joystick moves pane focus instead (see above), and only a
-provider that reports no pane navigation hands the joystick back to model
-cycling.
 
 ### Providers
 

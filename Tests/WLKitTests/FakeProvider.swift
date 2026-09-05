@@ -9,7 +9,7 @@ final class FakeProvider: Provider, @unchecked Sendable {
     var dialCalls: [(step: Int, mode: String)] = []
     var injectedTexts: [String] = []
     var injectError: Error?
-    var joystickCalls: [String] = []
+    var joystickCalls: [Pad.JoystickDirection] = []
     var descriptionToReturn = ProviderDescription()
     private var onChangeCallback: (@Sendable () -> Void)?
 
@@ -28,7 +28,7 @@ final class FakeProvider: Provider, @unchecked Sendable {
         injectedTexts.append(text)
     }
 
-    func joystick(_ direction: String) async throws {
+    func joystick(_ direction: Pad.JoystickDirection) async throws {
         joystickCalls.append(direction)
     }
 

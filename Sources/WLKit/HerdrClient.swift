@@ -266,14 +266,29 @@ public enum HerdrClient {
         _ = try await request("tab.focus", params: ["tab_id": tabID])
     }
 
+    /// Herdr's own pane-focus vocabulary — the four directions its
+    /// `pane.focus_direction` (and its prefix+h/j/k/l) speak.
+    public enum PaneDirection: String {
+        case left, right, up, down
+
+        /// The pad's joystick compass, mapped onto Herdr's layout axes.
+        public init(_ joystick: Pad.JoystickDirection) {
+            switch joystick {
+            case .north: self = .up
+            case .south: self = .down
+            case .east: self = .right
+            case .west: self = .left
+            }
+        }
+    }
+
     /// Moves pane focus one pane over within the focused pane's own split
-    /// tree — `direction` is `"left"`, `"right"`, `"up"`, or `"down"`, the
-    /// same vocabulary Herdr's `pane.focus_direction` (its prefix+h/j/k/l)
-    /// speaks. Herdr answers with the resulting layout whether or not focus
-    /// actually moved — a lone pane has no neighbour, which is a plain
-    /// `no_neighbor` answer, not an error.
-    public static func focusPane(direction: String) async throws {
-        _ = try await request("pane.focus_direction", params: ["direction": direction])
+    /// tree — the same moves Herdr's prefix+h/j/k/l make. Herdr answers
+    /// with the resulting layout whether or not focus actually moved — a
+    /// lone pane has no neighbour, which is a plain `no_neighbor` answer,
+    /// not an error.
+    public static func focusPane(direction: PaneDirection) async throws {
+        _ = try await request("pane.focus_direction", params: ["direction": direction.rawValue])
     }
 
     /// Injects key chords into a pane, crossterm-style names ("ctrl+alt+v",

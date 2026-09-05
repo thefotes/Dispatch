@@ -80,17 +80,13 @@ struct MicroManagerApp: App {
                             Task { await bridge.cycleDial(step) }
                         }
                     }
-                    // Same split as the dial: a provider that offers
-                    // joystick navigation (Herdr's pane-by-pane focus)
-                    // owns the joystick; otherwise the app keeps its own
-                    // model-cycling behaviour.
+                    // The joystick belongs to the provider, the way the
+                    // dial does when a provider mode is resolved: pane
+                    // navigation for one that can move focus, a no-op for
+                    // one that can't.
                     bridge.onJoystick = { [weak bridge] direction in
                         guard let bridge else { return }
-                        if bridge.joystickNavigation {
-                            Task { await bridge.moveJoystick(direction) }
-                        } else {
-                            tune.handleJoystick(direction)
-                        }
+                        Task { await bridge.moveJoystick(direction) }
                     }
                     // While a land confirmation is up, every key that is not
                     // the land key means "cancel", nothing else.

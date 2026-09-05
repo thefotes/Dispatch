@@ -57,10 +57,6 @@ class ReferenceProvider:
                 notify()
 
     def describe(self):
-        # No "joystickNavigation": the toy has no panes to move between, so
-        # Micromanager keeps its own joystick behaviour and never calls
-        # provider.joystick here — the method exists only so the protocol's
-        # optional surface is answered if something asks.
         return {
             "statePalette": {
                 "tick": {"color": 0x00C853, "effect": EFFECT_SOLID},
@@ -88,7 +84,8 @@ class ReferenceProvider:
         return {}
 
     def joystick(self, params):
-        print(f"[reference-provider] joystick: {params.get('direction')}", file=sys.stderr)
+        # The toy has no panes to move between, so a deflection is a no-op —
+        # the protocol's answer for a provider without pane navigation.
         return {}
 
     def subscribe(self, notify):
