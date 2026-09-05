@@ -183,21 +183,60 @@ stack/tabs/land. To unbind a key outright, back to nothing, bind it to
 keeps its default, matching how older configs behaved.
 
 `"dial"` sets what the knob does. `"effort"` (the default) climbs the
-reasoning-effort ladder for the focused agent; `"agent"` steps focus through
-the agents in sidebar order; `"tab"` cycles the tabs of the focused workspace;
-`"space"` (or `"workspace"`) steps through workspaces. All four wrap at the
-ends and follow the turn direction. An unrecognised value falls back to
-`"effort"`.
+reasoning-effort ladder for the focused agent — the one mode built into
+Micromanager itself. Any other name is handed to the active provider
+as-is; with the default Herdr provider that's `"agent"` (steps focus
+through the agents in sidebar order), `"tab"` (cycles the tabs of the
+focused workspace), or `"space"`/`"workspace"` (steps through workspaces),
+all wrapping and following the turn direction. A name the active provider
+doesn't recognise falls back to `"effort"` and says so in the panel, the
+same way an unrecognised shortcut does.
 
 `codex.models` is your copy of what Codex's own `/model` menu offers, in its
 order — the joystick steers that menu rather than owning it, so there is nothing
 to read it from.
+
+### Providers
+
+Herdr is not wired into the app directly: `BridgeController` talks to a small
+`Provider` protocol (agent status, focus, dial navigation, prompt injection),
+and Herdr is the one implementation shipped today (`HerdrProvider`), running
+in-process by default. A `"provider"` object in `config.json` swaps it for one
+reached over a socket instead — the same JSON-RPC-over-Unix-socket shape
+Herdr's own API already uses:
+
+```json
+{ "provider": { "connect": "/path/to/a/running/bridge.sock" } }
+```
+
+for a provider already running (Herdr's own pattern — it always runs a
+server), or
+
+```json
+{ "provider": { "launch": "provider-bridge", "args": [] } }
+```
+
+for one Micromanager should start itself and terminate on quit. This repo
+ships `provider-bridge`, a standalone binary that wraps `HerdrProvider` behind
+a socket server — proof the protocol does not need to run in-process, useful
+for running Micromanager and its Herdr integration as separate processes, or
+as a template for a non-Herdr provider written in any language. A `"provider"`
+change needs a full relaunch, not just an off/on toggle — unlike the rest of
+this file, it is read once at launch. Unmentioned (the ordinary case) keeps
+the in-process default.
+
+Writing your own provider — in Swift or anything else — is documented in
+**[docs/provider-protocol.md](docs/provider-protocol.md)**, alongside
+[`examples/reference-provider.py`](examples/reference-provider.py): a
+complete second implementation in dependency-free Python, under 150 lines,
+proving the protocol is not Swift-specific.
 
 | variable | what it overrides |
 |---|---|
 | `WL_TERMINAL_BUNDLE_ID` | the terminal to raise (default Ghostty) |
 | `WL_BUT_PATH` | the GitButler binary, skipping the search |
 | `HERDR_SOCKET_PATH` | the Herdr socket |
+| `WL_PROVIDER_BRIDGE_SOCKET` | where `provider-bridge` listens / `RemoteProvider` connects |
 | `WL_SIGN_IDENTITY` | the signing identity `bundle.sh` uses |
 
 ## Why it must be bundled and signed

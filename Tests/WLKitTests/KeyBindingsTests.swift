@@ -89,38 +89,47 @@ final class KeyBindingsTests: XCTestCase {
                        "a codex-only config leaves the claude side alone")
     }
 
-    // MARK: - Dial mode
+    // MARK: - Dial selection
 
     /// With nothing in the file the dial keeps its original job: effort.
-    func testDialModeDefaultsToEffort() {
-        XCTAssertEqual(KeyBindings().dialMode, .effort)
-        XCTAssertEqual(parse("{}").dialMode, .effort)
+    func testDialSelectionDefaultsToEffort() {
+        XCTAssertEqual(KeyBindings().dialSelection, .effort)
+        XCTAssertEqual(parse("{}").dialSelection, .effort)
     }
 
-    func testDialModeComesFromTheFile() {
-        XCTAssertEqual(parse(#"{"dial": "agent"}"#).dialMode, .agent)
-        XCTAssertEqual(parse(#"{"dial": "tab"}"#).dialMode, .tab)
-        XCTAssertEqual(parse(#"{"dial": "space"}"#).dialMode, .space)
-        XCTAssertEqual(parse(#"{"dial": "effort"}"#).dialMode, .effort)
+    /// This file has no opinion on what names are valid — any non-empty
+    /// string besides `"effort"` passes straight through. Whether "agent"
+    /// (or "banana") means anything is a question only the active
+    /// provider's `describe()` can answer, at `BridgeController`.
+    func testANonEffortStringBecomesAProviderSelectionVerbatim() {
+        XCTAssertEqual(parse(#"{"dial": "agent"}"#).dialSelection, .provider("agent"))
+        XCTAssertEqual(parse(#"{"dial": "banana"}"#).dialSelection, .provider("banana"))
+        XCTAssertEqual(parse(#"{"dial": "workspace"}"#).dialSelection, .provider("workspace"))
     }
 
-    /// `space` is the pad-facing word; `workspace` is the socket API's. Take both.
-    func testDialModeAcceptsWorkspaceAsAnAliasForSpace() {
-        XCTAssertEqual(parse(#"{"dial": "workspace"}"#).dialMode, .space)
+    func testEffortStringResolvesToEffort() {
+        XCTAssertEqual(parse(#"{"dial": "effort"}"#).dialSelection, .effort)
     }
 
-    func testDialModeIsCaseInsensitive() {
-        XCTAssertEqual(parse(#"{"dial": "AGENT"}"#).dialMode, .agent)
+    func testDialSelectionIsCaseInsensitive() {
+        XCTAssertEqual(parse(#"{"dial": "AGENT"}"#).dialSelection, .provider("agent"))
+        XCTAssertEqual(parse(#"{"dial": "EFFORT"}"#).dialSelection, .effort)
     }
 
-    /// A typo or the wrong type should not brick the dial — fall back to effort.
-    func testUnknownDialModeFallsBackToEffort() {
-        XCTAssertEqual(parse(#"{"dial": "banana"}"#).dialMode, .effort)
-        XCTAssertEqual(parse(#"{"dial": 5}"#).dialMode, .effort)
+    /// The wrong JSON shape is the one thing this file can judge on its own,
+    /// with no provider in the picture — falls back to effort and warns.
+    func testWrongShapeFallsBackToEffortAndWarns() {
+        let wrongType = parse(#"{"dial": 5}"#)
+        XCTAssertEqual(wrongType.dialSelection, .effort)
+        XCTAssertEqual(wrongType.dialWarning, "\"dial\" must be a string — keeping \"effort\".")
+
+        let empty = parse(#"{"dial": ""}"#)
+        XCTAssertEqual(empty.dialSelection, .effort)
+        XCTAssertEqual(empty.dialWarning, "\"dial\" must not be empty — keeping \"effort\".")
     }
 
-    func testDialModeSurvivesAKeysOnlyConfig() {
-        XCTAssertEqual(parse(#"{"keys": {"9": "Ship it"}}"#).dialMode, .effort)
+    func testDialSelectionSurvivesAKeysOnlyConfig() {
+        XCTAssertEqual(parse(#"{"keys": {"9": "Ship it"}}"#).dialSelection, .effort)
     }
 
     // MARK: - Key actions (text and shortcut)
@@ -204,5 +213,48 @@ final class KeyBindingsTests: XCTestCase {
     func testNumericZeroAndOneAreIgnoredNotTreatedAsBooleans() {
         XCTAssertNil(parse(#"{"keys": {"8": 0}}"#).action(for: 8))
         XCTAssertNil(parse(#"{"keys": {"8": 1}}"#).action(for: 8))
+    }
+
+    // MARK: - Provider spec
+
+    func testMissingProviderMeansTheInProcessDefault() {
+        XCTAssertNil(KeyBindings().providerSpec)
+        XCTAssertNil(parse("{}").providerSpec)
+    }
+
+    func testConnectSpecifiesASocketPathToDialInto() {
+        let bindings = parse(#"{"provider": {"connect": "/tmp/bridge.sock"}}"#)
+        XCTAssertEqual(bindings.providerSpec, .connect(socketPath: "/tmp/bridge.sock"))
+    }
+
+    func testLaunchSpecifiesACommandAndArgs() {
+        let bindings = parse(#"{"provider": {"launch": "provider-bridge", "args": ["--foo"]}}"#)
+        XCTAssertEqual(bindings.providerSpec, .launch(command: "provider-bridge", args: ["--foo"]))
+    }
+
+    func testLaunchWithoutArgsDefaultsToNone() {
+        let bindings = parse(#"{"provider": {"launch": "provider-bridge"}}"#)
+        XCTAssertEqual(bindings.providerSpec, .launch(command: "provider-bridge", args: []))
+    }
+
+    /// A config that sets both wins on `connect` rather than picking
+    /// arbitrarily or refusing to parse.
+    func testBothFieldsPresentPrefersConnect() {
+        let bindings = parse(#"{"provider": {"connect": "/tmp/a.sock", "launch": "cmd"}}"#)
+        XCTAssertEqual(bindings.providerSpec, .connect(socketPath: "/tmp/a.sock"))
+    }
+
+    func testEmptyConnectPathIsIgnored() {
+        let bindings = parse(#"{"provider": {"connect": ""}}"#)
+        XCTAssertNil(bindings.providerSpec)
+    }
+
+    func testMalformedProviderValueIsIgnored() {
+        XCTAssertNil(parse(#"{"provider": "connect"}"#).providerSpec)
+        XCTAssertNil(parse(#"{"provider": {}}"#).providerSpec)
+    }
+
+    func testProviderSpecSurvivesAKeysOnlyConfig() {
+        XCTAssertNil(parse(#"{"keys": {"9": "Ship it"}}"#).providerSpec)
     }
 }

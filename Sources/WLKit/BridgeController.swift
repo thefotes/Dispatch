@@ -43,6 +43,16 @@ public final class BridgeController: ObservableObject {
     @Published public private(set) var landPanelOpen = false
     /// Whether a Claude voice take is open, for the voice key's light.
     @Published public private(set) var voiceActive = false
+    /// The dial modes the current provider offers, for a future settings UI.
+    /// Set on every `start()`; never includes `"effort"`.
+    @Published public private(set) var dialModes: [ProviderDialMode] = []
+    /// `config.json`'s `"dial"` selection, resolved against the current
+    /// provider's `dialModes`. nil means "no provider mode" — either
+    /// `"effort"` was configured (Micromanager's own reasoning-effort
+    /// ladder, the app layer's job, never a provider's), or the configured
+    /// name wasn't one this provider actually offers, reported through
+    /// `lastError` by `resolveDialSelection`. What `cycleDial` acts on.
+    @Published public private(set) var resolvedDialMode: ProviderDialMode?
 
     public var config: BridgeConfig
     /// Text macros for the spare keys, reloaded on every bridge start so a
@@ -51,9 +61,15 @@ public final class BridgeController: ObservableObject {
 
     /// Overrides `keyBindings` without going through `start()`'s config-file
     /// reload — tests only, so a binding can be exercised without a real
-    /// `config.json` on disk.
+    /// `config.json` on disk. Call after `start()`, not before: `start()`
+    /// reloads from disk itself and would clobber this. Re-resolves the
+    /// dial immediately against whatever `dialModes` the provider already
+    /// described, so a test doesn't need a second `start()`/`stop()` cycle.
     func setKeyBindingsForTesting(_ bindings: KeyBindings) {
         keyBindings = bindings
+        let (resolved, warning) = Self.resolveDialSelection(bindings.dialSelection, offeredBy: dialModes)
+        resolvedDialMode = resolved
+        if let warning { lastError = warning }
     }
 
     /// Called when the stack key is pressed. The bridge owns the key, the app
@@ -80,8 +96,12 @@ public final class BridgeController: ObservableObject {
     private var device = WLDevice()
     /// Non-nil while the bridge is driving a virtual pad instead of hardware.
     @Published public private(set) var emulator: PadEmulator?
-    private var lifecycle: HerdrEventStream?
-    private var statusStreams: [String: HerdrEventStream] = [:]
+    /// What agent status, dial navigation, and prompt injection actually run
+    /// against. Herdr is one implementation (`HerdrProvider`) behind this;
+    /// swapping it for another tool means implementing `Provider`, not
+    /// changing anything here.
+    private let provider: Provider
+    private var providerSubscription: ProviderSubscription?
     private var pollTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     private var reopenTask: Task<Void, Never>?
@@ -92,8 +112,9 @@ public final class BridgeController: ObservableObject {
     /// to collapse its two switches' notifications into one logical press.
     private var lastVoiceKeyPress: DispatchTime?
 
-    public init(config: BridgeConfig = BridgeConfig()) {
+    public init(config: BridgeConfig = BridgeConfig(), provider: Provider = HerdrProvider()) {
         self.config = config
+        self.provider = provider
         wire(device)
     }
 
@@ -150,9 +171,12 @@ public final class BridgeController: ObservableObject {
         // A mistyped "dial" keeps its fallback; say so where the panel shows
         // the bridge's other errors, the same way an unrecognised shortcut does.
         if let warning = keyBindings.dialWarning { lastError = warning }
+        await applyProviderDescription()
 
         await openDevice()
-        startLifecycleStream()
+        providerSubscription = provider.subscribe { [weak self] in
+            Task { @MainActor in self?.schedule() }
+        }
         await refresh()
 
         pollTask = Task { [weak self] in
@@ -171,9 +195,7 @@ public final class BridgeController: ObservableObject {
         pollTask?.cancel(); pollTask = nil
         debounceTask?.cancel(); debounceTask = nil
         reopenTask?.cancel(); reopenTask = nil
-        lifecycle?.stop(); lifecycle = nil
-        statusStreams.values.forEach { $0.stop() }
-        statusStreams.removeAll()
+        providerSubscription?.cancel(); providerSubscription = nil
         lastFingerprint = nil
 
         // Switching off clears the lights but deliberately leaves the keymap
@@ -188,6 +210,39 @@ public final class BridgeController: ObservableObject {
         keyEffects = [:]
         aggregateState = nil
         agents = []
+    }
+
+    /// Pulls the provider's state palette, priority, and dial-mode labels
+    /// into `config` — its lighting vocabulary is the provider's, not a
+    /// `BridgeController` default. Re-applied on every `start()`, same as
+    /// `keyBindings`, so a provider swap only needs an off/on toggle.
+    private func applyProviderDescription() async {
+        let description = await provider.describe()
+        for (state, style) in description.statePalette {
+            config.colors[state] = style.color
+            config.effects[state] = style.effect
+        }
+        if !description.statePriority.isEmpty {
+            config.priority = description.statePriority
+        }
+        dialModes = description.dialModes
+
+        let (resolved, warning) = Self.resolveDialSelection(keyBindings.dialSelection, offeredBy: dialModes)
+        resolvedDialMode = resolved
+        if let warning { lastError = warning }
+    }
+
+    /// What `resolvedDialMode` becomes, pure so it is testable without a
+    /// provider. Warns only when a name should have matched and didn't.
+    static func resolveDialSelection(
+        _ selection: KeyBindings.DialSelection,
+        offeredBy modes: [ProviderDialMode]
+    ) -> (mode: ProviderDialMode?, warning: String?) {
+        guard case .provider(let name) = selection else { return (nil, nil) }
+        if let match = modes.first(where: { $0.id == name }) { return (match, nil) }
+        let available = modes.isEmpty ? "none" : modes.map(\.id).joined(separator: ", ")
+        let warning = "The dial's mode \"\(name)\" isn't offered by this provider (available: \(available)) — keeping the reasoning-effort ladder."
+        return (nil, warning)
     }
 
     // MARK: - Device
@@ -280,47 +335,7 @@ public final class BridgeController: ObservableObject {
         }
     }
 
-    // MARK: - Herdr events
-
-    private func startLifecycleStream() {
-        guard isRunning else { return }
-        let stream = HerdrEventStream(subscriptions: [
-            ["type": "pane.created"],
-            ["type": "pane.closed"],
-            ["type": "pane.exited"],
-            ["type": "pane.agent_detected"],
-        ])
-        stream.onEvent = { [weak self] _ in self?.schedule() }
-        stream.onClosed = { [weak self] _ in
-            guard let self, self.isRunning else { return }
-            self.lifecycle = nil
-            Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                self?.startLifecycleStream()
-            }
-        }
-        lifecycle = stream.start()
-    }
-
-    /// One dedicated stream per agent pane: a subscription owns its connection
-    /// and cannot be extended after the fact.
-    private func reconcileStatusStreams(_ agents: [HerdrAgent]) {
-        let wanted = Set(agents.compactMap(\.paneID))
-        for (paneID, stream) in statusStreams where !wanted.contains(paneID) {
-            stream.stop()
-            statusStreams.removeValue(forKey: paneID)
-        }
-        for paneID in wanted where statusStreams[paneID] == nil {
-            let stream = HerdrEventStream(subscriptions: [
-                ["type": "pane.agent_status_changed", "pane_id": paneID],
-            ])
-            stream.onEvent = { [weak self] _ in self?.schedule() }
-            stream.onClosed = { [weak self] _ in
-                self?.statusStreams.removeValue(forKey: paneID)
-            }
-            statusStreams[paneID] = stream.start()
-        }
-    }
+    // MARK: - Provider events
 
     private func schedule() {
         guard debounceTask == nil else { return }
@@ -345,14 +360,13 @@ public final class BridgeController: ObservableObject {
 
         let fetched: [HerdrAgent]
         do {
-            fetched = try await HerdrClient.listAgents()
+            fetched = try await provider.status()
         } catch {
             lastError = error.localizedDescription
             return
         }
         lastError = nil
         agents = fetched
-        reconcileStatusStreams(fetched)
 
         let state = StatusMapper.aggregate(fetched, config)
         // Every overridable key shares this light: a binding (text or
@@ -503,13 +517,7 @@ public final class BridgeController: ObservableObject {
     /// the human still reads it and presses enter.
     public func injectPrompt(_ text: String) async {
         do {
-            guard let agent = try await HerdrClient.focusedAgent(),
-                  let pane = agent.paneID
-            else {
-                lastError = "Nothing has focus in Herdr right now."
-                return
-            }
-            try await HerdrClient.sendText(paneID: pane, text: text)
+            try await provider.inject(text)
         } catch {
             lastError = error.localizedDescription
         }
@@ -530,76 +538,55 @@ public final class BridgeController: ObservableObject {
 
     /// Advances the focused workspace to its next tab, wrapping.
     public func cycleTabs() async {
-        await cycleTabsBy(1)
+        do {
+            try await provider.dial(1, mode: "tab")
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
-    /// The dial as a Herdr navigator. `step` is +1 / -1 from the encoder
-    /// detents; `.effort` is handled in the app layer and never reaches here.
+    /// The dial as a provider navigator: acts on `resolvedDialMode` (see its
+    /// doc — this is never called for `.effort`). `step` is +1 / -1 from the
+    /// encoder detents. Whether the mode brings the host app forward is the
+    /// provider's own call (`ProviderDialMode.raisesHost`), not a name this
+    /// file recognises.
     ///
     /// A fast turn fires one unstructured task per detent, and two overlapping
-    /// round-trips can both snapshot the same "currently focused" agent before
-    /// either focus call lands — several detents net one step, and whichever
-    /// response lands last wins. Chaining onto the previous task serialises
-    /// the steps, so each sees the state the last one produced.
+    /// round-trips can both snapshot the same "currently focused" entity
+    /// before either focus call lands — several detents net one step, and
+    /// whichever response lands last wins. Chaining onto the previous task
+    /// serialises the steps, so each sees the state the last one produced.
     private var dialChain: Task<Void, Never>?
 
-    public func cycleDial(_ step: Int, mode: KeyBindings.DialMode) async {
+    public func cycleDial(_ step: Int) async {
+        guard let target = resolvedDialMode else { return }
         let previous = dialChain ?? Task {}
         let task = Task { [weak self] in
             await previous.value
-            await self?.runDial(step, mode: mode)
+            await self?.runDial(step, target: target)
         }
         dialChain = task
         await task.value
     }
 
-    private func runDial(_ step: Int, mode: KeyBindings.DialMode) async {
-        switch mode {
-        case .effort: break
-        case .agent:  await cycleAgent(step)
-        case .tab:    await cycleTabsBy(step)
-        case .space:  await cycleWorkspace(step)
+    private func runDial(_ step: Int, target: ProviderDialMode) async {
+        do {
+            try await provider.dial(step, mode: target.id)
+            if target.raisesHost { raiseTerminal() }
+        } catch {
+            lastError = error.localizedDescription
         }
     }
 
-    /// Focuses an agent/workspace/tab and brings the terminal forward — the
-    /// one error-and-raise shape every navigation entry point shares, so a
-    /// future one cannot forget the raise.
+    /// Focuses an entity and brings the terminal forward — the one
+    /// error-and-raise shape every always-raising navigation entry point
+    /// shares, so a future one cannot forget the raise.
     private func focusAndRaise(_ body: () async throws -> Void) async {
         do {
             try await body()
             raiseTerminal()
         } catch {
             lastError = error.localizedDescription
-        }
-    }
-
-    private func cycleTabsBy(_ step: Int) async {
-        do {
-            try await HerdrClient.cycleTabs(step)
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    /// Steps focus to the next/previous agent, in the same reading order the
-    /// keys use, and brings the terminal forward as an agent key would.
-    private func cycleAgent(_ step: Int) async {
-        await focusAndRaise {
-            guard let next = HerdrClient.adjacentAgent(
-                in: try await HerdrClient.listAgents(), step: step
-            ), let target = next.focusTarget else { return }
-            try await HerdrClient.focusAgent(target)
-        }
-    }
-
-    /// Steps focus to the next/previous workspace in sidebar order.
-    private func cycleWorkspace(_ step: Int) async {
-        await focusAndRaise {
-            guard let next = HerdrClient.adjacentWorkspace(
-                in: try await HerdrClient.listWorkspaces(), step: step
-            ) else { return }
-            try await HerdrClient.focusWorkspace(next.workspaceID)
         }
     }
 
@@ -629,7 +616,7 @@ public final class BridgeController: ObservableObject {
         guard index >= 0, index < agents.count else { return }
         guard let target = agents[index].focusTarget else { return }
         await focusAndRaise {
-            try await HerdrClient.focusAgent(target)
+            try await provider.focus(target)
         }
     }
 
