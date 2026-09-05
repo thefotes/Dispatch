@@ -57,8 +57,7 @@ public final class WLDevice {
                 return "Found the device, but not its vendor collection (usage page 0xFF00). Nothing to talk to."
             case .openFailed(let r):
                 if r == kIOReturnNotPrivileged || UInt32(bitPattern: r) == 0xE00002C1 {
-                    return "Open refused (0xE00002C1). Grant Input Monitoring to the process running this app, "
-                        + "under System Settings → Privacy & Security → Input Monitoring."
+                    return "Open refused (0xE00002C1). Grant Input Monitoring to the process running this app, under System Settings → Privacy & Security → Input Monitoring."
                 }
                 return String(format: "IOHIDDeviceOpen failed (0x%08X)", UInt32(bitPattern: r))
             case .notConnected:
@@ -386,7 +385,13 @@ public final class WLDevice {
         while index < rpcAccumulator.endIndex {
             let ch = rpcAccumulator[index]
             if inString {
-                if escaped { escaped = false } else if ch == "\\" { escaped = true } else if ch == "\"" { inString = false }
+                if escaped {
+                    escaped = false
+                } else if ch == "\\" {
+                    escaped = true
+                } else if ch == "\"" {
+                    inString = false
+                }
             } else if ch == "\"" {
                 inString = true
             } else if ch == "{" {

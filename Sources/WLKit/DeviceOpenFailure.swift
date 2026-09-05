@@ -25,11 +25,9 @@ public enum DeviceOpenFailure: Equatable {
     public var message: String {
         switch self {
         case .permissionMissing:
-            return "Input Monitoring is not granted. System Settings › Privacy & Security › Input Monitoring, "
-                + "then switch the manager off and on."
+            return "Input Monitoring is not granted. System Settings › Privacy & Security › Input Monitoring, then switch the manager off and on."
         case .deviceUnavailable(let underlying):
-            return "The pad did not open. Something else may be holding it, or it needs a reconnect - "
-                + "unplug it, wait a moment, plug it back in. (\(underlying))"
+            return "The pad did not open. Something else may be holding it, or it needs a reconnect - unplug it, wait a moment, plug it back in. (\(underlying))"
         }
     }
 }

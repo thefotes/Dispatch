@@ -183,7 +183,11 @@ public enum AnsiHTML {
             case 100...107: style.background = palette[code - 100 + 8]
             case 38, 48:
                 let extended = readExtendedColor(parameters, from: &index)
-                if code == 38 { style.foreground = extended } else { style.background = extended }
+                if code == 38 {
+                    style.foreground = extended
+                } else {
+                    style.background = extended
+                }
             default: break
             }
             index += 1

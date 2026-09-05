@@ -169,7 +169,11 @@ struct PadView: View {
         let state = model.keys[index]
         let selected = model.selection.contains(index)
         return Button {
-            if selected { model.selection.remove(index) } else { model.selection.insert(index) }
+            if selected {
+                model.selection.remove(index)
+            } else {
+                model.selection.insert(index)
+            }
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 6)
@@ -253,7 +257,11 @@ struct LogView: View {
                     Toggle(isOn: Binding(
                         get: { model.visibleKinds.contains(kind) },
                         set: { on in
-                            if on { model.visibleKinds.insert(kind) } else { model.visibleKinds.remove(kind) }
+                            if on {
+                                model.visibleKinds.insert(kind)
+                            } else {
+                                model.visibleKinds.remove(kind)
+                            }
                         }
                     )) {
                         Text(kind.rawValue)

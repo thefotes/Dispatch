@@ -129,8 +129,7 @@ final class AppModel: ObservableObject {
             if let i = device.info {
                 let usage = String(format: "0x%04X", i.usagePage)
                 log(.info, "connected",
-                    "\(i.product)  ·  \(i.transport)  ·  pid 0x\(String(i.productID, radix: 16, uppercase: true))  ·  "
-                        + "primary usage page \(usage)  ·  \(i.interfaceCount) interface(s) matched")
+                    "\(i.product)  ·  \(i.transport)  ·  pid 0x\(String(i.productID, radix: 16, uppercase: true))  ·  primary usage page \(usage)  ·  \(i.interfaceCount) interface(s) matched")
             }
             refreshStatus()
         } catch {
