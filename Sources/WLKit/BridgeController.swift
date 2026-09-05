@@ -96,8 +96,10 @@ public final class BridgeController: ObservableObject {
     private var device = WLDevice()
     /// Non-nil while the bridge is driving a virtual pad instead of hardware.
     @Published public private(set) var emulator: PadEmulator?
-    /// Everything Herdr-specific reaches the bridge through here — never
-    /// `HerdrClient` directly. `HerdrProvider` is the shipped implementation.
+    /// What agent status, dial navigation, and prompt injection actually run
+    /// against. Herdr is one implementation (`HerdrProvider`) behind this;
+    /// swapping it for another tool means implementing `Provider`, not
+    /// changing anything here.
     private let provider: Provider
     private var providerSubscription: ProviderSubscription?
     private var pollTask: Task<Void, Never>?
