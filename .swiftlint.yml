@@ -1,0 +1,38 @@
+# SwiftLint configuration for WLTools / micro-manager.
+# Starts from SwiftLint's built-in defaults; adjust as we review the output.
+
+included:
+  - Sources
+  - Tests
+
+opt_in_rules:
+  - empty_count
+  - fatal_error_message
+  - first_where
+  - modifier_order
+  - overridden_super_call
+  - unowned_variable_capture
+  - yoda_condition
+
+line_length:
+  warning: 140
+  error: 200
+
+identifier_name:
+  min_length: 2
+  excluded:
+    - id
+    - x
+    - y
+    - z
+
+type_body_length:
+  warning: 400
+
+function_body_length:
+  warning: 80
+
+excluded:
+  - .build
+  - build
+  - docs
