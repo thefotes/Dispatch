@@ -34,7 +34,7 @@ public struct HerdrAgent: Equatable, Sendable {
     }
 
     /// Last path component of the working directory, which is what a person
-    /// recognises the agent by.
+    /// recognizes the agent by.
     public var shortName: String {
         guard let directory = workingDirectory else { return agent }
         return (directory as NSString).lastPathComponent
@@ -416,7 +416,7 @@ public final class HerdrEventStream {
         let envelope: [String: Any] = [
             "id": "wl_sub",
             "method": "events.subscribe",
-            "params": ["subscriptions": subscriptions],
+            "params": ["subscriptions": subscriptions]
         ]
         if let payload = try? JSONSerialization.data(withJSONObject: envelope) {
             conn.write(payload + Data("\n".utf8))

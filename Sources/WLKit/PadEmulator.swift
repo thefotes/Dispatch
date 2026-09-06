@@ -7,12 +7,12 @@ import SwiftUI
 /// `v.oai.hid` reports back, so the bridge above it cannot tell the difference.
 /// `WLDevice` routes to one of these instead of IOKit when it is handed one.
 ///
-/// It reproduces the firmware's awkward behaviours on purpose, because those
+/// It reproduces the firmware's awkward behaviors on purpose, because those
 /// are the ones worth catching before you meet them on real hardware:
 ///
 ///   * it answers `{"ok":1}` to any lighting payload, right or wrong;
 ///   * a key only lights if it is bound to `KV_OAI_AG*` on the **active
-///     layer** — an unbound key accepts its colour in silence and stays dark;
+///     layer** — an unbound key accepts its color in silence and stays dark;
 ///   * an unbound key sends a keystroke rather than a `v.oai.hid` report, so
 ///     pressing it here does nothing, exactly as it would on the device.
 ///
@@ -28,7 +28,7 @@ public final class PadEmulator: ObservableObject {
         public var effect: OAI.Effect = .off
         public var speed: Double = 0.5
 
-        /// Off is off, whatever colour was last set.
+        /// Off is off, whatever color was last set.
         public var isLit: Bool { brightness > 0 && effect != .off }
     }
 
@@ -247,7 +247,7 @@ public final class PadEmulator: ObservableObject {
                             ["KC_F13", "KC_F14"],
                             ["KC_F15", "KC_F16", "KC_F17", "KC_F18"],
                             ["KC_F19", "KC_F20", "KC_F21", "KC_F22"],
-                            ["KC_F23", "KC_NONE", "KC_F24"],
+                            ["KC_F23", "KC_NONE", "KC_F24"]
                         ],
                         "encoders": [["KC_VOLU", "KC_VOLD", "KC_MPLY"]],
                         "joystick": [
@@ -260,12 +260,12 @@ public final class PadEmulator: ObservableObject {
                                 ["k": "KC_P4", "a1": 0.6875, "a2": 0.8125],
                                 ["k": "KC_P5", "a1": 0.8125, "a2": 0.9375],
                                 ["k": "KC_P6", "a1": 0.9375, "a2": 0.0625],
-                                ["k": "KC_P7", "a1": 0.0625, "a2": 0.1875],
-                            ],
-                        ],
-                    ],
-                ]],
-            ]],
+                                ["k": "KC_P7", "a1": 0.0625, "a2": 0.1875]
+                            ]
+                        ]
+                    ]
+                ]]
+            ]]
         ]
     }
 }

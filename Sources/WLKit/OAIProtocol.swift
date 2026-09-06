@@ -145,7 +145,7 @@ public enum Pad {
         [0, 1],
         [2, 3, 4, 5],
         [6, 7, 8, 9],
-        [10, 11, 12],
+        [10, 11, 12]
     ]
     public static let keyCount = 13
     /// The firmware's keycode table goes to AG19, so clear the whole id space
@@ -162,7 +162,7 @@ public enum Pad {
         [1, 0],
         [2, 3, 4, 5],
         [6, 7, 8, 9],
-        [10, 11, 12],
+        [10, 11, 12]
     ]
 
     /// The agent slot a key answers for, or nil for non-agent keys.
@@ -206,11 +206,11 @@ public enum Pad {
     public static let dialUpID = 13     // encoder, clockwise detent
     public static let dialDownID = 14   // encoder, counter-clockwise detent
     /// The joystick's four cardinal sectors, named by the angle fraction at
-    /// their centre in the radial map (0 = east, counter-clockwise).
-    public static let joyNorthID = 15   // sector centred on 0.25
-    public static let joyWestID = 16    // sector centred on 0.5
-    public static let joySouthID = 17   // sector centred on 0.75
-    public static let joyEastID = 18    // sector centred on 0.0
+    /// their center in the radial map (0 = east, counter-clockwise).
+    public static let joyNorthID = 15   // sector centered on 0.25
+    public static let joyWestID = 16    // sector centered on 0.5
+    public static let joySouthID = 17   // sector centered on 0.75
+    public static let joyEastID = 18    // sector centered on 0.0
 
     /// Compass-named, since the names cross the provider seam as strings —
     /// providers map them onto whatever their own vocabulary is (Herdr's
@@ -242,10 +242,10 @@ public enum Pad {
     }
 }
 
-// MARK: - Colour helpers
+// MARK: - Color helpers
 
 extension Color {
-    /// Packed 0xRRGGBB, which is how colours go on the wire.
+    /// Packed 0xRRGGBB, which is how colors go on the wire.
     public var packedRGB: Int {
         let ns = NSColor(self).usingColorSpace(.sRGB) ?? .black
         let r = Int((ns.redComponent * 255).rounded())

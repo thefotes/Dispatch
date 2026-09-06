@@ -55,8 +55,8 @@ final class ProviderTests: XCTestCase {
     }
 
     /// A configured name the provider doesn't offer falls back to effort —
-    /// same "don't brick the pad over a typo" rule an unrecognised shortcut
-    /// follows — and says why, the way an unrecognised shortcut does too.
+    /// same "don't brick the pad over a typo" rule an unrecognized shortcut
+    /// follows — and says why, the way an unrecognized shortcut does too.
     func testAnUnofferedDialModeFallsBackToEffortAndWarns() async {
         let fake = FakeProvider()
         fake.descriptionToReturn = ProviderDescription(
@@ -138,7 +138,7 @@ final class ProviderTests: XCTestCase {
 
     private let sampleModes = [
         ProviderDialMode(id: "agent", label: "Agent", raisesHost: true),
-        ProviderDialMode(id: "tab", label: "Tab", raisesHost: false),
+        ProviderDialMode(id: "tab", label: "Tab", raisesHost: false)
     ]
 
     func testEffortResolvesToNilWithNoWarning() {

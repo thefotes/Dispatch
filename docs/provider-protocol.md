@@ -140,7 +140,7 @@ One entry per entity for the agent-key row, in display order. Only `agent`,
 fields you have nothing to report — see `HerdrAgent.wire` in
 `Sources/WLKit/ProviderWire.swift` for the exact optional-field handling).
 `agent_status` is one of the state names `provider.describe` put a palette
-entry under — an unrecognised one is not an error, it just paints
+entry under — an unrecognized one is not an error, it just paints
 unstyled. `pane_id` (or, failing that, `terminal_id`) is what `focus`
 expects back.
 

@@ -23,12 +23,12 @@
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="A Work Louder Creator Micro 2 with its keys lit in agent status colours, beside the words Micro Manager.">
+<meta property="og:image:alt" content="A Work Louder Creator Micro 2 with its keys lit in agent status colors, beside the words Micro Manager.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Micro Manager — your agents, on your keyboard">
 <meta name="twitter:description" content="Each Herdr agent gets its own key on a Work Louder Creator Micro 2 — red when it needs you, amber while it works. Press the key, jump to the agent.">
 <meta name="twitter:image" content="https://schacon.github.io/micro-manager/og-image.png">
-<meta name="twitter:image:alt" content="A Work Louder Creator Micro 2 with its keys lit in agent status colours, beside the words Micro Manager.">
+<meta name="twitter:image:alt" content="A Work Louder Creator Micro 2 with its keys lit in agent status colors, beside the words Micro Manager.">
 <meta name="theme-color" content="#0C0E13">
 <style>
   :root {
@@ -103,7 +103,7 @@
   .agent-row em { font-style: normal; color: #6B7383; }
   .agent-row i { display: inline-block; width: .5em; height: .5em; border-radius: 50%;
                  margin-right: .45em; vertical-align: .04em; background: #5C6474; }
-  /* Status colours live here as well as in the script: these keep the dots
+  /* Status colors live here as well as in the script: these keep the dots
      right with JavaScript off, the script needs them for the SVG keys. */
   [data-state="working"] i { background: #FFA000; }
   [data-state="blocked"] i { background: #FF2D2D; }
@@ -131,7 +131,7 @@
   .press.pressing { animation: keyripple .85s cubic-bezier(.15,.7,.3,1); }
   .agent-key.pressing .glow { animation: keyflare .85s ease-out; }
   .agent-key.pressing { animation: keydip .26s ease-out; }
-  /* The agent's row pulses on the same beat and in the same colour, so which
+  /* The agent's row pulses on the same beat and in the same color, so which
      key belongs to which agent is shown rather than left to be inferred. */
   @keyframes rowflash { from { background: rgba(196,181,253,.34); }
                         to   { background: transparent; } }
@@ -229,7 +229,7 @@
         <button class="agent-row" type="button" data-slot="1"
                 data-state="idle" data-tool="claude"
                 data-prompt="add the usage charts to the overview"
-                data-reply="Charts are in. The legend needs a colour that survives dark mode."
+                data-reply="Charts are in. The legend needs a color that survives dark mode."
                 aria-current="false">
           <span class="nm"><i></i>web-dashboard</span>
           <em>idle · claude</em>
@@ -278,7 +278,7 @@
     </div>
   </div>
   <div class="pad-wrap">
-<svg viewBox="78 -92 744 744" xmlns="http://www.w3.org/2000/svg" role="group" class="pad3d" aria-label="A Work Louder Creator Micro 2 with its keys lit in agent status colours. Each lit key selects that agent.">
+<svg viewBox="78 -92 744 744" xmlns="http://www.w3.org/2000/svg" role="group" class="pad3d" aria-label="A Work Louder Creator Micro 2 with its keys lit in agent status colors. Each lit key selects that agent.">
 <defs>
 <filter id="glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="9"/></filter>
 <filter id="softglow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="26"/></filter>
@@ -327,7 +327,7 @@
   </p>
 
   <table>
-    <thead><tr><th>Key colour</th><th>What it means</th></tr></thead>
+    <thead><tr><th>Key color</th><th>What it means</th></tr></thead>
     <tbody>
       <tr><td><span class="swatch" style="background:var(--red)"></span>Red</td><td>Blocked — the agent is waiting on you</td></tr>
       <tr><td><span class="swatch" style="background:var(--amber)"></span>Amber</td><td>Working</td></tr>
@@ -399,13 +399,13 @@
     A debug UI ships inside the app — open it from the <strong>Inspector</strong>
     button in the menu-bar panel. It logs every message in both directions,
     decodes the device's notifications, and lets you drive the lighting by hand:
-    per-key colours, effects, the underglow, and a raw JSON-RPC console.
+    per-key colors, effects, the underglow, and a raw JSON-RPC console.
   </p>
 
   <h2>Hacking on the pad yourself</h2>
   <p>
     The protocol is written up in full — the raw-HID framing, the vendor RPC
-    that reaches individual keys, the keymap binding that makes per-key colour
+    that reaches individual keys, the keymap binding that makes per-key color
     possible at all, and how to read key, dial and joystick events back.
   </p>
   <p>
@@ -437,7 +437,7 @@ cd micro-manager
 (function () {
   // The markup is the source of truth: agent rows carry their own state, tool,
   // prompt and reply, so the panel is correct before this runs at all.
-  var COLOUR = { working: "#FFA000", blocked: "#FF2D2D",
+  var COLOR = { working: "#FFA000", blocked: "#FF2D2D",
                  done: "#00B0FF", idle: "#00C853" };
   var NEXT = { idle: ["working"], working: ["done", "blocked"],
                blocked: ["working"], done: ["idle"] };
@@ -463,21 +463,21 @@ cd micro-manager
 
   // The same five shade factors scripts/pad-illustration.py uses, so a repaint
   // matches the generated default instead of drifting from it.
-  function paintKey(slot, colour, isFocused) {
+  function paintKey(slot, color, isFocused) {
     var g = svg.querySelector('.agent-key[data-slot="' + slot + '"]');
     if (!g) return;
     function set(sel, attr, value) {
       var el = g.querySelector(sel);
       if (el) el.setAttribute(attr, value);
     }
-    set(".glow", "fill", colour);
+    set(".glow", "fill", color);
     set(".glow", "opacity", isFocused ? "0.95" : "0.45");
-    set(".side", "fill", shade(colour, 0.52));
-    set(".top", "fill", shade(colour, 1.06));
-    set(".inset", "fill", shade(colour, 1.34));
-    set(".rim", "stroke", shade(colour, isFocused ? 1.8 : 1.5));
+    set(".side", "fill", shade(color, 0.52));
+    set(".top", "fill", shade(color, 1.06));
+    set(".inset", "fill", shade(color, 1.34));
+    set(".rim", "stroke", shade(color, isFocused ? 1.8 : 1.5));
     var ring = svg.querySelector('.press[data-slot="' + slot + '"]');
-    if (ring) ring.setAttribute("stroke", shade(colour, 1.9));
+    if (ring) ring.setAttribute("stroke", shade(color, 1.9));
 
   }
 
@@ -491,13 +491,13 @@ cd micro-manager
     var secs = Math.floor((Date.now() - started) / 1000) % 3600;
     var clock = Math.floor(secs / 60) + "m " + ("0" + (secs % 60)).slice(-2) + "s";
     if (state === "working") {
-      el.innerHTML = '<span style="color:' + COLOUR.working + '">' +
+      el.innerHTML = '<span style="color:' + COLOR.working + '">' +
         (reduced ? "∙" : FRAMES[frame % FRAMES.length]) +
         '</span> Working… <span style="color:#5C6474">(' + clock + ')</span>';
     } else if (state === "blocked") {
-      el.innerHTML = '<span style="color:' + COLOUR.blocked + '">●</span> Needs you';
+      el.innerHTML = '<span style="color:' + COLOR.blocked + '">●</span> Needs you';
     } else if (state === "done") {
-      el.innerHTML = '<span style="color:' + COLOUR.done + '">✓</span> Done — not read yet';
+      el.innerHTML = '<span style="color:' + COLOR.done + '">✓</span> Done — not read yet';
     } else {
       el.innerHTML = '<span style="color:#5C6474">idle</span>';
     }
@@ -508,7 +508,7 @@ cd micro-manager
       var state = row.dataset.state;
       // Address the key by the row's declared slot, not its DOM position:
       // which agent lights which key is the one thing worth not guessing.
-      paintKey(Number(row.dataset.slot), COLOUR[state], i === focused);
+      paintKey(Number(row.dataset.slot), COLOR[state], i === focused);
       row.setAttribute("aria-current", i === focused ? "true" : "false");
       row.querySelector("em").textContent = state + " · " + row.dataset.tool;
       row.setAttribute("aria-label",

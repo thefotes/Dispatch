@@ -13,12 +13,12 @@ final class AnsiHTMLTests: XCTestCase {
         XCTAssertEqual(AnsiHTML.render("a<b & c>d"), "a&lt;b &amp; c&gt;d")
     }
 
-    func testBasicColoursBecomeSpans() {
+    func testBasicColorsBecomeSpans() {
         let html = AnsiHTML.render("\u{1B}[36muncommitted\u{1B}[0m")
         XCTAssertEqual(html, "<span style=\"color:\(AnsiHTML.palette[6])\">uncommitted</span>")
     }
 
-    func testBoldAndColourCombine() {
+    func testBoldAndColorCombine() {
         let html = AnsiHTML.render("\u{1B}[1;34mzz\u{1B}[0m")
         XCTAssertTrue(html.contains("class=\"b\""), html)
         XCTAssertTrue(html.contains(AnsiHTML.palette[4]), html)
@@ -34,12 +34,12 @@ final class AnsiHTMLTests: XCTestCase {
         XCTAssertTrue(html.hasSuffix("</span>"), html)
     }
 
-    func testBrightColoursUseTheUpperPalette() {
+    func testBrightColorsUseTheUpperPalette() {
         let html = AnsiHTML.render("\u{1B}[92mbright\u{1B}[0m")
         XCTAssertTrue(html.contains(AnsiHTML.palette[10]), html)
     }
 
-    func testTruecolourAndIndexedColour() {
+    func testTruecolorAndIndexedColor() {
         XCTAssertTrue(AnsiHTML.render("\u{1B}[38;2;18;52;86mx").contains("#123456"))
         XCTAssertEqual(AnsiHTML.xterm256(232), "#080808")
         XCTAssertEqual(AnsiHTML.xterm256(196), "#FF0000")

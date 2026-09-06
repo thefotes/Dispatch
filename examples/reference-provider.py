@@ -5,7 +5,7 @@ Proves the provider protocol (docs/provider-protocol.md) is not
 Swift-specific: this is under 150 lines of dependency-free Python, and it
 answers every method HerdrProvider does. What it drives is a toy — a single
 fake entity that alternates between two states on a timer, "focus" that just
-prints, "inject" that just prints — but the wire behaviour is real, not a
+prints, "inject" that just prints — but the wire behavior is real, not a
 mock: point config.json at this file and the agent-key row actually lights
 up from it.
 
@@ -39,7 +39,7 @@ def default_socket_path():
 
 
 class ReferenceProvider:
-    """The toy behaviour: one entity, ticking between two states every 2s."""
+    """The toy behavior: one entity, ticking between two states every 2s."""
 
     def __init__(self):
         self._lock = threading.Lock()

@@ -5,7 +5,7 @@ import Foundation
 /// per connection, closed after the reply — against a `ProviderBridgeServer`
 /// on the other end. `events.subscribe` is the one exception: that
 /// connection stays open, an ack line immediately, then one line per change
-/// until cancelled.
+/// until canceled.
 public final class RemoteProvider: Provider, @unchecked Sendable {
     private let socketPath: String
     private let timeout: TimeInterval

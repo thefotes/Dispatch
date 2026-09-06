@@ -40,6 +40,6 @@ private extension ShortcutSpec.Modifiers {
         (.control, 0x3B, .maskControl),
         (.option, 0x3A, .maskAlternate),
         (.shift, 0x38, .maskShift),
-        (.command, 0x37, .maskCommand),
+        (.command, 0x37, .maskCommand)
     ]
 }

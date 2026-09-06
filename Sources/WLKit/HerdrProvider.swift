@@ -28,10 +28,10 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
                 "working": ProviderStateStyle(color: 0xFFA000, effect: .solid),
                 // "done" is an agent that finished and has not been looked at
                 // yet; "idle" is finished and seen. A real difference, so a
-                // different colour.
+                // different color.
                 "done": ProviderStateStyle(color: 0x00B0FF, effect: .solid),
                 "idle": ProviderStateStyle(color: 0x00C853, effect: .solid),
-                "unknown": ProviderStateStyle(color: 0x00C853, effect: .solid),
+                "unknown": ProviderStateStyle(color: 0x00C853, effect: .solid)
             ],
             statePriority: ["blocked", "working", "unknown", "idle", "done"],
             dialModes: [
@@ -40,7 +40,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
                 // looking at the pane it stays within.
                 ProviderDialMode(id: "agent", label: "Agent", raisesHost: true),
                 ProviderDialMode(id: "tab", label: "Tab", raisesHost: false),
-                ProviderDialMode(id: "space", label: "Space", raisesHost: true),
+                ProviderDialMode(id: "space", label: "Space", raisesHost: true)
             ]
         )
     }
@@ -69,7 +69,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             else { return }
             try await HerdrClient.focusWorkspace(next.workspaceID)
         default:
-            break   // an unrecognised mode does nothing, same as `.effort` never reaching here
+            break   // an unrecognized mode does nothing, same as `.effort` never reaching here
         }
     }
 
@@ -120,7 +120,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             ["type": "pane.created"],
             ["type": "pane.closed"],
             ["type": "pane.exited"],
-            ["type": "pane.agent_detected"],
+            ["type": "pane.agent_detected"]
         ])
         stream.onEvent = { [weak self] _ in self?.changeNotifier.notify() }
         stream.onClosed = { [weak self] _ in
@@ -156,7 +156,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
 
         for paneID in toStart {
             let stream = HerdrEventStream(subscriptions: [
-                ["type": "pane.agent_status_changed", "pane_id": paneID],
+                ["type": "pane.agent_status_changed", "pane_id": paneID]
             ])
             stream.onEvent = { [weak self] _ in self?.changeNotifier.notify() }
             stream.onClosed = { [weak self] _ in

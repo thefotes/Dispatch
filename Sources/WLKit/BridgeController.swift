@@ -159,7 +159,11 @@ public final class BridgeController: ObservableObject {
     // MARK: - Lifecycle
 
     public func toggle() async {
-        if isRunning { await stop() } else { await start() }
+        if isRunning {
+            await stop()
+        } else {
+            await start()
+        }
     }
 
     public func start() async {
@@ -169,7 +173,7 @@ public final class BridgeController: ObservableObject {
         contendingClient = false
         keyBindings = KeyBindings.load()
         // A mistyped "dial" keeps its fallback; say so where the panel shows
-        // the bridge's other errors, the same way an unrecognised shortcut does.
+        // the bridge's other errors, the same way an unrecognized shortcut does.
         if let warning = keyBindings.dialWarning { lastError = warning }
         await applyProviderDescription()
 
@@ -309,7 +313,7 @@ public final class BridgeController: ObservableObject {
                 let cfg = try await KeymapManager.read(device)
                 keymapReady = KeymapManager.isAgentKeymapApplied(cfg)
                 if !keymapReady {
-                    lastError = "The agent keys and the stack key are not bound to KV_OAI_AG00..AG06, so per-key colours will do nothing."
+                    lastError = "The agent keys and the stack key are not bound to KV_OAI_AG00..AG06, so per-key colors will do nothing."
                 }
             }
         } catch {
@@ -370,7 +374,7 @@ public final class BridgeController: ObservableObject {
 
         let state = StatusMapper.aggregate(fetched, config)
         // Every overridable key shares this light: a binding (text or
-        // shortcut) wins and paints the generic macro colour; an unbound key
+        // shortcut) wins and paints the generic macro color; an unbound key
         // falls back to whatever it does by default.
         let flexKeys = Pad.overridableKeyIDs.map { key -> OAI.Thread in
             switch keyBindings.action(for: key) {
@@ -437,8 +441,10 @@ public final class BridgeController: ObservableObject {
             // A write failure this deep almost always means the HID session
             // itself went bad under us, not that this one call was unlucky —
             // observed after sleep/wake over Bluetooth, where the device
-            // stays "open" but every SetReport fails with a wedged-session
-            // code (0xE00002E2). Retrying the same call against the same
+            // stays "open" but every SetReport fails with 0xE00002E2
+            // (kIOReturnNotPermitted — *not* kIOReturnOverrun, which is
+            // 0xE00002E8; misreading it as a size error sends you off
+            // decoding report descriptors). Retrying the same call against the same
             // handle every poll never recovers on its own; disconnecting
             // does, since it routes through the same onDisconnect →
             // scheduleReopen path a genuinely lost connection already takes,
@@ -506,7 +512,7 @@ public final class BridgeController: ObservableObject {
             Task { await injectPrompt(text) }
         case .shortcut(let spec):
             guard let parsed = ShortcutSpec.parse(spec) else {
-                lastError = "Unrecognised shortcut \"\(spec)\"."
+                lastError = "Unrecognized shortcut \"\(spec)\"."
                 return
             }
             onShortcut?(parsed)

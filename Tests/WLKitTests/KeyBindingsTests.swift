@@ -31,9 +31,9 @@ final class KeyBindingsTests: XCTestCase {
 
     /// "10+11" is the wide key spoken of as one: both halves get the string.
     func testWideKeyBindsBothHalvesTogether() {
-        let bindings = parse(#"{"keys": {"10+11": "Summarise your progress"}}"#)
-        XCTAssertEqual(bindings.text(for: 10), "Summarise your progress")
-        XCTAssertEqual(bindings.text(for: 11), "Summarise your progress")
+        let bindings = parse(#"{"keys": {"10+11": "Summarize your progress"}}"#)
+        XCTAssertEqual(bindings.text(for: 10), "Summarize your progress")
+        XCTAssertEqual(bindings.text(for: 11), "Summarize your progress")
     }
 
     func testWideKeyHalvesCanDiffer() {
@@ -147,7 +147,7 @@ final class KeyBindingsTests: XCTestCase {
                        .text("Open PRs for all active GitButler branches"))
     }
 
-    /// A shortcut object with no recognised field binds nothing, same as a
+    /// A shortcut object with no recognized field binds nothing, same as a
     /// malformed value anywhere else in the file — the key stays unmentioned.
     func testAShortcutObjectMissingItsFieldIsIgnored() {
         let bindings = parse(#"{"keys": {"6": {}}}"#)

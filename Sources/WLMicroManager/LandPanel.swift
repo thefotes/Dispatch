@@ -64,7 +64,7 @@ final class LandPanelController {
         }
     }
 
-    /// Any other pad key. Returns true when the press cancelled the pending
+    /// Any other pad key. Returns true when the press canceled the pending
     /// confirmation, in which case it must not also do its usual job — the
     /// press meant "no", not "focus agent 3".
     func handleOtherKey() -> Bool {

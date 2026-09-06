@@ -19,7 +19,7 @@ func rgb(_ packed: Int) -> NSColor {
     )
 }
 
-/// One cell of the icon's grid: a key lit with a colour, an unlit key, or a
+/// One cell of the icon's grid: a key lit with a color, an unlit key, or a
 /// rotary knob.
 enum Cell {
     case key(Int)
@@ -29,7 +29,7 @@ enum Cell {
 }
 
 // The pad as the app presents it: agent statuses across the top six keys,
-// then the stack, tab-cycle and land keys in their own colours. Row order is
+// then the stack, tab-cycle and land keys in their own colors. Row order is
 // top to bottom as you look at the device.
 let grid: [[Cell]] = [
     [.key(0x00C853), .key(0xFFA000), .knob, .knob],
@@ -39,7 +39,7 @@ let grid: [[Cell]] = [
 ]
 
 func draw(in ctx: CGContext) {
-    // Standard macOS icon geometry: an 832pt rounded rect centred on a 1024pt
+    // Standard macOS icon geometry: an 832pt rounded rect centered on a 1024pt
     // transparent canvas.
     let body = CGRect(x: 96, y: 96, width: 832, height: 832)
     let shape = CGPath(roundedRect: body, cornerWidth: 186, cornerHeight: 186, transform: nil)

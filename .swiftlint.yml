@@ -1,0 +1,70 @@
+# SwiftLint configuration for WLTools / micro-manager.
+# Starts from SwiftLint's built-in defaults; adjust as we review the output.
+
+included:
+  - Sources
+  - Tests
+
+opt_in_rules:
+  - empty_count
+  - fatal_error_message
+  - first_where
+  - modifier_order
+  - overridden_super_call
+  - unowned_variable_capture
+  - yoda_condition
+
+# Disabled for now: several existing functions/files exceed the defaults.
+# Re-enable and refactor (BridgeController, AnsiHTML, PadEmulator, WLDevice,
+# HerdrClient) in a follow-up.
+disabled_rules:
+  - cyclomatic_complexity
+  - file_length
+  - function_body_length
+  - line_length
+
+# No line_length: block here on purpose — configuring a rule that is also in
+# disabled_rules makes SwiftLint warn on every run, and the noise trains you to
+# stop reading its output. Re-add the thresholds at the same time you take
+# line_length back out of the list above.
+
+identifier_name:
+  min_length: 2
+  # Single letters are idiomatic for loop indices, color/geometry components,
+  # and byte counts. Longer identifiers are still checked.
+  excluded:
+    - a
+    - b
+    - c
+    - d
+    - e
+    - f
+    - g
+    - h
+    - i
+    - j
+    - k
+    - m
+    - n
+    - r
+    - s
+    - v
+    - w
+    - x
+    - y
+    - z
+
+# Relaxed from defaults for existing code; tighten after refactoring.
+type_body_length:
+  warning: 500
+
+large_tuple:
+  warning: 3
+
+function_parameter_count:
+  warning: 7
+
+excluded:
+  - .build
+  - build
+  - docs

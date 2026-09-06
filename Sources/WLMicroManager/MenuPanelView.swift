@@ -35,7 +35,7 @@ struct MenuPanelView: View {
             if bridge.contendingClient {
                 Divider()
                 Label(
-                    "Another app is also driving this pad — colours may fight.",
+                    "Another app is also driving this pad — colors may fight.",
                     systemImage: "exclamationmark.triangle"
                 )
                 .font(.caption)
@@ -229,8 +229,11 @@ struct MenuPanelView: View {
                 .padding(.horizontal, 14).padding(.top, 8)
                 .onChange(of: launchAtLogin) { enabled in
                     do {
-                        if enabled { try SMAppService.mainApp.register() }
-                        else { try SMAppService.mainApp.unregister() }
+                        if enabled {
+                            try SMAppService.mainApp.register()
+                        } else {
+                            try SMAppService.mainApp.unregister()
+                        }
                     } catch {
                         // Registering only works from a bundled, signed app;
                         // reflect reality rather than leaving the box ticked.

@@ -38,7 +38,7 @@ public struct ShortcutSpec: Equatable, Sendable {
             case "opt", "option", "alt": modifiers.insert(.option)
             case "ctrl", "control": modifiers.insert(.control)
             default:
-                // A second base key, or an unrecognised name, both fail —
+                // A second base key, or an unrecognized name, both fail —
                 // reporting silence rather than guessing which one you meant.
                 guard keyCode == nil, let code = keyCodes[part] else { return nil }
                 keyCode = code
@@ -63,6 +63,6 @@ public struct ShortcutSpec: Equatable, Sendable {
         "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97, "f7": 98,
         "f8": 100, "f9": 101, "f10": 109, "f11": 103, "f12": 111,
         "f13": 105, "f14": 107, "f15": 113, "f16": 106, "f17": 64, "f18": 79, "f19": 80,
-        "left": 123, "right": 124, "down": 125, "up": 126,
+        "left": 123, "right": 124, "down": 125, "up": 126
     ]
 }

@@ -151,8 +151,8 @@ public final class WLDevice {
             kIOHIDVendorIDKey: WLDevice.vendorID,
             kIOHIDDeviceUsagePairsKey: [
                 [kIOHIDDeviceUsagePageKey: WLDevice.vendorUsagePage,
-                 kIOHIDDeviceUsageKey: WLDevice.vendorUsage],
-            ],
+                 kIOHIDDeviceUsageKey: WLDevice.vendorUsage]
+            ]
         ] as CFDictionary)
         let openResult = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         guard openResult == kIOReturnSuccess else {
@@ -166,11 +166,22 @@ public final class WLDevice {
         guard let set = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>, !set.isEmpty else {
             throw Failure.notFound
         }
-        // Over Bluetooth the pad is a single IOHIDDevice whose primary usage is
-        // keyboard, with the vendor collection alongside it in DeviceUsagePairs.
-        // Over USB each interface is its own IOHIDDevice, so picking the first
-        // match lands on the keyboard and every report id 6 write is dropped.
-        // Select the one that actually carries the vendor collection.
+        // Match on the vendor collection, never on the primary usage.
+        //
+        // macOS makes one IOHIDDevice per HID *interface*, not per top-level
+        // collection, and this pad puts all four of its collections (boot
+        // keyboard, two consumer, and the vendor channel we want) on a single
+        // interface. So on both transports it enumerates as exactly ONE
+        // IOHIDDevice whose PrimaryUsagePage is 1 (keyboard) — the vendor pair
+        // 0xFF00/1 appears only in DeviceUsagePairs. Verified 2026-09-05 over
+        // USB: one IOUSBHostInterface, bInterfaceNumber 0, and report id 6
+        // writes to that keyboard-primary device succeed.
+        //
+        // The first clause is therefore the one that never fires today; it is
+        // kept because a firmware that splits the vendor collection onto its own
+        // interface would be the better match. Do not "simplify" this to the
+        // first vendor-id match: on a device that does split, that lands on the
+        // keyboard and every report id 6 write is silently dropped.
         guard let dev = set.first(where: { primaryUsagePage($0) == WLDevice.vendorUsagePage })
             ?? set.first(where: { hasVendorCollection($0) })
         else {
@@ -385,9 +396,13 @@ public final class WLDevice {
         while index < rpcAccumulator.endIndex {
             let ch = rpcAccumulator[index]
             if inString {
-                if escaped { escaped = false }
-                else if ch == "\\" { escaped = true }
-                else if ch == "\"" { inString = false }
+                if escaped {
+                    escaped = false
+                } else if ch == "\\" {
+                    escaped = true
+                } else if ch == "\"" {
+                    inString = false
+                }
             } else if ch == "\"" {
                 inString = true
             } else if ch == "{" {

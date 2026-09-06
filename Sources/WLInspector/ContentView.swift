@@ -66,8 +66,8 @@ struct ContentView: View {
                     }
                 }
 
-                section("Colour") {
-                    ColorPicker("Colour", selection: $model.editColor, supportsOpacity: false)
+                section("Color") {
+                    ColorPicker("Color", selection: $model.editColor, supportsOpacity: false)
                     Text(hexString(model.editColor.packedRGB))
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.secondary)
@@ -87,13 +87,13 @@ struct ContentView: View {
                     }
                     Button("Apply to whole keys zone") { model.applyKeysZone() }
                         .disabled(!model.connected)
-                    Text("The zone is a single colour across all keys. Per-key colours override it.")
+                    Text("The zone is a single color across all keys. Per-key colors override it.")
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 section("Underglow") {
-                    ColorPicker("Colour", selection: $model.ambientColor, supportsOpacity: false)
+                    ColorPicker("Color", selection: $model.ambientColor, supportsOpacity: false)
                     Picker("Effect", selection: $model.ambientEffect) {
                         ForEach(OAI.Effect.allCases) { Text($0.label).tag($0) }
                     }
@@ -112,7 +112,7 @@ struct ContentView: View {
                     .disabled(!model.connected)
                     Button("All lights off", role: .destructive) { model.allOff() }
                         .disabled(!model.connected)
-                    Text("Clears every key and both zones. Zones alone are not enough — key colour paints over them.")
+                    Text("Clears every key and both zones. Zones alone are not enough — key color paints over them.")
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -169,7 +169,11 @@ struct PadView: View {
         let state = model.keys[index]
         let selected = model.selection.contains(index)
         return Button {
-            if selected { model.selection.remove(index) } else { model.selection.insert(index) }
+            if selected {
+                model.selection.remove(index)
+            } else {
+                model.selection.insert(index)
+            }
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 6)
@@ -203,7 +207,7 @@ struct RawCallView: View {
         ("Announce host app", "host.focused_app", "{\"name\":\"WLInspector\",\"bundle_id\":\"cc.worklouder.inspector\"}"),
         ("Device status", "device.status", ""),
         ("Firmware version", "sys.version", ""),
-        ("List files", "fs.list", "{\"checksum\":false,\"rec\":true}"),
+        ("List files", "fs.list", "{\"checksum\":false,\"rec\":true}")
     ]
 
     var body: some View {
@@ -253,7 +257,11 @@ struct LogView: View {
                     Toggle(isOn: Binding(
                         get: { model.visibleKinds.contains(kind) },
                         set: { on in
-                            if on { model.visibleKinds.insert(kind) } else { model.visibleKinds.remove(kind) }
+                            if on {
+                                model.visibleKinds.insert(kind)
+                            } else {
+                                model.visibleKinds.remove(kind)
+                            }
                         }
                     )) {
                         Text(kind.rawValue)

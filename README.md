@@ -32,12 +32,12 @@ all three drive the same lighting and will overwrite each other.
 
 ## What the pad does
 
-**The icon** shows state at a glance: dimmed when off, a coloured dot when
+**The icon** shows state at a glance: dimmed when off, a colored dot when
 running — green all idle, amber something working, red something needs you —
 and a badge when the pad is missing or permission is denied.
 
 **The top six keys** are one agent each, in the order Herdr's own panel lists
-them. Colours are red (blocked, breathing), amber (working), blue (done —
+them. Colors are red (blocked, breathing), amber (working), blue (done —
 finished but not yet looked at) and green (idle — finished and seen). Herdr
 distinguishes done from idle by whether you have focused the pane yet, so blue
 means something is waiting to be read and green means quiet. The **underglow**
@@ -84,7 +84,7 @@ login shell is asked. Set `WL_BUT_PATH` to skip all of it.
 ## The panel
 
 Click the menu-bar icon. It draws the pad in its real shape with every key
-showing its live colour, then one row per agent. Click a key or a row to jump to
+showing its live color, then one row per agent. Click a key or a row to jump to
 that agent. It also carries the on/off switch, an "Open at login" toggle, a
 warning when another app is fighting for the device, and the **Inspector**
 button.
@@ -98,7 +98,7 @@ way back in if the bindings are still there.
 The debug UI ships inside the app — the **Inspector** button in the panel opens
 it. It logs every message in both directions (`TX`, `RX`, `NOTIFY`, `DEVICE`),
 decodes the device's abbreviated notifications, and drives the lighting by hand:
-per-key colours and effects, the two zones, a key walk, and a raw JSON-RPC
+per-key colors and effects, the two zones, a key walk, and a raw JSON-RPC
 console with presets.
 
 It lives at `MicroManager.app/Contents/Library/Inspector.app`, signed by the
@@ -131,7 +131,7 @@ the ones that cost time on real hardware:
 - it answers `{"ok":1}` to any lighting payload, right or wrong;
 - it boots on the **stock F-key keymap**, so the app has to bind the keys
   before anything can light — and a key that is not bound to `KV_OAI_AG*`
-  accepts its colour in silence and stays dark;
+  accepts its color in silence and stays dark;
 - an unbound key reports nothing when pressed, because on the pad it would be
   sending a keystroke instead.
 
@@ -151,7 +151,7 @@ the dial and joystick offer, drop a `config.json` into
   "keys": {
     "9":     "Open PRs for all active GitButler branches",
     "12":    "Run but pull",
-    "10+11": "Summarise what you are working on",
+    "10+11": "Summarize what you are working on",
     "6":     { "shortcut": "cmd+shift+5" },
     "7":     { "shortcut": "f13" }
   },
@@ -170,7 +170,7 @@ Modifiers (`cmd`/`command`, `shift`, `opt`/`option`/`alt`, `ctrl`/`control`) go
 in any order, `+`-joined, with exactly one base key — a letter, digit, named
 punctuation key (`equal`, `minus`, `comma`, …), or a named key (`space`,
 `tab`, `return`, `escape`, `delete`, `up`/`down`/`left`/`right`, `f1`–`f19`).
-An unrecognised shortcut string does nothing and reports itself as an error
+An unrecognized shortcut string does nothing and reports itself as an error
 the next time you press that key. A synthesised shortcut needs the
 **Accessibility** permission, same as the wide key's right-command tap.
 
@@ -190,8 +190,8 @@ as-is; with the default Herdr provider that's `"agent"` (steps focus
 through the agents in sidebar order), `"tab"` (cycles the tabs of the
 focused workspace), or `"space"`/`"workspace"` (steps through workspaces),
 all wrapping and following the turn direction. A name the active provider
-doesn't recognise falls back to `"effort"` and says so in the panel, the
-same way an unrecognised shortcut does.
+doesn't recognize falls back to `"effort"` and says so in the panel, the
+same way an unrecognized shortcut does.
 
 ### Providers
 
@@ -267,6 +267,23 @@ two at once means they overwrite each other. The panel detects this — the devi
 is opened shared, so we receive other clients' replies, and a response id we
 never issued is a reliable tell.
 
+## When the pad stops responding
+
+Lit but inert — the dial and keys do nothing, usually after a sleep/wake. The
+panel will name the error; if it ends in `0xE00002E2`, that is
+`kIOReturnNotPermitted`, which means either Input Monitoring is not granted or
+the HID session has wedged.
+
+If Input Monitoring is already granted, it is a wedged session, and **only
+restarting the Mac clears it**. Power-cycling the pad, toggling Bluetooth,
+re-pairing, switching to USB and replugging the cable have all been tried and
+none of them work — the state survives re-enumeration on either transport. Quit
+Work Louder Input and the Codex app first in case one of them is simply holding
+the pad, try one replug, then restart.
+
+Full write-up, including how to confirm the fix took:
+**[docs/hacking.md §14](docs/hacking.md#14-when-the-pad-stops-responding)**.
+
 ## Development
 
 ```bash
@@ -284,7 +301,7 @@ swift run WLInspector  # the debug UI
 | `docs/hacking.md` | how the pad protocol works, and how to drive it yourself |
 | `docs/index.html` | the website, served by GitHub Pages from `docs/` |
 
-The device protocol — raw-HID JSON-RPC, per-key colour, key and joystick events,
+The device protocol — raw-HID JSON-RPC, per-key color, key and joystick events,
 and the keymap binding that makes per-key lighting possible at all — is written
 up in full in **[docs/hacking.md](docs/hacking.md)**.
 

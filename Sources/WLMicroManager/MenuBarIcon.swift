@@ -5,7 +5,7 @@ import WLKit
 /// The menu-bar icon.
 ///
 /// Menu-bar images are drawn as templates (flattened to monochrome) unless the
-/// NSImage says otherwise, so a coloured status needs `isTemplate = false` and
+/// NSImage says otherwise, so a colored status needs `isTemplate = false` and
 /// an explicitly drawn dot. Neutral states stay templated so they follow the
 /// menu bar's own light/dark appearance.
 enum MenuBarIcon {
