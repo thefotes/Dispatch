@@ -4,7 +4,7 @@ import XCTest
 /// Exercises the emulator through `WLDevice`, the way the bridge reaches it.
 ///
 /// These run everywhere, with no pad attached — which is the point of having
-/// an emulator at all. They pin the firmware behaviours that are invisible on
+/// an emulator at all. They pin the firmware behaviors that are invisible on
 /// real hardware: silent acceptance of any payload, and keys that cannot light
 /// until they are bound.
 final class PadEmulatorTests: XCTestCase {
@@ -88,7 +88,7 @@ final class PadEmulatorTests: XCTestCase {
 
         _ = try await device.callAsync(OAI.methodThreads, params: OAI.threadsParams(
             [OAI.Thread(id: 2, color: 0x123456, brightness: 1, effect: .solid, speed: 0.4)]))
-        // Change only the brightness; colour and effect must survive.
+        // Change only the brightness; color and effect must survive.
         _ = try await device.callAsync(OAI.methodThreads,
                                        params: [["id": 2, "b": 0.25]])
         XCTAssertEqual(emulator.keys[2]?.color, 0x123456)

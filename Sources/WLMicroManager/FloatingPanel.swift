@@ -36,7 +36,7 @@ final class FloatingPanel: NSObject {
     func present() {
         let panel = panel ?? makePanel()
         self.panel = panel
-        centre(panel, height: panel.frame.height)
+        center(panel, height: panel.frame.height)
         panel.orderFrontRegardless()
         onVisibilityChange?(true)
     }
@@ -130,7 +130,7 @@ final class FloatingPanel: NSObject {
         return panel
     }
 
-    private func centre(_ panel: NSPanel, height: CGFloat) {
+    private func center(_ panel: NSPanel, height: CGFloat) {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
             ?? NSScreen.main
@@ -161,7 +161,7 @@ final class FloatingPanel: NSObject {
 
     private func contentHeightChanged(_ height: CGFloat) {
         guard let panel, panel.isVisible else { return }
-        centre(panel, height: height)
+        center(panel, height: height)
     }
 
     /// A message handler is retained by the content controller, so it holds the
@@ -214,7 +214,7 @@ enum PanelHTML {
         "<div class=\"cmd\">$ \(AnsiHTML.escapeHTML(text))</div>"
     }
 
-    /// A command's combined output, colour intact. Success keeps `pre`'s
+    /// A command's combined output, color intact. Success keeps `pre`'s
     /// columns — a stack graph only reads if they hold. A failure is one long
     /// sentence, and clipping it behind a scrollbar hides the half that says
     /// what to do about it, so it wraps instead.

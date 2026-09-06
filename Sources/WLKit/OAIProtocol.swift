@@ -206,11 +206,11 @@ public enum Pad {
     public static let dialUpID = 13     // encoder, clockwise detent
     public static let dialDownID = 14   // encoder, counter-clockwise detent
     /// The joystick's four cardinal sectors, named by the angle fraction at
-    /// their centre in the radial map (0 = east, counter-clockwise).
-    public static let joyNorthID = 15   // sector centred on 0.25
-    public static let joyWestID = 16    // sector centred on 0.5
-    public static let joySouthID = 17   // sector centred on 0.75
-    public static let joyEastID = 18    // sector centred on 0.0
+    /// their center in the radial map (0 = east, counter-clockwise).
+    public static let joyNorthID = 15   // sector centered on 0.25
+    public static let joyWestID = 16    // sector centered on 0.5
+    public static let joySouthID = 17   // sector centered on 0.75
+    public static let joyEastID = 18    // sector centered on 0.0
 
     public enum JoystickDirection {
         case north, south, east, west
@@ -239,10 +239,10 @@ public enum Pad {
     }
 }
 
-// MARK: - Colour helpers
+// MARK: - Color helpers
 
 extension Color {
-    /// Packed 0xRRGGBB, which is how colours go on the wire.
+    /// Packed 0xRRGGBB, which is how colors go on the wire.
     public var packedRGB: Int {
         let ns = NSColor(self).usingColorSpace(.sRGB) ?? .black
         let r = Int((ns.redComponent * 255).rounded())

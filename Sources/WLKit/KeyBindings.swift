@@ -9,7 +9,7 @@ import Foundation
 ///       "keys": {
 ///         "9": "Open PRs for all active GitButler branches",
 ///         "12": "Run but pull",
-///         "10+11": "Summarise what you are working on"
+///         "10+11": "Summarize what you are working on"
 ///       },
 ///       "dial":   "effort",
 ///       "claude": { "models": ["fable", "opus"], "efforts": ["low", "high"] },
@@ -29,14 +29,14 @@ import Foundation
 /// unbinds a key outright.
 ///
 /// A top-level `"dial"` string repurposes the knob: `"effort"` (the default)
-/// climbs the reasoning-effort ladder — the one dial behaviour built into
+/// climbs the reasoning-effort ladder — the one dial behavior built into
 /// Micromanager itself, handled in the app layer, never reaching a
 /// provider. Any other name is passed through verbatim to whichever
 /// provider is active, resolved against what `Provider.describe()` actually
 /// offers once the bridge starts — this file has no opinion on what names
 /// are valid, since that is entirely up to the provider. An unresolvable
 /// name falls back to `"effort"` and surfaces itself in `BridgeController`,
-/// the same way an unrecognised shortcut does.
+/// the same way an unrecognized shortcut does.
 ///
 /// A top-level `"provider"` object swaps the in-process `HerdrProvider` for
 /// one reached over a socket: `{"provider": {"connect": "/path/to.sock"}}`
@@ -103,7 +103,7 @@ public struct KeyBindings: Sendable, Equatable {
     public private(set) var providerSpec: ProviderSpec?
 
     /// Set when `"dial"` was present but the wrong JSON shape (not a string,
-    /// or an empty one) — a name that is simply unrecognised by the active
+    /// or an empty one) — a name that is simply unrecognized by the active
     /// provider is a `BridgeController`-time concern, not this file's.
     public private(set) var dialWarning: String?
 
@@ -228,7 +228,7 @@ public struct KeyBindings: Sendable, Equatable {
     }
 
     /// A key's value is a bare string (a text macro; an empty one is a no-op,
-    /// matching the pre-`.off` behaviour so existing configs keep working),
+    /// matching the pre-`.off` behavior so existing configs keep working),
     /// an object with a `"shortcut"` string (same empty-string rule), or
     /// `false` (turns it off outright — the unambiguous choice for a
     /// stack/tabs/land key, where an empty string could read as "leave it

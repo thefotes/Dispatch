@@ -169,7 +169,7 @@ public final class BridgeController: ObservableObject {
         contendingClient = false
         keyBindings = KeyBindings.load()
         // A mistyped "dial" keeps its fallback; say so where the panel shows
-        // the bridge's other errors, the same way an unrecognised shortcut does.
+        // the bridge's other errors, the same way an unrecognized shortcut does.
         if let warning = keyBindings.dialWarning { lastError = warning }
         await applyProviderDescription()
 
@@ -309,7 +309,7 @@ public final class BridgeController: ObservableObject {
                 let cfg = try await KeymapManager.read(device)
                 keymapReady = KeymapManager.isAgentKeymapApplied(cfg)
                 if !keymapReady {
-                    lastError = "The agent keys and the stack key are not bound to KV_OAI_AG00..AG06, so per-key colours will do nothing."
+                    lastError = "The agent keys and the stack key are not bound to KV_OAI_AG00..AG06, so per-key colors will do nothing."
                 }
             }
         } catch {
@@ -370,7 +370,7 @@ public final class BridgeController: ObservableObject {
 
         let state = StatusMapper.aggregate(fetched, config)
         // Every overridable key shares this light: a binding (text or
-        // shortcut) wins and paints the generic macro colour; an unbound key
+        // shortcut) wins and paints the generic macro color; an unbound key
         // falls back to whatever it does by default.
         let flexKeys = Pad.overridableKeyIDs.map { key -> OAI.Thread in
             switch keyBindings.action(for: key) {
@@ -508,7 +508,7 @@ public final class BridgeController: ObservableObject {
             Task { await injectPrompt(text) }
         case .shortcut(let spec):
             guard let parsed = ShortcutSpec.parse(spec) else {
-                lastError = "Unrecognised shortcut \"\(spec)\"."
+                lastError = "Unrecognized shortcut \"\(spec)\"."
                 return
             }
             onShortcut?(parsed)
@@ -551,13 +551,13 @@ public final class BridgeController: ObservableObject {
     /// doc — this is never called for `.effort`). `step` is +1 / -1 from the
     /// encoder detents. Whether the mode brings the host app forward is the
     /// provider's own call (`ProviderDialMode.raisesHost`), not a name this
-    /// file recognises.
+    /// file recognizes.
     ///
     /// A fast turn fires one unstructured task per detent, and two overlapping
     /// round-trips can both snapshot the same "currently focused" entity
     /// before either focus call lands — several detents net one step, and
     /// whichever response lands last wins. Chaining onto the previous task
-    /// serialises the steps, so each sees the state the last one produced.
+    /// serializes the steps, so each sees the state the last one produced.
     private var dialChain: Task<Void, Never>?
 
     public func cycleDial(_ step: Int) async {

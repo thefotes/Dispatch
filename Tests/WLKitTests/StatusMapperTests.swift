@@ -31,7 +31,7 @@ final class StatusMapperTests: XCTestCase {
         XCTAssertEqual(StatusMapper.zone(for: state)?.color, 0xFFA000)
     }
 
-    func testUnrecognisedStatusStillYieldsAState() {
+    func testUnrecognizedStatusStillYieldsAState() {
         XCTAssertEqual(StatusMapper.aggregate([agent("wat")]), "unknown")
     }
 
@@ -60,7 +60,7 @@ final class StatusMapperTests: XCTestCase {
         for thread in threads.dropFirst() {
             XCTAssertEqual(thread.effect, .off)
             XCTAssertEqual(thread.brightness, 0)
-            XCTAssertNil(thread.color, "no colour on an unused key")
+            XCTAssertNil(thread.color, "no color on an unused key")
         }
     }
 
@@ -75,7 +75,7 @@ final class StatusMapperTests: XCTestCase {
         XCTAssertEqual(StatusMapper.threads(for: many).count, 6)
     }
 
-    func testConfigOverridesAreHonoured() {
+    func testConfigOverridesAreHonored() {
         var cfg = BridgeConfig()
         cfg.colors["working"] = 0x123456
         cfg.brightness = 0.3
@@ -102,7 +102,7 @@ final class StatusMapperTests: XCTestCase {
         XCTAssertNil(wire["s"])
     }
 
-    func testColourRoundTrip() {
+    func testColorRoundTrip() {
         XCTAssertEqual(packedRGB(fromHex: "#FF2D2D"), 0xFF2D2D)
         XCTAssertEqual(packedRGB(fromHex: "00C853"), 0x00C853)
         XCTAssertEqual(packedRGB(fromHex: "#0f0"), 0x00FF00)
@@ -130,13 +130,13 @@ final class StatusMapperTests: XCTestCase {
     }
 }
 
-// MARK: - Status colours must stay distinguishable
+// MARK: - Status colors must stay distinguishable
 
 extension StatusMapperTests {
 
-    func testDoneAndIdleAreToldApartByColour() {
+    func testDoneAndIdleAreToldApartByColor() {
         // "done" means finished and not yet looked at; "idle" means finished
-        // and seen. Different signals, so they must not share a colour.
+        // and seen. Different signals, so they must not share a color.
         let cfg = BridgeConfig()
         XCTAssertNotEqual(
             cfg.color(for: "done"),
@@ -147,12 +147,12 @@ extension StatusMapperTests {
         XCTAssertEqual(cfg.color(for: "done"), 0x00B0FF)
     }
 
-    func testAttentionStatesAllHaveDistinctColours() {
+    func testAttentionStatesAllHaveDistinctColors() {
         let cfg = BridgeConfig()
         var seen: [Int: String] = [:]
         for state in ["blocked", "working", "done", "idle"] {
             let color = cfg.color(for: state)
-            XCTAssertNil(seen[color], "\(state) reuses the colour of \(seen[color] ?? "")")
+            XCTAssertNil(seen[color], "\(state) reuses the color of \(seen[color] ?? "")")
             seen[color] = state
         }
     }
@@ -166,10 +166,10 @@ extension StatusMapperTests {
         XCTAssertEqual(threads[1].color, 0x00C853)
     }
 
-    /// Pins every status colour. These are the whole point of the pad — a
+    /// Pins every status color. These are the whole point of the pad — a
     /// silent change to one is a bug you find by looking at hardware, which is
     /// the slowest possible way to find it.
-    func testEveryStatusColourIsPinned() {
+    func testEveryStatusColorIsPinned() {
         let cfg = BridgeConfig()
         XCTAssertEqual(cfg.color(for: "blocked"), 0xFF2D2D)
         XCTAssertEqual(cfg.color(for: "working"), 0xFFA000)

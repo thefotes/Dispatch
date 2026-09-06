@@ -173,9 +173,9 @@ public enum GitButler {
         process.currentDirectoryURL = URL(fileURLWithPath: directory)
 
         var environment = ProcessInfo.processInfo.environment
-        // `but` drops colour when stdout is not a terminal, and colour is most
+        // `but` drops color when stdout is not a terminal, and color is most
         // of what makes the stack readable. JSON goes the other way: forced
-        // colour has no business inside machine-readable output.
+        // color has no business inside machine-readable output.
         if color {
             environment["CLICOLOR_FORCE"] = "1"
         }

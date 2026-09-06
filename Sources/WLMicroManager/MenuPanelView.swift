@@ -35,7 +35,7 @@ struct MenuPanelView: View {
             if bridge.contendingClient {
                 Divider()
                 Label(
-                    "Another app is also driving this pad — colours may fight.",
+                    "Another app is also driving this pad — colors may fight.",
                     systemImage: "exclamationmark.triangle"
                 )
                 .font(.caption)

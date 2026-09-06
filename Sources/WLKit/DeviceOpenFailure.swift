@@ -5,7 +5,7 @@ import Foundation
 /// `IOHIDDeviceOpen` returns `kIOReturnNotPermitted` (0xE00002E2) for a missing
 /// Input Monitoring grant *and* for a device that is already held or has got
 /// itself wedged, so reading the code alone gets it wrong half the time. The
-/// original check only recognised the older 0xE00002C1, so on current systems a
+/// original check only recognized the older 0xE00002C1, so on current systems a
 /// permissions failure fell through and the menu simply said it was looking for
 /// the pad, which sends you hunting for a cable when the answer is a checkbox.
 ///

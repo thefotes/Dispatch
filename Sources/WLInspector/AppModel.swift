@@ -232,7 +232,7 @@ final class AppModel: ObservableObject {
             magic: 1,
             color: ambientColor.packedRGB
         )
-        // Leave the keys zone dark so it does not compete with per-key colours.
+        // Leave the keys zone dark so it does not compete with per-key colors.
         device.call(OAI.methodRGBConfig, params: OAI.rgbConfigParams(keys: .dark, ambient: zone))
     }
 

@@ -8,7 +8,7 @@ almost orthographic; give YAW and PITCH non-zero angles to tilt it instead.
 
     ./scripts/pad-illustration.py > /tmp/pad.svg
 
-Key colours are the ones the app actually drives, from BridgeConfig in
+Key colors are the ones the app actually drives, from BridgeConfig in
 Sources/WLKit/StatusMapper.swift — so the picture matches the hardware.
 """
 
@@ -46,8 +46,8 @@ def rounded_rect(cx, cy, w, h, r, z, seg=6):
     """Corner-rounded rectangle in the z-plane, as a point list."""
     hw, hh = w / 2 - r, h / 2 - r
     pts = []
-    centres = [(cx + hw, cy + hh), (cx - hw, cy + hh), (cx - hw, cy - hh), (cx + hw, cy - hh)]
-    for corner, (ccx, ccy) in enumerate(centres):
+    centers = [(cx + hw, cy + hh), (cx - hw, cy + hh), (cx - hw, cy - hh), (cx + hw, cy - hh)]
+    for corner, (ccx, ccy) in enumerate(centers):
         a0 = corner * (math.pi / 2)
         for i in range(seg + 1):
             a = a0 + i * (math.pi / 2) / seg
@@ -83,9 +83,9 @@ def path(points2d, close=True):
     return d + (" Z" if close else "")
 
 
-def shade(hex_colour, factor):
+def shade(hex_color, factor):
     """Multiply a #rrggbb toward black (factor<1) or white (factor>1)."""
-    n = int(hex_colour.lstrip("#"), 16)
+    n = int(hex_color.lstrip("#"), 16)
     out = []
     for shift in (16, 8, 0):
         c = (n >> shift) & 0xFF
@@ -96,7 +96,7 @@ def shade(hex_colour, factor):
 
 # ---------------------------------------------------------------- the pad
 
-# Colours the app really drives (BridgeConfig).
+# Colors the app really drives (BridgeConfig).
 BLOCKED, WORKING, DONE, IDLE = "#FF2D2D", "#FFA000", "#00B0FF", "#00C853"
 VOICE, MACRO = "#ECEFF1", "#90A4AE"
 BOWTIE = "#9AA3B2"   # silkscreened on the case, not a lit key
@@ -108,13 +108,13 @@ GAP = 0.12
 KEY_H = 0.24     # keycap height
 CASE_H = 0.42
 
-# rows of (centre_x, width, colour, label) laid out in pad space
+# rows of (center_x, width, color, label) laid out in pad space
 COLS = 4
 span = COLS * U + (COLS - 1) * GAP
 
 
 def col(i, w=U):
-    """Centre x of something `w` wide whose left edge sits in column `i`.
+    """Center x of something `w` wide whose left edge sits in column `i`.
 
     Everything is addressed by column so a double-width key and a knob line up
     with the singles above and below them.
@@ -123,20 +123,20 @@ def col(i, w=U):
 
 
 ROW = U + GAP    # row-to-row pitch, same as the column pitch: the grid is square
-y0 = -1.5 * ROW  # four rows, centred on the case
+y0 = -1.5 * ROW  # four rows, centered on the case
 
-# (centre_x, centre_y, width, colour, agent slot or None)
+# (center_x, center_y, width, color, agent slot or None)
 #
 # The six agent keys carry a slot number, which the page's script uses to
-# recolour them as its mock agents change state — see AGENT KEY CONTRACT below.
+# recolor them as its mock agents change state — see AGENT KEY CONTRACT below.
 # Slots run in reading order, the same as `Pad.agentKeyIDs` in the app.
 rows = []
 # Row 0 is shared with the dial and the joystick, one in each outer column.
 rows += [(col(1), y0, U, WORKING, 0), (col(2), y0, U, IDLE, 1)]
 rows += [(col(i), y0 + ROW, U, c, 2 + i)
          for i, c in enumerate([BLOCKED, DONE, IDLE, IDLE])]
-# The action row reads as one group, so it is a single unlit grey rather than
-# four colours competing with the agent statuses above it.
+# The action row reads as one group, so it is a single unlit gray rather than
+# four colors competing with the agent statuses above it.
 rows += [(col(i), y0 + 2 * ROW, U, MACRO, None) for i in range(4)]
 # Bottom row: the leftmost slot is empty, then a double-width key, then a single.
 rows += [(col(1, 2 * U + GAP), y0 + 3 * ROW, 2 * U + GAP, VOICE, None),
@@ -218,11 +218,11 @@ add(knob(col(3), y0, 0.31, 0.22, cap="#2A2F39"))   # unlit, but light enough to 
 # AGENT KEY CONTRACT — docs/index.html scripts against this, so keep it stable:
 # each agent key is a <g class="agent-key" data-slot="N"> holding five paths
 # classed glow / side / top / inset / rim. The script sets `fill` (and `stroke`
-# on the rim) from one status colour, applying the same five shade factors used
-# here. Change the factors here and the live recolour drifts from the default.
+# on the rim) from one status color, applying the same five shade factors used
+# here. Change the factors here and the live recolor drifts from the default.
 drawn = []
 rings = []   # press ripples, drawn last so nothing clips them
-for (kx, ky, kw, colour, slot) in rows:
+for (kx, ky, kw, color, slot) in rows:
     top = rounded_rect(kx, ky, kw, U, 0.17, KEY_H)
     bot = rounded_rect(kx, ky, kw, U, 0.17, 0.03)
     t2 = [(p[0], p[1]) for p in map(project, top)]
@@ -234,13 +234,13 @@ for (kx, ky, kw, colour, slot) in rows:
         body.append(f'<g class="agent-key" data-slot="{slot}" role="button" '
                     f'tabindex="0" aria-label="Agent {slot + 1}">')
     # glow first, so it sits under the cap it belongs to
-    body.append(f'<path class="glow" d="{path(t2)}" fill="{colour}" opacity="0.5" filter="url(#glow)"/>')
-    body.append(f'<path class="side" d="{path(hull(t2 + b2))}" fill="{shade(colour, 0.52)}"/>')
-    body.append(f'<path class="top" d="{path(t2)}" fill="{shade(colour, 1.06)}"/>')
+    body.append(f'<path class="glow" d="{path(t2)}" fill="{color}" opacity="0.5" filter="url(#glow)"/>')
+    body.append(f'<path class="side" d="{path(hull(t2 + b2))}" fill="{shade(color, 0.52)}"/>')
+    body.append(f'<path class="top" d="{path(t2)}" fill="{shade(color, 1.06)}"/>')
     # an inset, brighter core reads as light coming through a frosted cap
     inset = [(p[0], p[1]) for p in map(project, rounded_rect(kx, ky, kw - 0.2, U - 0.2, 0.12, KEY_H + 0.001))]
-    body.append(f'<path class="inset" d="{path(inset)}" fill="{shade(colour, 1.34)}" opacity="0.9"/>')
-    body.append(f'<path class="rim" d="{path(t2)}" fill="none" stroke="{shade(colour, 1.5)}" '
+    body.append(f'<path class="inset" d="{path(inset)}" fill="{shade(color, 1.34)}" opacity="0.9"/>')
+    body.append(f'<path class="rim" d="{path(t2)}" fill="none" stroke="{shade(color, 1.5)}" '
                 'stroke-width="1.4" opacity="0.75"/>')
     if slot is not None:
         body.append('</g>')
@@ -250,7 +250,7 @@ for (kx, ky, kw, colour, slot) in rows:
         # rather than scaling a shape avoids needing a transform origin, which
         # on an arbitrary path is more trouble than it is worth.
         rings.append(f'<path class="press" data-slot="{slot}" d="{path(t2)}" '
-                     f'fill="none" stroke="{shade(colour, 1.9)}" '
+                     f'fill="none" stroke="{shade(color, 1.9)}" '
                      'stroke-width="2" opacity="0"/>')
     drawn.append((depth, "".join(body)))
 
@@ -273,6 +273,6 @@ vw, vh = max(xs) - min(xs) + 2 * PAD, max(ys) - min(ys) + 2 * PAD
 header = (f'<svg viewBox="{vx:.0f} {vy:.0f} {vw:.0f} {vh:.0f}" '
           'xmlns="http://www.w3.org/2000/svg" role="group" class="pad3d" '
           'aria-label="A Work Louder Creator Micro 2 with its keys lit in agent '
-          'status colours. Each lit key selects that agent.">')
+          'status colors. Each lit key selects that agent.">')
 print(header)
 print("\n".join(out))
