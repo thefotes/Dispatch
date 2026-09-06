@@ -34,7 +34,7 @@ public struct HerdrAgent: Equatable, Sendable {
     }
 
     /// Last path component of the working directory, which is what a person
-    /// recognises the agent by.
+    /// recognizes the agent by.
     public var shortName: String {
         guard let directory = workingDirectory else { return agent }
         return (directory as NSString).lastPathComponent

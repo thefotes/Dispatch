@@ -28,7 +28,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
                 "working": ProviderStateStyle(color: 0xFFA000, effect: .solid),
                 // "done" is an agent that finished and has not been looked at
                 // yet; "idle" is finished and seen. A real difference, so a
-                // different colour.
+                // different color.
                 "done": ProviderStateStyle(color: 0x00B0FF, effect: .solid),
                 "idle": ProviderStateStyle(color: 0x00C853, effect: .solid),
                 "unknown": ProviderStateStyle(color: 0x00C853, effect: .solid)
@@ -69,7 +69,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             else { return }
             try await HerdrClient.focusWorkspace(next.workspaceID)
         default:
-            break   // an unrecognised mode does nothing, same as `.effort` never reaching here
+            break   // an unrecognized mode does nothing, same as `.effort` never reaching here
         }
     }
 

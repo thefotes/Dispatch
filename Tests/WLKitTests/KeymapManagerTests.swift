@@ -93,9 +93,9 @@ final class KeymapManagerTests: XCTestCase {
         for sector in sectors {
             let a1 = try XCTUnwrap(sector["a1"] as? Double)
             let a2 = try XCTUnwrap(sector["a2"] as? Double)
-            let centre = KeymapManager.sectorCentre(a1, a2)
+            let center = KeymapManager.sectorCenter(a1, a2)
             if let code = sector["k"] as? String, code.hasPrefix("KV_OAI_AG") {
-                cardinals[centre] = code
+                cardinals[center] = code
             } else {
                 diagonals += 1
             }

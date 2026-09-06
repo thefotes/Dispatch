@@ -23,7 +23,7 @@ final class ProviderChangeNotifierTests: XCTestCase {
         withExtendedLifetime(subscription) {}
     }
 
-    func testCancellingClearsTheCallback() {
+    func testCancelingClearsTheCallback() {
         let notifier = ProviderChangeNotifier()
         var fired = 0
         let subscription = notifier.subscribe({ fired += 1 }, onTeardown: {})
@@ -38,7 +38,7 @@ final class ProviderChangeNotifierTests: XCTestCase {
     /// once per cancel, and only after the callback is already cleared, so
     /// a `notify()` racing the cancel never both fires the old callback and
     /// sees teardown incomplete.
-    func testCancellingRunsTeardownExactlyOnce() {
+    func testCancelingRunsTeardownExactlyOnce() {
         let notifier = ProviderChangeNotifier()
         var teardownCount = 0
         let subscription = notifier.subscribe({}, onTeardown: { teardownCount += 1 })

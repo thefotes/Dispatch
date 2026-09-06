@@ -1,7 +1,7 @@
 # Hacking the Work Louder Creator Micro 2
 
 A step-by-step guide to driving the pad from your own code: setting individual
-key colours, reading key presses back, and using the dial and joystick as
+key colors, reading key presses back, and using the dial and joystick as
 inputs. No Work Louder software involved — this talks to the firmware directly.
 
 Everything here is verified on a
@@ -26,7 +26,7 @@ uses.
 5. [First contact](#5-first-contact)
 6. [Zone lighting: the easy win](#6-zone-lighting-the-easy-win)
 7. [The keymap prerequisite](#7-the-keymap-prerequisite)
-8. [Per-key colour](#8-per-key-colour)
+8. [Per-key color](#8-per-key-color)
 9. [Key events](#9-key-events)
 10. [The dial and the joystick](#10-the-dial-and-the-joystick)
 11. [Turning everything off](#11-turning-everything-off)
@@ -121,7 +121,7 @@ Requests look like `{"method": "...", "params": ..., "id": 42}`. Two rules:
   silently — this is the single most common way to conclude the keys are inert
   when they are not.
 
-Colours go on the wire as a packed `0xRRGGBB` integer. `brightness`, `speed` and
+Colors go on the wire as a packed `0xRRGGBB` integer. `brightness`, `speed` and
 `magic` are floats in `0..1`.
 
 ---
@@ -280,7 +280,7 @@ await dev.call("v.oai.rgbcfg", {
 ```
 
 Note the **abbreviated field names** — `e` effect, `b` brightness, `s` speed,
-`m` magic, `c` colour — and that **`e` is a number**, not a string. This is the
+`m` magic, `c` color — and that **`e` is a number**, not a string. This is the
 part that silently no-ops if you get it wrong.
 
 There is also an older `lights.preview` taking `backlight` and `underglow` with
@@ -299,7 +299,7 @@ await dev.call("lights.preview", {
 ## 7. The keymap prerequisite
 
 **A key can only be lit individually if it is bound to a `KV_OAI_AG*` keycode on
-the active layer.** This is the gate that makes per-key colour look impossible
+the active layer.** This is the gate that makes per-key color look impossible
 until you find it. Nothing reports the mismatch: per-key calls still answer
 `{"ok":1}` for a key that cannot light. Parking the codes on a spare layer does
 nothing — it must be the *active* layer.
@@ -408,7 +408,7 @@ you want the whole cap to glow evenly.
 
 ---
 
-## 8. Per-key colour
+## 8. Per-key color
 
 This is the payoff. The method is `v.oai.thstatus`, and each key is a "thread".
 
@@ -422,7 +422,7 @@ await dev.call("v.oai.thstatus", [
 ]);
 ```
 
-That is the whole trick. Three keys, three colours:
+That is the whole trick. Three keys, three colors:
 
 ```js
 await dev.call("v.oai.thstatus", [
@@ -454,11 +454,11 @@ Effects are the firmware's own set:
 | 2 | snake   | 6 | shallow breath |
 | 3 | rainbow |   | |
 
-Each key can carry its **own** effect, not just its own colour — one key
-breathing while its neighbours sit solid works fine.
+Each key can carry its **own** effect, not just its own color — one key
+breathing while its neighbors sit solid works fine.
 
-**Thread state paints over zone state.** A key with a thread colour ignores the
-`keys` zone; the zone only shows through where no thread colour is set. That is
+**Thread state paints over zone state.** A key with a thread color ignores the
+`keys` zone; the zone only shows through where no thread color is set. That is
 also why turning the pad off takes two calls — see [§11](#11-turning-everything-off).
 
 ### Prove it with a walk
@@ -542,7 +542,7 @@ The joystick is radial: eight sectors, each with an angle range `a1..a2`
 expressed as a **fraction of a full turn**, where **0 is east and the angle
 increases counter-clockwise**.
 
-| sector centre | direction | stock keycode |
+| sector center | direction | stock keycode |
 |---|---|---|
 | 0.000 | east  | `KC_P6` |
 | 0.125 | NE    | `KC_P7` |
@@ -553,19 +553,19 @@ increases counter-clockwise**.
 | 0.750 | south | `KC_P4` |
 | 0.875 | SE    | `KC_P5` |
 
-Bind whichever you want. Match on the sector's centre rather than its bounds —
+Bind whichever you want. Match on the sector's center rather than its bounds —
 the east sector wraps through zero (`a1: 0.9375, a2: 0.0625`), so a naive
 midpoint gives you 0.5 instead of 0.0:
 
 ```js
-const centre = (a1, a2) => ((a2 >= a1 ? (a1 + a2) / 2 : (a1 + a2 + 1) / 2) % 1);
+const center = (a1, a2) => ((a2 >= a1 ? (a1 + a2) / 2 : (a1 + a2 + 1) / 2) % 1);
 const cardinals = { 0.25: "KV_OAI_AG15",   // north
                     0.50: "KV_OAI_AG16",   // west
                     0.75: "KV_OAI_AG17",   // south
                     0.00: "KV_OAI_AG18" }; // east
 
 for (const sector of layer.layout.joystick.sectors) {
-  const c = centre(sector.a1, sector.a2);
+  const c = center(sector.a1, sector.a2);
   const hit = Object.keys(cardinals).find((k) => Math.abs(Number(k) - c) < 0.01);
   if (hit) sector.k = cardinals[hit];
 }
@@ -581,7 +581,7 @@ The device also pushes a continuous radial notification:
 {"m": "v.oai.rad", "p": {"a": 0.25, "d": 0.8}}
 ```
 
-`a` is the angle on the same 0..1 scale, `d` the distance from centre, 0..1.
+`a` is the angle on the same 0..1 scale, `d` the distance from center, 0..1.
 Use this if you want analogue position rather than four discrete directions —
 you handle your own deadzone and repeat-rate. The sector-binding route above is
 the easier one and is what Micro Manager uses; the Inspector decodes and logs
@@ -644,7 +644,7 @@ names and string effects. Mixing them is the classic silent failure.
 
 | | `v.oai.rgbcfg` / `thstatus` | `lights.preview` |
 |---|---|---|
-| colour | `c` (int) | `color` (int) |
+| color | `c` (int) | `color` (int) |
 | brightness | `b` | `brightness` |
 | effect | `e` (**number**) | `effect` (**string**) |
 | speed | `s` | `speed` |
@@ -665,8 +665,8 @@ malformed ones, and returns success. Verify against the LEDs.
 **A key that is not AG-bound on the *active* layer cannot be lit,** and nothing
 tells you. Threads for it still return `{"ok":1}`.
 
-**Thread colour overrides zone colour.** Zones only show through where no thread
-colour is set, and "all off" needs both cleared.
+**Thread color overrides zone color.** Zones only show through where no thread
+color is set, and "all off" needs both cleared.
 
 **Call ids must be under 1000.**
 

@@ -29,7 +29,7 @@ final class VoiceController {
 
     /// Which half of the start/stop cycle we are in. Only the light cares —
     /// stopping a take from the keyboard makes this drift, and the next press
-    /// resynchronises it.
+    /// resynchronizes it.
     private var takeOpen = false
 
     func handleVoiceKey() {

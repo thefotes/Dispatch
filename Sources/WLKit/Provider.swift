@@ -51,7 +51,7 @@ public struct ProviderDescription: Sendable, Equatable {
     /// Dial modes this provider understands, in menu order, each with a
     /// short label. `BridgeController` resolves `config.json`'s `"dial"`
     /// string against these ids — a name that isn't here falls back to the
-    /// effort ladder with a warning, the same way an unrecognised shortcut
+    /// effort ladder with a warning, the same way an unrecognized shortcut
     /// reports itself. Never includes `"effort"`, which is handled entirely
     /// in the app layer and never reaches a provider.
     public var dialModes: [ProviderDialMode]
@@ -95,8 +95,8 @@ public struct ProviderDialMode: Sendable, Equatable {
     }
 }
 
-/// Cancellation handle for `Provider.subscribe`. Cancelling twice, or letting
-/// it deinit uncancelled, is safe — both just run `onCancel` once.
+/// Cancellation handle for `Provider.subscribe`. Canceling twice, or letting
+/// it deinit uncanceled, is safe — both just run `onCancel` once.
 public final class ProviderSubscription: @unchecked Sendable {
     private let lock = NSLock()
     private var onCancel: (() -> Void)?

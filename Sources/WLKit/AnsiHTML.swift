@@ -2,14 +2,14 @@ import Foundation
 
 /// Turns terminal output into HTML.
 ///
-/// `but status` draws a stack with box characters and SGR colour, so rendering
-/// it faithfully means honouring the escapes rather than stripping them. Only
+/// `but status` draws a stack with box characters and SGR color, so rendering
+/// it faithfully means honoring the escapes rather than stripping them. Only
 /// SGR (`ESC [ ... m`) carries meaning here; every other escape sequence is
 /// dropped rather than printed, because a stray `ESC [?25l` shown literally is
 /// worse than no cursor control at all.
 public enum AnsiHTML {
 
-    /// One span's worth of styling. `nil` colour means the document default.
+    /// One span's worth of styling. `nil` color means the document default.
     struct Style: Equatable {
         var foreground: String?
         var background: String?
@@ -21,7 +21,7 @@ public enum AnsiHTML {
         var isPlain: Bool { self == Style() }
 
         /// Bold is a class rather than `font-weight`, so the theme decides
-        /// whether it brightens the colour as well.
+        /// whether it brightens the color as well.
         var attribute: String {
             var classes: [String] = []
             if bold { classes.append("b") }
@@ -194,7 +194,7 @@ public enum AnsiHTML {
         }
     }
 
-    /// `38;5;n` (256-colour) and `38;2;r;g;b` (truecolour). Advances `index`
+    /// `38;5;n` (256-color) and `38;2;r;g;b` (truecolor). Advances `index`
     /// past the arguments it consumed.
     private static func readExtendedColor(_ parameters: [Int], from index: inout Int) -> String? {
         guard index + 1 < parameters.count else { return nil }
@@ -227,8 +227,8 @@ public enum AnsiHTML {
                 levels[offset % 6]
             )
         case 232..<256:
-            let grey = 8 + (value - 232) * 10
-            return String(format: "#%02X%02X%02X", grey, grey, grey)
+            let gray = 8 + (value - 232) * 10
+            return String(format: "#%02X%02X%02X", gray, gray, gray)
         default:
             return nil
         }

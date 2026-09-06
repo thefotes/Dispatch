@@ -26,18 +26,18 @@ public enum KeymapManager {
     static let dialCodes = ["KV_OAI_AG13", "KV_OAI_AG14"]
 
     /// The joystick's four cardinal sectors, matched by the angle at their
-    /// centre in the radial map. Diagonal sectors are left alone.
-    static let joystickCodes: [(centre: Double, code: String)] = [
+    /// center in the radial map. Diagonal sectors are left alone.
+    static let joystickCodes: [(center: Double, code: String)] = [
         (0.25, "KV_OAI_AG15"),
         (0.50, "KV_OAI_AG16"),
         (0.75, "KV_OAI_AG17"),
         (0.00, "KV_OAI_AG18")
     ]
 
-    /// A sector's centre angle, handling the one that wraps through zero.
-    static func sectorCentre(_ a1: Double, _ a2: Double) -> Double {
-        let centre = a2 >= a1 ? (a1 + a2) / 2 : ((a1 + a2 + 1) / 2)
-        return centre.truncatingRemainder(dividingBy: 1)
+    /// A sector's center angle, handling the one that wraps through zero.
+    static func sectorCenter(_ a1: Double, _ a2: Double) -> Double {
+        let center = a2 >= a1 ? (a1 + a2) / 2 : ((a1 + a2 + 1) / 2)
+        return center.truncatingRemainder(dividingBy: 1)
     }
 
     /// The keycode each managed key must carry, addressed by its position in
@@ -124,12 +124,12 @@ public enum KeymapManager {
         }
         if let joystick = layout["joystick"] as? [String: Any],
            let sectors = joystick["sectors"] as? [[String: Any]] {
-            for (centre, code) in joystickCodes {
+            for (center, code) in joystickCodes {
                 let bound = sectors.contains { sector in
                     guard let a1 = sector["a1"] as? Double,
                           let a2 = sector["a2"] as? Double
                     else { return false }
-                    return abs(sectorCentre(a1, a2) - centre) < 0.01
+                    return abs(sectorCenter(a1, a2) - center) < 0.01
                         && sector["k"] as? String == code
                 }
                 if !bound { return false }
@@ -177,8 +177,8 @@ public enum KeymapManager {
                 guard let a1 = sectors[index]["a1"] as? Double,
                       let a2 = sectors[index]["a2"] as? Double
                 else { continue }
-                let centre = sectorCentre(a1, a2)
-                if let match = joystickCodes.first(where: { abs($0.centre - centre) < 0.01 }) {
+                let center = sectorCenter(a1, a2)
+                if let match = joystickCodes.first(where: { abs($0.center - center) < 0.01 }) {
                     sectors[index]["k"] = match.code
                 }
             }

@@ -18,7 +18,7 @@ public struct BridgeConfig: Sendable {
         // Herdr reports "done" for an agent that has finished and that you
         // have not looked at yet, and "idle" once it is focused. That is a
         // real difference - one is waiting to be read, the other is just
-        // quiet - so give them different colours.
+        // quiet - so give them different colors.
         "done": 0x00B0FF,
         "idle": 0x00C853,
         "unknown": 0x00C853
@@ -30,13 +30,13 @@ public struct BridgeConfig: Sendable {
         "done": .solid,
         "unknown": .solid
     ]
-    /// The stack key is not an agent, so it gets a colour of its own rather
-    /// than borrowing one of the status colours.
+    /// The stack key is not an agent, so it gets a color of its own rather
+    /// than borrowing one of the status colors.
     public var stackColor: Int = 0x7C4DFF
-    /// Same reasoning for the tab-cycle key, in a colour of its own so the two
+    /// Same reasoning for the tab-cycle key, in a color of its own so the two
     /// action keys read as different things.
     public var tabCycleColor: Int = 0x00BFA5
-    /// The land key pushes to the target, so it gets a colour with some weight
+    /// The land key pushes to the target, so it gets a color with some weight
     /// to it — distinct from blocked-red, which means "look", not "beware".
     public var landColor: Int = 0xE91E63
     /// The voice key: white at rest, recording-red while a take is open.
@@ -47,10 +47,10 @@ public struct BridgeConfig: Sendable {
     public var brightness: Double = 1
     public var speed: Double = 0.5
     /// Leave the key-backlight ZONE alone: keys are painted per-agent instead,
-    /// and a zone colour would only compete with them.
+    /// and a zone color would only compete with them.
     public var driveBacklight = false
     /// Bind the keys this app drives to `KV_OAI_AG*` on startup. Required for
-    /// per-key colour to work at all.
+    /// per-key color to work at all.
     public var manageKeymap = true
     public var pollInterval: TimeInterval = 2.5
     public var debounce: TimeInterval = 0.1
@@ -155,7 +155,7 @@ public enum StatusMapper {
         )
     }
 
-    /// A text-macro key's thread: dimly lit so it reads as bound, in a colour
+    /// A text-macro key's thread: dimly lit so it reads as bound, in a color
     /// that stays out of the status conversation.
     public static func macroThread(id: Int, _ cfg: BridgeConfig = BridgeConfig()) -> OAI.Thread {
         OAI.Thread(

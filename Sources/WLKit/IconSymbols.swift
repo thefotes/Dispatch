@@ -12,7 +12,7 @@ public enum IconSymbols {
     /// Running, nothing to report.
     public static let idle = "keyboard"
 
-    /// Agents are doing something worth a colour.
+    /// Agents are doing something worth a color.
     public static let active = "keyboard.fill"
 
     /// No pad, or no permission to reach it.
