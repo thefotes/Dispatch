@@ -254,6 +254,34 @@ public enum HerdrClient {
         _ = try await request("workspace.focus", params: ["workspace_id": workspaceID])
     }
 
+    /// Creates a workspace — which Herdr starts with one tab and one root
+    /// pane, cwd inherited from the focused pane — and focuses it. The create
+    /// reply does not focus (it comes back `focused: false`), so the focus is
+    /// an explicit second call; without it the pad's new-workspace key would
+    /// create a space you then had to go find.
+    public static func createWorkspace() async throws {
+        let result = try await request("workspace.create")
+        // The reply nests the new workspace under "workspace"; a flat
+        // "workspace_id" is accepted too, in case a future Herdr flattens it.
+        let workspace = result["workspace"] as? [String: Any]
+        if let id = workspace?["workspace_id"] as? String ?? result["workspace_id"] as? String {
+            try await focusWorkspace(id)
+        }
+    }
+
+    /// Splits the focused pane, Herdr choosing the target when no `pane_id`
+    /// is given, and focuses the new pane — which the split reply reports
+    /// without promising focus, so this asserts it the same way
+    /// `createWorkspace` does. `direction` is which side the new pane takes
+    /// ("right", "down", "left", "up") and is required by Herdr.
+    public static func splitPane(direction: String) async throws {
+        let result = try await request("pane.split", params: ["direction": direction])
+        let pane = result["pane"] as? [String: Any]
+        if let paneID = pane?["pane_id"] as? String ?? result["pane_id"] as? String {
+            try? await request("pane.focus", params: ["pane_id": paneID])
+        }
+    }
+
     public static func listTabs(workspaceID: String? = nil) async throws -> [HerdrTab] {
         var params: [String: Any] = [:]
         if let workspaceID { params["workspace_id"] = workspaceID }

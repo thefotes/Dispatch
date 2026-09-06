@@ -47,6 +47,18 @@ public final class RemoteProvider: Provider, @unchecked Sendable {
         _ = try await request("provider.inject", params: ["text": text])
     }
 
+    public func createWorkspace() async throws {
+        _ = try await request("provider.create_workspace", params: [:])
+    }
+
+    public func splitPane(direction: String) async throws {
+        _ = try await request("provider.split_pane", params: ["direction": direction])
+    }
+
+    public func cyclePromptTools(_ tools: [String]) async throws {
+        _ = try await request("provider.cycle_tools", params: ["tools": tools])
+    }
+
     public func joystick(_ direction: Pad.JoystickDirection) async throws {
         _ = try await request("provider.joystick", params: ["direction": direction.rawValue])
     }

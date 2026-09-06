@@ -30,6 +30,27 @@ public protocol Provider: Sendable {
     /// Injects text into whatever "focused" means for this provider.
     func inject(_ text: String) async throws
 
+    /// Creates a new workspace — Herdr's "space" — and focuses it, the way
+    /// the host app's own new-space gesture would. Directionless: a workspace
+    /// starts with one tab and one pane.
+    func createWorkspace() async throws
+
+    /// Splits the focused pane, focusing the new one. `direction` is which
+    /// side of the existing pane the new one takes — "right", "down", "left"
+    /// or "up" — passed through verbatim so a provider with its own
+    /// vocabulary can interpret it; `config.json`'s `"herdr"` section is
+    /// where the value the keys send comes from.
+    func splitPane(direction: String) async throws
+
+    /// Cycles the focused pane's prompt through `tools`: erases whatever the
+    /// previous press of the same key typed (backspaces, not a wipe — the
+    /// human may have edited it since) and types the next name, unsubmitted.
+    /// The first press with nothing typed types the first tool. State is the
+    /// provider's to keep: which pane was last written and what was typed
+    /// there, so a different pane being focused between presses erases
+    /// nothing.
+    func cyclePromptTools(_ tools: [String]) async throws
+
     /// Moves focus one pane over — one joystick deflection. The four
     /// directions are all the hardware can express, so this is an enum, not
     /// a string; a provider that has no notion of panes implements it as a

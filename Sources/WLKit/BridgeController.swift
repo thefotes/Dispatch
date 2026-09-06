@@ -378,7 +378,7 @@ public final class BridgeController: ObservableObject {
         // falls back to whatever it does by default.
         let flexKeys = Pad.overridableKeyIDs.map { key -> OAI.Thread in
             switch keyBindings.action(for: key) {
-            case .text, .shortcut:
+            case .text, .shortcut, .herdr:
                 return StatusMapper.macroThread(id: key, config)
             case .off:
                 return OAI.Thread(id: key, brightness: 0, effect: .off)
@@ -516,6 +516,38 @@ public final class BridgeController: ObservableObject {
                 return
             }
             onShortcut?(parsed)
+        case .herdr(let action):
+            Task { await runHerdrAction(action) }
+        }
+    }
+
+    /// Runs a `{"herdr": ...}` key's provider action, serialized the way the
+    /// dial and joystick are: rapid presses of the cycler are exactly the
+    /// overlapping-round-trip hazard `chained` exists for — two presses
+    /// resolving "the tool after the last one typed" against the same
+    /// snapshot would type the same name twice.
+    private var herdrChain: Task<Void, Never>?
+
+    public func runHerdrAction(_ action: KeyBindings.HerdrKeyAction) async {
+        await chained(&herdrChain) { [weak self] in
+            await self?.performHerdrAction(action)
+        }.value
+    }
+
+    private func performHerdrAction(_ action: KeyBindings.HerdrKeyAction) async {
+        do {
+            switch action {
+            case .workspace:
+                try await provider.createWorkspace()
+                raiseTerminal()
+            case .pane:
+                try await provider.splitPane(direction: keyBindings.herdrSplitDirection)
+                raiseTerminal()
+            case .cycle:
+                try await provider.cyclePromptTools(keyBindings.herdrTools)
+            }
+        } catch {
+            lastError = error.localizedDescription
         }
     }
 

@@ -149,6 +149,9 @@ struct MenuPanelView: View {
         switch action {
         case .text(let text): return "Type: \(text)"
         case .shortcut(let spec): return "Shortcut: \(spec)"
+        case .herdr(.workspace): return "Create and focus a new Herdr workspace"
+        case .herdr(.pane): return "Split the focused Herdr pane"
+        case .herdr(.cycle): return "Cycle the prompt through the configured tools"
         case .off: return "Unbound"
         case nil: break
         }

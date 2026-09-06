@@ -9,8 +9,13 @@ import Foundation
 ///       "keys": {
 ///         "9": "Open PRs for all active GitButler branches",
 ///         "12": "Run but pull",
-///         "10+11": "Summarize what you are working on"
+///         "10+11": "Summarize what you are working on",
+///         "6":  { "herdr": "workspace" },
+///         "7":  { "herdr": "pane" },
+///         "8":  { "herdr": "cycle" }
 ///       },
+///       "herdr":  { "tools": ["opencode", "claude", "codex"],
+///                   "split_direction": "right" },
 ///       "dial":   "effort",
 ///       "claude": { "efforts": ["low", "high"] }
 ///     }
@@ -18,7 +23,13 @@ import Foundation
 /// A bound string is injected into the focused agent's prompt, unsubmitted.
 /// A key can also be bound to a system-wide keyboard shortcut instead —
 /// `{"shortcut": "cmd+shift+5"}` — synthesised regardless of what Herdr is
-/// doing. `"10+11"` addresses the wide key as one; `"10"` and `"11"` address
+/// doing, or to a provider action — `{"herdr": "workspace"}`, `"pane"` or
+/// `"cycle"` — which goes through the active `Provider` like every other
+/// navigation gesture. `"herdr"` knobs live in the top-level `"herdr"`
+/// object: `"tools"` is the list the cycle key rotates through, and
+/// `"split_direction"` is which side of the focused pane the pane key's
+/// split takes ("right", "down", "left" or "up"). `"10+11"` addresses the
+/// wide key as one; `"10"` and `"11"` address
 /// its halves separately. Keys the file does not mention keep their
 /// defaults — 9 and 12 default to the text macros below, the wide key
 /// defaults to the voice key, and 6/7/8 default to stack/tabs/land. Binding
@@ -65,7 +76,25 @@ public struct KeyBindings: Sendable, Equatable {
     public enum KeyAction: Equatable, Sendable {
         case text(String)
         case shortcut(String)
+        /// A provider-level action — a new workspace, a pane split, the
+        /// prompt-tool cycler — reached over `Provider` like everything else
+        /// the bridge asks of it, so a remote provider serves these too.
+        case herdr(HerdrKeyAction)
         case off
+    }
+
+    /// The provider actions a key can be bound to with `{"herdr": "..."}`.
+    /// Named for the shipped provider, the way the config section is; a
+    /// different provider that understands the same `Provider` protocol
+    /// serves them all the same.
+    public enum HerdrKeyAction: String, Equatable, Sendable {
+        /// `"workspace"` — create and focus a new workspace.
+        case workspace
+        /// `"pane"` — split the focused pane, direction from
+        /// `herdrSplitDirection`.
+        case pane
+        /// `"cycle"` — cycle the focused prompt through `herdrTools`.
+        case cycle
     }
 
     /// Which `Provider` the bridge should use instead of the in-process
@@ -87,6 +116,15 @@ public struct KeyBindings: Sendable, Equatable {
     /// What the knob does. Set with a top-level `"dial"` string.
     public private(set) var dialSelection: DialSelection
 
+    /// The prompt names the `{"herdr": "cycle"}` key rotates through, in
+    /// order. Set with a top-level `"herdr": {"tools": [...]}` object.
+    public private(set) var herdrTools: [String]
+
+    /// Which side of the focused pane the `{"herdr": "pane"}` key's split
+    /// puts the new one on: "right", "down", "left" or "up". Set with a
+    /// top-level `"herdr": {"split_direction": ...}` string.
+    public private(set) var herdrSplitDirection: String
+
     /// Which provider to use, if not the in-process default.
     public private(set) var providerSpec: ProviderSpec?
 
@@ -100,16 +138,22 @@ public struct KeyBindings: Sendable, Equatable {
         12: .text("Run but pull")
     ]
     public static let defaultClaudeEfforts = ["low", "medium", "high", "xhigh", "max"]
+    public static let defaultHerdrTools = ["opencode", "claude", "codex"]
+    public static let defaultHerdrSplitDirection = "right"
 
     public init(
         actions: [Int: KeyAction] = KeyBindings.defaults,
         claudeEfforts: [String] = KeyBindings.defaultClaudeEfforts,
+        herdrTools: [String] = KeyBindings.defaultHerdrTools,
+        herdrSplitDirection: String = KeyBindings.defaultHerdrSplitDirection,
         dialSelection: DialSelection = .effort,
         dialWarning: String? = nil,
         providerSpec: ProviderSpec? = nil
     ) {
         self.actions = actions
         self.claudeEfforts = claudeEfforts
+        self.herdrTools = herdrTools
+        self.herdrSplitDirection = herdrSplitDirection
         self.dialSelection = dialSelection
         self.dialWarning = dialWarning
         self.providerSpec = providerSpec
@@ -160,11 +204,18 @@ public struct KeyBindings: Sendable, Equatable {
         let claude = json["claude"] as? [String: Any]
         let efforts = (claude?["efforts"] as? [String])?.filter { !$0.isEmpty }
 
+        let herdr = json["herdr"] as? [String: Any]
+        let tools = (herdr?["tools"] as? [String])?.filter { !$0.isEmpty }
+        let splitDirection = herdr?["split_direction"] as? String
+        let direction = (splitDirection?.isEmpty == false) ? splitDirection! : defaultHerdrSplitDirection
+
         let (dialSelection, dialWarning) = dial(from: json["dial"])
 
         return KeyBindings(
             actions: actions,
             claudeEfforts: efforts?.isEmpty == false ? efforts! : defaultClaudeEfforts,
+            herdrTools: tools?.isEmpty == false ? tools! : defaultHerdrTools,
+            herdrSplitDirection: direction,
             dialSelection: dialSelection,
             dialWarning: dialWarning,
             providerSpec: providerSpec(from: json["provider"])
@@ -222,8 +273,14 @@ public struct KeyBindings: Sendable, Equatable {
             return flag ? nil : .off
         }
         if let text = value as? String { return text.isEmpty ? nil : .text(text) }
-        if let object = value as? [String: Any], let shortcut = object["shortcut"] as? String {
-            return shortcut.isEmpty ? nil : .shortcut(shortcut)
+        if let object = value as? [String: Any] {
+            if let shortcut = object["shortcut"] as? String {
+                return shortcut.isEmpty ? nil : .shortcut(shortcut)
+            }
+            if let name = object["herdr"] as? String,
+               let action = HerdrKeyAction(rawValue: name.lowercased()) {
+                return .herdr(action)
+            }
         }
         return nil
     }

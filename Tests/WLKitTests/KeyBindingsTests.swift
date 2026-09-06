@@ -241,4 +241,65 @@ final class KeyBindingsTests: XCTestCase {
     func testProviderSpecSurvivesAKeysOnlyConfig() {
         XCTAssertNil(parse(#"{"keys": {"9": "Ship it"}}"#).providerSpec)
     }
+
+    // MARK: - Herdr key actions
+
+    /// The tool cycle key ships with the three tools actually in rotation.
+    func testHerdrToolsHaveADefault() {
+        XCTAssertEqual(KeyBindings().herdrTools, ["opencode", "claude", "codex"])
+    }
+
+    func testHerdrSplitDirectionDefaultsToRight() {
+        XCTAssertEqual(KeyBindings().herdrSplitDirection, "right")
+    }
+
+    func testHerdrBindingsParse() {
+        let bindings = parse(#"{"keys": {"6": {"herdr": "workspace"}, "7": {"herdr": "pane"}, "8": {"herdr": "cycle"}}}"#)
+        XCTAssertEqual(bindings.action(for: 6), .herdr(.workspace))
+        XCTAssertEqual(bindings.action(for: 7), .herdr(.pane))
+        XCTAssertEqual(bindings.action(for: 8), .herdr(.cycle))
+    }
+
+    func testHerdrBindingNamesAreCaseInsensitive() {
+        XCTAssertEqual(parse(#"{"keys": {"6": {"herdr": "Workspace"}}}"#).action(for: 6), .herdr(.workspace))
+    }
+
+    /// A name that is not one of the three actions binds nothing — the key
+    /// keeps whatever job it had, rather than going silently dead.
+    func testAnUnknownHerdrNameIsIgnored() {
+        XCTAssertNil(parse(#"{"keys": {"6": {"herdr": "explode"}}}"#).action(for: 6))
+    }
+
+    /// The override wins over a built-in: key 7's tab cycle is exactly the
+    /// case this binding exists to replace.
+    func testHerdrBindingOverridesTheTabCycleDefault() {
+        let bindings = parse(#"{"keys": {"7": {"herdr": "pane"}}}"#)
+        XCTAssertEqual(bindings.action(for: 7), .herdr(.pane))
+    }
+
+    func testHerdrToolsAreOverridable() {
+        let bindings = parse(#"{"herdr": {"tools": ["aider", "amp"]}}"#)
+        XCTAssertEqual(bindings.herdrTools, ["aider", "amp"])
+    }
+
+    /// An empty or missing list falls back to the default rotation rather
+    /// than a cycle key that presses into nothing.
+    func testAnEmptyHerdrToolListFallsBackToDefaults() {
+        XCTAssertEqual(parse(#"{"herdr": {"tools": []}}"#).herdrTools, KeyBindings.defaultHerdrTools)
+        XCTAssertEqual(parse(#"{"herdr": {}}"#).herdrTools, KeyBindings.defaultHerdrTools)
+    }
+
+    func testHerdrSplitDirectionIsOverridable() {
+        XCTAssertEqual(parse(#"{"herdr": {"split_direction": "down"}}"#).herdrSplitDirection, "down")
+    }
+
+    func testAnEmptyHerdrSplitDirectionFallsBackToRight() {
+        XCTAssertEqual(parse(#"{"herdr": {"split_direction": ""}}"#).herdrSplitDirection, "right")
+    }
+
+    func testHerdrSectionSurvivesAKeysOnlyConfig() {
+        let bindings = parse(#"{"keys": {"9": "Ship it"}}"#)
+        XCTAssertEqual(bindings.herdrTools, KeyBindings.defaultHerdrTools)
+        XCTAssertEqual(bindings.herdrSplitDirection, "right")
+    }
 }

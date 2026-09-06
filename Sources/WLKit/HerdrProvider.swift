@@ -80,6 +80,48 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
         try await HerdrClient.sendText(paneID: pane, text: text)
     }
 
+    public func createWorkspace() async throws {
+        try await HerdrClient.createWorkspace()
+    }
+
+    public func splitPane(direction: String) async throws {
+        try await HerdrClient.splitPane(direction: direction)
+    }
+
+    /// The tool-cycler's memory: the pane last written and what was typed
+    /// there, so the next press knows both what to erase and what comes
+    /// next. Guarded by `lock`, like every other mutable state here.
+    private var lastPromptPaneID: String?
+    private var lastPromptTool: String?
+
+    public func cyclePromptTools(_ tools: [String]) async throws {
+        let ordered = tools.filter { !$0.isEmpty }
+        guard !ordered.isEmpty else { return }
+        guard let agent = try await HerdrClient.focusedAgent(), let pane = agent.paneID else {
+            throw HerdrError.api("Nothing has focus in Herdr right now.")
+        }
+
+        lock.lock()
+        // Only erase what this same pane still holds — the human may have
+        // focused a different pane (or cleared the prompt by hand) since the
+        // last press, and backspacing there would eat their text.
+        let previous = pane == lastPromptPaneID ? lastPromptTool : nil
+        let index = previous.flatMap { ordered.firstIndex(of: $0) }
+            .map { ($0 + 1) % ordered.count } ?? 0
+        let next = ordered[index]
+        lastPromptPaneID = pane
+        lastPromptTool = next
+        lock.unlock()
+
+        if let previous, !previous.isEmpty {
+            try await HerdrClient.sendKeys(
+                paneID: pane,
+                keys: Array(repeating: "backspace", count: previous.count)
+            )
+        }
+        try await HerdrClient.sendText(paneID: pane, text: next)
+    }
+
     /// One joystick deflection, one pane over — Herdr's `pane.focus_direction`,
     /// the same moves its own prefix+h/j/k/l make. A deflection with nowhere
     /// to go (a lone pane, or the edge of the layout) is a no-op, not an
