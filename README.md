@@ -66,7 +66,8 @@ macro key.
 point it at Herdr navigation instead — stepping the focused agent, tab, or
 workspace. **The joystick** moves pane focus, the same moves Herdr's own
 prefix+h/j/k/l make: north is up, south is down, east is right, west is
-left.
+left. It wraps at the edges of the layout — deflecting off the last pane of
+a tab lands on the first.
 
 ### The stack key
 
