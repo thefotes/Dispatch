@@ -143,8 +143,8 @@ Manager only — the Inspector is a separate process and still needs hardware.
 ## Configuration
 
 Everything works without a config file. To rebind the macro keys or change what
-the dial and joystick offer, drop a `config.json` into
-`~/.config/micromanager/`:
+the dial offers, drop a `config.json` into `~/.config/micromanager/`. The
+joystick is not configurable — it moves pane focus through the active provider:
 
 ```json
 {
@@ -156,8 +156,7 @@ the dial and joystick offer, drop a `config.json` into
     "7":     { "shortcut": "f13" }
   },
   "dial":   "effort",
-  "claude": { "models": ["fable", "opus"], "efforts": ["low", "high"] },
-  "codex":  { "models": ["gpt-5.6-sol", "gpt-5.6-codex"] }
+  "claude": { "efforts": ["low", "high"] }
 }
 ```
 
