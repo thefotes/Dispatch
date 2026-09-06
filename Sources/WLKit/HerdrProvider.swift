@@ -16,11 +16,40 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     private var statusStreams: [String: HerdrEventStream] = [:]
     private var stopped = true
 
-    public init() {}
+    /// Herdr-specific knobs for the actions `perform` serves, injected at
+    /// construction (from `config.json`'s `"herdr"` section, via
+    /// `ProviderFactory`) rather than reaching into `KeyBindings` here —
+    /// this file owns what the knobs mean, not where they come from.
+    public struct Options: Sendable {
+        /// The prompt names the cycle action rotates through, in order.
+        public var tools: [String]
+        /// Which side of the focused pane the split action puts the new one
+        /// on: "right", "down", "left" or "up" — Herdr's own vocabulary,
+        /// passed through verbatim.
+        public var splitDirection: String
 
-    /// Herdr's status vocabulary and the agent/tab/space navigation the dial
-    /// offers — pinned against `BridgeConfig`'s own defaults by
-    /// `HerdrProviderTests`, so the two cannot silently drift apart.
+        public init(
+            tools: [String] = Options.defaultTools,
+            splitDirection: String = Options.defaultSplitDirection
+        ) {
+            self.tools = tools
+            self.splitDirection = splitDirection
+        }
+
+        public static let defaultTools = ["opencode", "claude", "codex"]
+        public static let defaultSplitDirection = "right"
+    }
+
+    private let options: Options
+
+    public init(options: Options = Options()) {
+        self.options = options
+    }
+
+    /// Herdr's status vocabulary, the agent/tab/space navigation the dial
+    /// offers, and the named actions its keys can be bound to — pinned
+    /// against `BridgeConfig`'s own defaults by `HerdrProviderTests`, so the
+    /// two cannot silently drift apart.
     public func describe() async -> ProviderDescription {
         ProviderDescription(
             statePalette: [
@@ -41,6 +70,12 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
                 ProviderDialMode(id: "agent", label: "Agent", raisesHost: true),
                 ProviderDialMode(id: "tab", label: "Tab", raisesHost: false),
                 ProviderDialMode(id: "space", label: "Space", raisesHost: true)
+            ],
+            actions: [
+                ProviderAction(id: "new_workspace", label: "New Herdr workspace", raisesHost: true),
+                ProviderAction(id: "split_pane", label: "Split Herdr pane", raisesHost: true),
+                // Cycling types into a prompt you are already looking at.
+                ProviderAction(id: "cycle_prompt", label: "Cycle prompt tool", raisesHost: false)
             ]
         )
     }
@@ -80,12 +115,17 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
         try await HerdrClient.sendText(paneID: pane, text: text)
     }
 
-    public func createWorkspace() async throws {
-        try await HerdrClient.createWorkspace()
-    }
-
-    public func splitPane(direction: String) async throws {
-        try await HerdrClient.splitPane(direction: direction)
+    public func perform(_ action: String) async throws {
+        switch action {
+        case "new_workspace":
+            try await HerdrClient.createWorkspace()
+        case "split_pane":
+            try await HerdrClient.splitPane(direction: options.splitDirection)
+        case "cycle_prompt":
+            try await cyclePromptTools(options.tools)
+        default:
+            break   // not ours to run — callers resolve ids against describe()
+        }
     }
 
     /// The tool-cycler's memory: the pane last written and what was typed
@@ -94,24 +134,14 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     private var lastPromptPaneID: String?
     private var lastPromptTool: String?
 
-    public func cyclePromptTools(_ tools: [String]) async throws {
+    private func cyclePromptTools(_ tools: [String]) async throws {
         let ordered = tools.filter { !$0.isEmpty }
         guard !ordered.isEmpty else { return }
         guard let agent = try await HerdrClient.focusedAgent(), let pane = agent.paneID else {
             throw HerdrError.api("Nothing has focus in Herdr right now.")
         }
 
-        lock.lock()
-        // Only erase what this same pane still holds — the human may have
-        // focused a different pane (or cleared the prompt by hand) since the
-        // last press, and backspacing there would eat their text.
-        let previous = pane == lastPromptPaneID ? lastPromptTool : nil
-        let index = previous.flatMap { ordered.firstIndex(of: $0) }
-            .map { ($0 + 1) % ordered.count } ?? 0
-        let next = ordered[index]
-        lastPromptPaneID = pane
-        lastPromptTool = next
-        lock.unlock()
+        let (previous, next) = planCycle(paneID: pane, tools: ordered)
 
         if let previous, !previous.isEmpty {
             try await HerdrClient.sendKeys(
@@ -120,6 +150,25 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             )
         }
         try await HerdrClient.sendText(paneID: pane, text: next)
+    }
+
+    /// Records this press against the cycler's memory and answers what to
+    /// erase and what to type. Synchronous on purpose: `NSLock` is not to be
+    /// held across an `await`, and the whole point of the memory is that two
+    /// presses cannot both plan from the same snapshot (the bridge chains
+    /// presses, and this is the one section that must stay atomic).
+    private func planCycle(paneID: String, tools: [String]) -> (previous: String?, next: String) {
+        lock.lock(); defer { lock.unlock() }
+        // Only erase what this same pane still holds — the human may have
+        // focused a different pane (or cleared the prompt by hand) since the
+        // last press, and backspacing there would eat their text.
+        let previous = paneID == lastPromptPaneID ? lastPromptTool : nil
+        let index = previous.flatMap { tools.firstIndex(of: $0) }
+            .map { ($0 + 1) % tools.count } ?? 0
+        let next = tools[index]
+        lastPromptPaneID = paneID
+        lastPromptTool = next
+        return (previous, next)
     }
 
     /// One joystick deflection, one pane over — Herdr's `pane.focus_direction`,

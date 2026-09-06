@@ -13,13 +13,18 @@ enum ProviderFactory {
     private(set) static var launchedProcess: Process?
 
     static func make() -> Provider {
-        switch KeyBindings.load().providerSpec {
+        let bindings = KeyBindings.load()
+        switch bindings.providerSpec {
         case .none:
-            return HerdrProvider()
+            // The in-process Herdr provider gets the Herdr-specific knobs
+            // its actions read from config.json's `"herdr"` section — the
+            // protocol stays generic, this is the concrete implementation's
+            // own configuration.
+            return makeDefault(bindings)
         case .connect(let socketPath):
             return RemoteProvider(socketPath: socketPath)
         case .launch(let command, let args):
-            return launchAndConnect(command: command, args: args)
+            return launchAndConnect(command: command, args: args, bindings: bindings)
         }
     }
 
@@ -30,6 +35,13 @@ enum ProviderFactory {
         launchedProcess = nil
     }
 
+    private static func makeDefault(_ bindings: KeyBindings) -> Provider {
+        HerdrProvider(options: HerdrProvider.Options(
+            tools: bindings.herdrTools,
+            splitDirection: bindings.herdrSplitDirection
+        ))
+    }
+
     /// Launches the configured command through `/usr/bin/env`, so a bare
     /// name on `$PATH` and an absolute path both work the way they would in
     /// a shell, then connects at the default provider-bridge socket path —
@@ -37,7 +49,7 @@ enum ProviderFactory {
     /// otherwise. A launch spec that points a *different* binary at a
     /// non-default socket needs a matching `"connect"` spec instead; this
     /// path does not read one back out of `args`.
-    private static func launchAndConnect(command: String, args: [String]) -> Provider {
+    private static func launchAndConnect(command: String, args: [String], bindings: KeyBindings) -> Provider {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [command] + args
@@ -47,7 +59,7 @@ enum ProviderFactory {
         } catch {
             // Nothing will ever be listening — falling back to the
             // in-process default beats a bridge that can never connect.
-            return HerdrProvider()
+            return makeDefault(bindings)
         }
         // Wait for the socket file to actually exist rather than guessing a
         // fixed delay — a fast-starting provider does not pay for a delay it

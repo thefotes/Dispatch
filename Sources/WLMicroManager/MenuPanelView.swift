@@ -149,9 +149,13 @@ struct MenuPanelView: View {
         switch action {
         case .text(let text): return "Type: \(text)"
         case .shortcut(let spec): return "Shortcut: \(spec)"
-        case .herdr(.workspace): return "Create and focus a new Herdr workspace"
-        case .herdr(.pane): return "Split the focused Herdr pane"
-        case .herdr(.cycle): return "Cycle the prompt through the configured tools"
+        case .action(let name):
+            // The label is the provider's own; until its describe() lands,
+            // the raw name is still more useful than nothing.
+            if let action = bridge.actions.first(where: { $0.id == name }) {
+                return action.label
+            }
+            return "Action: \(name)"
         case .off: return "Unbound"
         case nil: break
         }

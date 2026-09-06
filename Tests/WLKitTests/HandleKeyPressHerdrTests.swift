@@ -1,63 +1,69 @@
 import XCTest
 @testable import WLKit
 
-/// The `{"herdr": ...}` bindings route key presses through the provider —
+/// The `{"action": ...}` bindings route key presses through the provider —
 /// these pin the dispatch from a real `handleKeyPress` to a recorded fake,
 /// so a refactor of the key switch cannot drop the wiring unnoticed.
 @MainActor
 final class HandleKeyPressHerdrTests: XCTestCase {
 
-    private func makeBridge(_ action: KeyBindings.HerdrKeyAction, key: Int) -> (BridgeController, FakeProvider) {
+    private func makeBridge(_ action: String, key: Int) -> (BridgeController, FakeProvider) {
         let provider = FakeProvider()
         let bridge = BridgeController(provider: provider)
-        bridge.setKeyBindingsForTesting(KeyBindings(actions: [key: .herdr(action)]))
+        bridge.setKeyBindingsForTesting(KeyBindings(actions: [key: .action(action)]))
         return (bridge, provider)
     }
 
-    func testTheWorkspaceKeyCreatesAWorkspace() async {
-        let (bridge, provider) = makeBridge(.workspace, key: Pad.stackKeyID)
+    func testAWorkspaceActionReachesTheProvider() async {
+        let (bridge, provider) = makeBridge("new_workspace", key: Pad.stackKeyID)
         bridge.handleKeyPress(Pad.stackKeyID)
-        await Task.yield()
         try? await Task.sleep(nanoseconds: 100_000_000)
-        XCTAssertEqual(provider.createWorkspaceCalls, 1)
+        XCTAssertEqual(provider.performedActions, ["new_workspace"])
     }
 
-    func testThePaneKeySplitsInTheConfiguredDirection() async {
-        let provider = FakeProvider()
-        let bridge = BridgeController(provider: provider)
-        bridge.setKeyBindingsForTesting(KeyBindings(
-            actions: [Pad.tabCycleKeyID: .herdr(.pane)],
-            herdrSplitDirection: "down"
-        ))
+    func testAPaneActionReachesTheProvider() async {
+        let (bridge, provider) = makeBridge("split_pane", key: Pad.tabCycleKeyID)
         bridge.handleKeyPress(Pad.tabCycleKeyID)
         try? await Task.sleep(nanoseconds: 100_000_000)
-        XCTAssertEqual(provider.splitPaneCalls, ["down"])
+        XCTAssertEqual(provider.performedActions, ["split_pane"])
     }
 
-    func testTheCycleKeyCyclesTheConfiguredTools() async {
-        let provider = FakeProvider()
-        let bridge = BridgeController(provider: provider)
-        bridge.setKeyBindingsForTesting(KeyBindings(
-            actions: [Pad.landKeyID: .herdr(.cycle)],
-            herdrTools: ["opencode", "claude", "codex"]
-        ))
+    func testACycleActionReachesTheProvider() async {
+        let (bridge, provider) = makeBridge("cycle_prompt", key: Pad.landKeyID)
         bridge.handleKeyPress(Pad.landKeyID)
         try? await Task.sleep(nanoseconds: 100_000_000)
-        XCTAssertEqual(provider.cycleToolCalls, [["opencode", "claude", "codex"]])
+        XCTAssertEqual(provider.performedActions, ["cycle_prompt"])
+    }
+
+    /// A name the provider never offered must not reach the provider — it
+    /// surfaces as a panel error instead, the way an unrecognized dial name
+    /// does.
+    func testAnUnofferedActionIsRefusedAtTheBridge() async {
+        let provider = FakeProvider()
+        provider.descriptionToReturn = ProviderDescription(actions: [
+            ProviderAction(id: "new_workspace", label: "New workspace", raisesHost: true)
+        ])
+        let bridge = BridgeController(provider: provider)
+        bridge.setKeyBindingsForTesting(KeyBindings(actions: [Pad.stackKeyID: .action("explode")]))
+        bridge.applyDescriptionForTesting(provider.descriptionToReturn)
+
+        bridge.handleKeyPress(Pad.stackKeyID)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(provider.performedActions, [])
+        XCTAssertNotNil(bridge.lastError)
     }
 
     /// Two presses in a row must reach the provider twice — the chain
     /// serializes them, it never collapses them the way the wide key's
     /// debounce collapses one physical press's two switches.
-    func testTwoCyclePressesBothReachTheProvider() async {
-        let provider = FakeProvider()
-        let bridge = BridgeController(provider: provider)
-        bridge.setKeyBindingsForTesting(KeyBindings(actions: [Pad.landKeyID: .herdr(.cycle)]))
+    func testTwoActionPressesBothReachTheProvider() async {
+        let (bridge, provider) = makeBridge("cycle_prompt", key: Pad.landKeyID)
 
         bridge.handleKeyPress(Pad.landKeyID)
         bridge.handleKeyPress(Pad.landKeyID)
         try? await Task.sleep(nanoseconds: 200_000_000)
 
-        XCTAssertEqual(provider.cycleToolCalls.count, 2)
+        XCTAssertEqual(provider.performedActions.count, 2)
     }
 }

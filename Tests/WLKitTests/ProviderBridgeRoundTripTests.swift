@@ -107,50 +107,32 @@ final class ProviderBridgeRoundTripTests: XCTestCase {
         XCTAssertEqual(fake.injectedTexts, ["ship it"])
     }
 
-    func testCreateWorkspaceRoundTrips() async throws {
+    func testPerformForwardsTheActionName() async throws {
         let fake = FakeProvider()
         let (remote, server, _) = try makePair(fake)
         defer { server.stop() }
 
-        try await remote.createWorkspace()
-        XCTAssertEqual(fake.createWorkspaceCalls, 1)
+        try await remote.perform("new_workspace")
+        XCTAssertEqual(fake.performedActions, ["new_workspace"])
     }
 
-    func testSplitPaneForwardsTheDirection() async throws {
-        let fake = FakeProvider()
-        let (remote, server, _) = try makePair(fake)
-        defer { server.stop() }
-
-        try await remote.splitPane(direction: "right")
-        XCTAssertEqual(fake.splitPaneCalls, ["right"])
-    }
-
-    func testCycleToolsForwardsTheToolList() async throws {
-        let fake = FakeProvider()
-        let (remote, server, _) = try makePair(fake)
-        defer { server.stop() }
-
-        try await remote.cyclePromptTools(["opencode", "claude", "codex"])
-        XCTAssertEqual(fake.cycleToolCalls, [["opencode", "claude", "codex"]])
-    }
-
-    func testSplitPaneWithoutADirectionIsRejected() async throws {
+    func testPerformWithoutAnActionIsRejected() async throws {
         let fake = FakeProvider()
         let (remote, server, path) = try makePair(fake)
         defer { server.stop() }
 
         // Hand-crafted envelope: the wire method exists but the required
         // parameter is missing, which the server must refuse rather than
-        // forward an empty direction to the provider. The reply is read
+        // forward an empty action to the provider. The reply is read
         // before the connection closes — a write to a socket the peer has
         // already dropped raises SIGPIPE, which kills the whole test run.
         let reply = try Self.roundTripOnFreshConnection(
             path: path,
-            envelope: ["id": "t", "method": "provider.split_pane", "params": [String: Any]()]
+            envelope: ["id": "t", "method": "provider.perform", "params": [String: Any]()]
         )
-        XCTAssertTrue(reply.contains("needs a direction"), "unexpected reply: \(reply)")
+        XCTAssertTrue(reply.contains("needs an action"), "unexpected reply: \(reply)")
         try await Task.sleep(nanoseconds: 200_000_000)
-        XCTAssertEqual(fake.splitPaneCalls, [])
+        XCTAssertEqual(fake.performedActions, [])
     }
 
     /// One request on its own connection, the same shape the server expects,

@@ -10,9 +10,7 @@ final class FakeProvider: Provider, @unchecked Sendable {
     var injectedTexts: [String] = []
     var injectError: Error?
     var joystickCalls: [Pad.JoystickDirection] = []
-    var createWorkspaceCalls = 0
-    var splitPaneCalls: [String] = []
-    var cycleToolCalls: [[String]] = []
+    var performedActions: [String] = []
     var descriptionToReturn = ProviderDescription()
     private var onChangeCallback: (@Sendable () -> Void)?
 
@@ -35,16 +33,8 @@ final class FakeProvider: Provider, @unchecked Sendable {
         joystickCalls.append(direction)
     }
 
-    func createWorkspace() async throws {
-        createWorkspaceCalls += 1
-    }
-
-    func splitPane(direction: String) async throws {
-        splitPaneCalls.append(direction)
-    }
-
-    func cyclePromptTools(_ tools: [String]) async throws {
-        cycleToolCalls.append(tools)
+    func perform(_ action: String) async throws {
+        performedActions.append(action)
     }
 
     func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription {

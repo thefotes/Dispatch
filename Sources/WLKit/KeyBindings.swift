@@ -10,9 +10,9 @@ import Foundation
 ///         "9": "Open PRs for all active GitButler branches",
 ///         "12": "Run but pull",
 ///         "10+11": "Summarize what you are working on",
-///         "6":  { "herdr": "workspace" },
-///         "7":  { "herdr": "pane" },
-///         "8":  { "herdr": "cycle" }
+///         "6": { "action": "new_workspace" },
+///         "7": { "action": "split_pane" },
+///         "8": { "action": "cycle_prompt" }
 ///       },
 ///       "herdr":  { "tools": ["opencode", "claude", "codex"],
 ///                   "split_direction": "right" },
@@ -23,12 +23,14 @@ import Foundation
 /// A bound string is injected into the focused agent's prompt, unsubmitted.
 /// A key can also be bound to a system-wide keyboard shortcut instead —
 /// `{"shortcut": "cmd+shift+5"}` — synthesised regardless of what Herdr is
-/// doing, or to a provider action — `{"herdr": "workspace"}`, `"pane"` or
-/// `"cycle"` — which goes through the active `Provider` like every other
-/// navigation gesture. `"herdr"` knobs live in the top-level `"herdr"`
-/// object: `"tools"` is the list the cycle key rotates through, and
-/// `"split_direction"` is which side of the focused pane the pane key's
-/// split takes ("right", "down", "left" or "up"). `"10+11"` addresses the
+/// doing, or to a named provider action — `{"action": "..."}` — resolved
+/// against what the active provider advertised through `describe()` and
+/// dispatched through `Provider.perform`, exactly the way `"dial"` names
+/// are resolved. What the names mean is entirely the provider's business;
+/// the knobs a provider's actions read (for the shipped Herdr provider:
+/// the `"tools"` list the cycle action rotates through and the
+/// `"split_direction"` its split action takes) live in that provider's own
+/// config section and are its to interpret. `"10+11"` addresses the
 /// wide key as one; `"10"` and `"11"` address
 /// its halves separately. Keys the file does not mention keep their
 /// defaults — 9 and 12 default to the text macros below, the wide key
@@ -76,25 +78,12 @@ public struct KeyBindings: Sendable, Equatable {
     public enum KeyAction: Equatable, Sendable {
         case text(String)
         case shortcut(String)
-        /// A provider-level action — a new workspace, a pane split, the
-        /// prompt-tool cycler — reached over `Provider` like everything else
-        /// the bridge asks of it, so a remote provider serves these too.
-        case herdr(HerdrKeyAction)
+        /// A named provider action — `{"action": "..."}` — resolved against
+        /// what the active provider offered through `describe()` and handed
+        /// to `Provider.perform`. This file has no opinion on what the
+        /// names mean, exactly like `"dial"`.
+        case action(String)
         case off
-    }
-
-    /// The provider actions a key can be bound to with `{"herdr": "..."}`.
-    /// Named for the shipped provider, the way the config section is; a
-    /// different provider that understands the same `Provider` protocol
-    /// serves them all the same.
-    public enum HerdrKeyAction: String, Equatable, Sendable {
-        /// `"workspace"` — create and focus a new workspace.
-        case workspace
-        /// `"pane"` — split the focused pane, direction from
-        /// `herdrSplitDirection`.
-        case pane
-        /// `"cycle"` — cycle the focused prompt through `herdrTools`.
-        case cycle
     }
 
     /// Which `Provider` the bridge should use instead of the in-process
@@ -277,9 +266,11 @@ public struct KeyBindings: Sendable, Equatable {
             if let shortcut = object["shortcut"] as? String {
                 return shortcut.isEmpty ? nil : .shortcut(shortcut)
             }
-            if let name = object["herdr"] as? String,
-               let action = HerdrKeyAction(rawValue: name.lowercased()) {
-                return .herdr(action)
+            // Shape-level only: a non-empty action name. Whether the active
+            // provider actually offers it is `BridgeController`'s concern,
+            // resolved against `describe()` the way dial names are.
+            if let name = object["action"] as? String, !name.isEmpty {
+                return .action(name)
             }
         }
         return nil

@@ -46,6 +46,9 @@ public final class BridgeController: ObservableObject {
     /// The dial modes the current provider offers, for a future settings UI.
     /// Set on every `start()`; never includes `"effort"`.
     @Published public private(set) var dialModes: [ProviderDialMode] = []
+    /// The named actions the current provider offers, for `{"action": ...}`
+    /// key bindings and the panel's help text. Set on every `start()`.
+    @Published public private(set) var actions: [ProviderAction] = []
     /// `config.json`'s `"dial"` selection, resolved against the current
     /// provider's `dialModes`. nil means "no provider mode" — either
     /// `"effort"` was configured (Micromanager's own reasoning-effort
@@ -70,6 +73,13 @@ public final class BridgeController: ObservableObject {
         let (resolved, warning) = Self.resolveDialSelection(bindings.dialSelection, offeredBy: dialModes)
         resolvedDialMode = resolved
         if let warning { lastError = warning }
+    }
+
+    /// Installs a provider description without a `start()`/`stop()` cycle —
+    /// tests only, the same escape hatch `setKeyBindingsForTesting` is.
+    func applyDescriptionForTesting(_ description: ProviderDescription) {
+        dialModes = description.dialModes
+        actions = description.actions
     }
 
     /// Called when the stack key is pressed. The bridge owns the key, the app
@@ -230,6 +240,7 @@ public final class BridgeController: ObservableObject {
             config.priority = description.statePriority
         }
         dialModes = description.dialModes
+        actions = description.actions
 
         let (resolved, warning) = Self.resolveDialSelection(keyBindings.dialSelection, offeredBy: dialModes)
         resolvedDialMode = resolved
@@ -378,7 +389,7 @@ public final class BridgeController: ObservableObject {
         // falls back to whatever it does by default.
         let flexKeys = Pad.overridableKeyIDs.map { key -> OAI.Thread in
             switch keyBindings.action(for: key) {
-            case .text, .shortcut, .herdr:
+            case .text, .shortcut, .action:
                 return StatusMapper.macroThread(id: key, config)
             case .off:
                 return OAI.Thread(id: key, brightness: 0, effect: .off)
@@ -516,36 +527,38 @@ public final class BridgeController: ObservableObject {
                 return
             }
             onShortcut?(parsed)
-        case .herdr(let action):
-            Task { await runHerdrAction(action) }
+        case .action(let name):
+            Task { await runProviderAction(name) }
         }
     }
 
-    /// Runs a `{"herdr": ...}` key's provider action, serialized the way the
-    /// dial and joystick are: rapid presses of the cycler are exactly the
+    /// Runs a key's `{"action": ...}` binding, serialized the way the dial
+    /// and joystick are: rapid presses of a cycling action are exactly the
     /// overlapping-round-trip hazard `chained` exists for — two presses
-    /// resolving "the tool after the last one typed" against the same
-    /// snapshot would type the same name twice.
-    private var herdrChain: Task<Void, Never>?
+    /// resolving "the next state" against the same snapshot would advance
+    /// once, not twice.
+    private var actionChain: Task<Void, Never>?
 
-    public func runHerdrAction(_ action: KeyBindings.HerdrKeyAction) async {
-        await chained(&herdrChain) { [weak self] in
-            await self?.performHerdrAction(action)
+    public func runProviderAction(_ name: String) async {
+        await chained(&actionChain) { [weak self] in
+            await self?.performProviderAction(name)
         }.value
     }
 
-    private func performHerdrAction(_ action: KeyBindings.HerdrKeyAction) async {
+    private func performProviderAction(_ name: String) async {
+        // A name the active provider never offered is a panel error, the
+        // same way an unrecognized dial name is. An empty action list means
+        // describe() has not landed (or failed) — the provider is still the
+        // authority on its own ids, so the attempt goes through and a
+        // rejection surfaces as lastError like any provider failure.
+        if !actions.isEmpty, !actions.contains(where: { $0.id == name }) {
+            lastError = "The active provider does not offer an action named \"\(name)\"."
+            return
+        }
+        let raisesHost = actions.first(where: { $0.id == name })?.raisesHost ?? false
         do {
-            switch action {
-            case .workspace:
-                try await provider.createWorkspace()
-                raiseTerminal()
-            case .pane:
-                try await provider.splitPane(direction: keyBindings.herdrSplitDirection)
-                raiseTerminal()
-            case .cycle:
-                try await provider.cyclePromptTools(keyBindings.herdrTools)
-            }
+            try await provider.perform(name)
+            if raisesHost { raiseTerminal() }
         } catch {
             lastError = error.localizedDescription
         }

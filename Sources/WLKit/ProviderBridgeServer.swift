@@ -152,20 +152,11 @@ public final class ProviderBridgeServer: @unchecked Sendable {
             }
             try await provider.inject(text)
             return [:]
-        case "provider.create_workspace":
-            try await provider.createWorkspace()
-            return [:]
-        case "provider.split_pane":
-            guard let direction = params["direction"] as? String, !direction.isEmpty else {
-                throw HerdrError.badResponse("provider.split_pane needs a direction")
+        case "provider.perform":
+            guard let action = params["action"] as? String, !action.isEmpty else {
+                throw HerdrError.badResponse("provider.perform needs an action")
             }
-            try await provider.splitPane(direction: direction)
-            return [:]
-        case "provider.cycle_tools":
-            guard let tools = params["tools"] as? [String], !tools.isEmpty else {
-                throw HerdrError.badResponse("provider.cycle_tools needs tools")
-            }
-            try await provider.cyclePromptTools(tools)
+            try await provider.perform(action)
             return [:]
         case "provider.joystick":
             guard let raw = params["direction"] as? String,
