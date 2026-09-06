@@ -23,9 +23,10 @@ disabled_rules:
   - function_body_length
   - line_length
 
-line_length:
-  warning: 140
-  error: 200
+# No line_length: block here on purpose — configuring a rule that is also in
+# disabled_rules makes SwiftLint warn on every run, and the noise trains you to
+# stop reading its output. Re-add the thresholds at the same time you take
+# line_length back out of the list above.
 
 identifier_name:
   min_length: 2

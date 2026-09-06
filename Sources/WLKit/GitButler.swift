@@ -85,7 +85,8 @@ public enum GitButler {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
 
-        let path = (String(bytes: data, encoding: .utf8) ?? "")
+        // swiftlint:disable:next optional_data_string_conversion - see below
+        let path = String(decoding: data, as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) else { return nil }
         return path
@@ -208,7 +209,16 @@ public enum GitButler {
         watchdog.cancel()
 
         return StatusOutput(
-            text: String(bytes: data, encoding: .utf8) ?? "",
+            // Deliberately against optional_data_string_conversion, in both
+            // this function and `resolve` above. The rule prefers the failable
+            // String(bytes:encoding:), but every caller here would answer its
+            // nil with `?? ""`, and that turns one bad byte into a silently
+            // empty status. String(decoding:) repairs invalid UTF-8 into
+            // U+FFFD instead, so the rest of the output survives. `but` emits
+            // ANSI-coloured text that a pipe can cut mid-codepoint, so this is
+            // a live case. Losing a glyph beats losing the report.
+            // swiftlint:disable:next optional_data_string_conversion
+            text: String(decoding: data, as: UTF8.self),
             succeeded: process.terminationStatus == 0,
             directory: directory
         )
