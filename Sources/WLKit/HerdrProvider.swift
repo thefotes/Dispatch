@@ -141,7 +141,14 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             throw HerdrError.api("Nothing has focus in Herdr right now.")
         }
 
-        let (previous, next) = planCycle(paneID: pane, tools: ordered)
+        let previous: String?, next: String
+        do {
+            lock.lock(); defer { lock.unlock() }
+            (previous, next) = Self.plannedCycle(
+                paneID: pane, tools: ordered,
+                lastPaneID: lastPromptPaneID, lastTool: lastPromptTool
+            )
+        }
 
         if let previous, !previous.isEmpty {
             try await HerdrClient.sendKeys(
@@ -150,25 +157,35 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             )
         }
         try await HerdrClient.sendText(paneID: pane, text: next)
+
+        // Commit the memory only now that the pane actually holds `next`. A
+        // Herdr failure between the plan and here would otherwise leave the
+        // cycler believing it typed something it did not, and the following
+        // press would backspace the wrong count into whatever the pane
+        // really holds. Presses are serialized by `BridgeController`'s action
+        // chain, so the next `plannedCycle` sees this write.
+        lock.lock()
+        lastPromptPaneID = pane
+        lastPromptTool = next
+        lock.unlock()
     }
 
-    /// Records this press against the cycler's memory and answers what to
-    /// erase and what to type. Synchronous on purpose: `NSLock` is not to be
-    /// held across an `await`, and the whole point of the memory is that two
-    /// presses cannot both plan from the same snapshot (the bridge chains
-    /// presses, and this is the one section that must stay atomic).
-    private func planCycle(paneID: String, tools: [String]) -> (previous: String?, next: String) {
-        lock.lock(); defer { lock.unlock() }
-        // Only erase what this same pane still holds — the human may have
-        // focused a different pane (or cleared the prompt by hand) since the
-        // last press, and backspacing there would eat their text.
-        let previous = paneID == lastPromptPaneID ? lastPromptTool : nil
+    /// The cycler's pure core: given the memory of the last press, what this
+    /// press should erase (nil unless the *same* pane still holds it — the
+    /// human may have moved focus or cleared the prompt by hand, and
+    /// backspacing there would eat their text) and what it should type next,
+    /// wrapping at the end of the list. A tool no longer in the list is
+    /// still erased — it was still typed — before starting over at the front.
+    static func plannedCycle(
+        paneID: String,
+        tools: [String],
+        lastPaneID: String?,
+        lastTool: String?
+    ) -> (previous: String?, next: String) {
+        let previous = paneID == lastPaneID ? lastTool : nil
         let index = previous.flatMap { tools.firstIndex(of: $0) }
             .map { ($0 + 1) % tools.count } ?? 0
-        let next = tools[index]
-        lastPromptPaneID = paneID
-        lastPromptTool = next
-        return (previous, next)
+        return (previous, tools[index])
     }
 
     /// One joystick deflection, one pane over — Herdr's `pane.focus_direction`,
