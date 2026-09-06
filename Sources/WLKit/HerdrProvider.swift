@@ -189,17 +189,58 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     }
 
     /// One joystick deflection, one pane over — Herdr's `pane.focus_direction`,
-    /// the same moves its own prefix+h/j/k/l make. A deflection with nowhere
-    /// to go (a lone pane, or the edge of the layout) is a no-op, not an
-    /// error: Herdr answers it with a plain `no_neighbor` result, and if a
-    /// Herdr version ever words it as an error instead, that too is
-    /// swallowed here — a deflection into empty space should never surface
-    /// `lastError`.
+    /// the same move its own prefix+h/j/k/l make — with a wrap at the edge:
+    /// deflecting off the last pane of the focused tab lands on the first,
+    /// off the first lands on the last.
+    ///
+    /// The layout snapshot up front tells us whether the focused pane even
+    /// sits at the end of its tab's list; only then is a wrap possible, and
+    /// only then do we spend a second round-trip confirming focus stayed put
+    /// (a lone pane or a true edge answers `pane.focus_direction` with a
+    /// `no_neighbor` result — older Herdr builds phrase it as an error, both
+    /// land here the same). A deflection with nowhere to go and nothing to
+    /// wrap to is a no-op, never a surfaced `lastError`. The wrap itself is
+    /// a single `agent.focus`, never a walk pane-by-pane — walking would
+    /// mark every pane it passed through "seen" in Herdr.
     public func joystick(_ direction: Pad.JoystickDirection) async throws {
+        let before = (try? await HerdrClient.listAgents()) ?? []
+        let fromPane = before.first(where: \.focused)?.paneID
+        let wrapTarget = Self.wrapTarget(direction, panes: Self.panesInFocusedTab(before))
+
         do {
             try await HerdrClient.focusPane(direction: HerdrClient.PaneDirection(direction))
-        } catch HerdrError.api(let message) where message.contains("no_neighbor") || message.contains("no neighbor") {
-            return
+        } catch HerdrError.api(let message)
+            where message.contains("no_neighbor") || message.contains("no neighbor") {
+            // Treated as "did not move" — the wrap check below handles it.
+        }
+
+        guard let fromPane, let wrapTarget,
+              (try? await HerdrClient.focusedAgent())?.paneID == fromPane
+        else { return }
+        try await HerdrClient.focusAgent(wrapTarget)
+    }
+
+    /// The panes sharing the focused pane's tab, in Herdr's own list order.
+    /// Just the focused entry when tabs aren't reported, which leaves
+    /// `wrapTarget` a no-op (it needs two or more).
+    static func panesInFocusedTab(_ agents: [HerdrAgent]) -> [HerdrAgent] {
+        guard let focused = agents.first(where: \.focused) else { return [] }
+        guard let tab = focused.tabID else { return [focused] }
+        return agents.filter { $0.tabID == tab }
+    }
+
+    /// The pane a deflection wraps to once it has run off the edge: east or
+    /// south off the last pane lands on the first, west or north off the
+    /// first lands on the last. Nil — no wrap, the deflection just stays put
+    /// — for a tab with fewer than two panes, or a focused pane that isn't
+    /// at the matching end (a genuine `no_neighbor` mid-layout).
+    static func wrapTarget(_ direction: Pad.JoystickDirection, panes: [HerdrAgent]) -> String? {
+        guard panes.count > 1, let index = panes.firstIndex(where: \.focused) else { return nil }
+        switch direction {
+        case .east, .south:
+            return index == panes.count - 1 ? panes.first?.focusTarget : nil
+        case .west, .north:
+            return index == 0 ? panes.last?.focusTarget : nil
         }
     }
 

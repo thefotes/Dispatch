@@ -91,4 +91,47 @@ final class HerdrProviderTests: XCTestCase {
         XCTAssertEqual(previous, "aider")
         XCTAssertEqual(next, "opencode")
     }
+
+    // MARK: - Joystick pane wrap
+
+    private func pane(_ id: String, tab: String = "t1", focused: Bool = false) -> HerdrAgent {
+        HerdrAgent(status: "idle", paneID: id, tabID: tab, focused: focused)
+    }
+
+    func testDeflectingOffTheLastPaneWrapsToTheFirst() {
+        let panes = [pane("a"), pane("b"), pane("c", focused: true)]
+        XCTAssertEqual(HerdrProvider.wrapTarget(.east, panes: panes), "a")
+        XCTAssertEqual(HerdrProvider.wrapTarget(.south, panes: panes), "a")
+    }
+
+    func testDeflectingOffTheFirstPaneWrapsToTheLast() {
+        let panes = [pane("a", focused: true), pane("b"), pane("c")]
+        XCTAssertEqual(HerdrProvider.wrapTarget(.west, panes: panes), "c")
+        XCTAssertEqual(HerdrProvider.wrapTarget(.north, panes: panes), "c")
+    }
+
+    /// A deflection from the middle of the list is an ordinary one-pane-over
+    /// move — no wrap, whatever the direction.
+    func testAMidListDeflectionNeverWraps() {
+        let panes = [pane("a"), pane("b", focused: true), pane("c")]
+        for direction: Pad.JoystickDirection in [.north, .south, .east, .west] {
+            XCTAssertNil(HerdrProvider.wrapTarget(direction, panes: panes))
+        }
+    }
+
+    func testALonePaneNeverWraps() {
+        XCTAssertNil(HerdrProvider.wrapTarget(.east, panes: [pane("a", focused: true)]))
+        XCTAssertNil(HerdrProvider.wrapTarget(.east, panes: []))
+    }
+
+    /// Only the panes sharing the focused pane's tab are wrap candidates —
+    /// a deflection never jumps to another tab.
+    func testPanesInFocusedTabIgnoresOtherTabs() {
+        let agents = [
+            pane("a", tab: "t1", focused: true),
+            pane("b", tab: "t1"),
+            pane("c", tab: "t2")
+        ]
+        XCTAssertEqual(HerdrProvider.panesInFocusedTab(agents).map(\.paneID), ["a", "b"])
+    }
 }
