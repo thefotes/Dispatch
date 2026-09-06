@@ -560,19 +560,15 @@ public final class BridgeController: ObservableObject {
     /// A fast turn fires one unstructured task per detent, and two overlapping
     /// round-trips can both snapshot the same "currently focused" entity
     /// before either focus call lands — several detents net one step, and
-    /// whichever response lands last wins. Chaining onto the previous task
-    /// serializes the steps, so each sees the state the last one produced.
+    /// whichever response lands last wins. `chained` serializes the steps,
+    /// so each sees the state the last one produced.
     private var dialChain: Task<Void, Never>?
 
     public func cycleDial(_ step: Int) async {
         guard let target = resolvedDialMode else { return }
-        let previous = dialChain ?? Task {}
-        let task = Task { [weak self] in
-            await previous.value
+        await chained(&dialChain) { [weak self] in
             await self?.runDial(step, target: target)
-        }
-        dialChain = task
-        await task.value
+        }.value
     }
 
     private func runDial(_ step: Int, target: ProviderDialMode) async {
@@ -582,6 +578,54 @@ public final class BridgeController: ObservableObject {
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    /// One joystick deflection, to the provider — which navigates panes if
+    /// it can, and does nothing if it can't; this file has no opinion on
+    /// which kind is active.
+    ///
+    /// Serialized exactly like `cycleDial`, via the same helper: a fast
+    /// roll fires one unstructured task per sector, and two overlapping
+    /// round-trips could resolve "one pane over" against the same starting
+    /// focus, netting one move out of several.
+    ///
+    /// No `raiseTerminal()`: pane navigation stays within the terminal you
+    /// are already looking at, the way the `tab` dial mode does.
+    private var joystickChain: Task<Void, Never>?
+
+    public func moveJoystick(_ direction: Pad.JoystickDirection) async {
+        await chained(&joystickChain) { [weak self] in
+            await self?.runJoystick(direction)
+        }.value
+    }
+
+    private func runJoystick(_ direction: Pad.JoystickDirection) async {
+        do {
+            try await provider.joystick(direction)
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    /// Serializes gesture handlers — dial detents, joystick deflections —
+    /// onto a chain of tasks: each body awaits the previous one before
+    /// running, so two overlapping round-trips cannot both act on the same
+    /// snapshot of provider state. `chain` is the caller's stored task, run
+    /// to completion or left dangling; either way the next gesture chains
+    /// onto whatever came before it. Synchronous on purpose: an `inout`
+    /// property cannot cross an `await`, so the caller awaits the returned
+    /// task.
+    private func chained(
+        _ chain: inout Task<Void, Never>?,
+        _ body: @escaping @Sendable () async -> Void
+    ) -> Task<Void, Never> {
+        let previous = chain ?? Task {}
+        let task = Task {
+            await previous.value
+            await body()
+        }
+        chain = task
+        return task
     }
 
     /// Focuses an entity and brings the terminal forward — the one

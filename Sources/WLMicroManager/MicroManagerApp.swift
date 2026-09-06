@@ -80,7 +80,14 @@ struct MicroManagerApp: App {
                             Task { await bridge.cycleDial(step) }
                         }
                     }
-                    bridge.onJoystick = { direction in tune.handleJoystick(direction) }
+                    // The joystick belongs to the provider, the way the
+                    // dial does when a provider mode is resolved: pane
+                    // navigation for one that can move focus, a no-op for
+                    // one that can't.
+                    bridge.onJoystick = { [weak bridge] direction in
+                        guard let bridge else { return }
+                        Task { await bridge.moveJoystick(direction) }
+                    }
                     // While a land confirmation is up, every key that is not
                     // the land key means "cancel", nothing else.
                     bridge.onKeyIntercept = { index in

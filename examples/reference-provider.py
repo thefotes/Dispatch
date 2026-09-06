@@ -83,6 +83,11 @@ class ReferenceProvider:
         print(f"[reference-provider] inject: {params.get('text')!r}", file=sys.stderr)
         return {}
 
+    def joystick(self, params):
+        # The toy has no panes to move between, so a deflection is a no-op —
+        # the protocol's answer for a provider without pane navigation.
+        return {}
+
     def subscribe(self, notify):
         with self._lock:
             self._subscribers.append(notify)
@@ -124,6 +129,8 @@ def handle_connection(conn, provider):
                 result = provider.dial(params)
             elif method == "provider.inject":
                 result = provider.inject(params)
+            elif method == "provider.joystick":
+                result = provider.joystick(params)
             else:
                 raise ValueError(f"unknown method {method}")
             write_line(conn, {"id": request_id, "result": result})

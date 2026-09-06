@@ -64,8 +64,9 @@ macro key.
 
 **The dial** tunes reasoning effort by default; the `"dial"` config key can
 point it at Herdr navigation instead — stepping the focused agent, tab, or
-workspace. **The joystick** switches model: it puts the model list on screen,
-north and south move, east confirms, west cancels.
+workspace. **The joystick** moves pane focus, the same moves Herdr's own
+prefix+h/j/k/l make: north is up, south is down, east is right, west is
+left.
 
 ### The stack key
 
@@ -142,8 +143,8 @@ Manager only — the Inspector is a separate process and still needs hardware.
 ## Configuration
 
 Everything works without a config file. To rebind the macro keys or change what
-the dial and joystick offer, drop a `config.json` into
-`~/.config/micromanager/`:
+the dial offers, drop a `config.json` into `~/.config/micromanager/`. The
+joystick is not configurable — it moves pane focus through the active provider:
 
 ```json
 {
@@ -155,8 +156,7 @@ the dial and joystick offer, drop a `config.json` into
     "7":     { "shortcut": "f13" }
   },
   "dial":   "effort",
-  "claude": { "models": ["fable", "opus"], "efforts": ["low", "high"] },
-  "codex":  { "models": ["gpt-5.6-sol", "gpt-5.6-codex"] }
+  "claude": { "efforts": ["low", "high"] }
 }
 ```
 
@@ -191,10 +191,6 @@ focused workspace), or `"space"`/`"workspace"` (steps through workspaces),
 all wrapping and following the turn direction. A name the active provider
 doesn't recognize falls back to `"effort"` and says so in the panel, the
 same way an unrecognized shortcut does.
-
-`codex.models` is your copy of what Codex's own `/model` menu offers, in its
-order — the joystick steers that menu rather than owning it, so there is nothing
-to read it from.
 
 ### Providers
 

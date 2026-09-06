@@ -56,37 +56,21 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertEqual(parse(#"{"keys": "nope"}"#), KeyBindings())
     }
 
-    func testClaudeModelAndEffortListsHaveDefaults() {
+    func testClaudeEffortListHasADefault() {
         let bindings = KeyBindings()
-        XCTAssertEqual(bindings.claudeModels, ["fable", "opus", "sonnet", "haiku"])
         XCTAssertEqual(bindings.claudeEfforts, ["low", "medium", "high", "xhigh", "max"])
     }
 
-    func testClaudeListsAreOverridable() {
-        let bindings = parse(#"{"claude": {"models": ["opus", "sonnet"], "efforts": ["low", "high"]}}"#)
-        XCTAssertEqual(bindings.claudeModels, ["opus", "sonnet"])
+    func testClaudeEffortsAreOverridable() {
+        let bindings = parse(#"{"claude": {"efforts": ["low", "high"]}}"#)
         XCTAssertEqual(bindings.claudeEfforts, ["low", "high"])
         XCTAssertEqual(bindings.text(for: 9), "Open PRs for all active GitButler branches",
                        "key defaults survive a claude-only config")
     }
 
-    func testEmptyClaudeListsFallBackToDefaults() {
-        let bindings = parse(#"{"claude": {"models": []}}"#)
-        XCTAssertEqual(bindings.claudeModels, KeyBindings.defaultClaudeModels)
-    }
-
-    /// Codex's list has no default to fall back on: it is a copy of what that
-    /// TUI offers, and guessing it would put wrong names next to the numbers.
-    func testCodexModelsAreEmptyUntilConfigured() {
-        XCTAssertEqual(KeyBindings().codexModels, [])
-        XCTAssertEqual(parse(#"{"codex": {"models": []}}"#).codexModels, [])
-    }
-
-    func testCodexModelsComeFromTheFile() {
-        let bindings = parse(#"{"codex": {"models": ["gpt-5.6-sol", "gpt-5.6-codex"]}}"#)
-        XCTAssertEqual(bindings.codexModels, ["gpt-5.6-sol", "gpt-5.6-codex"])
-        XCTAssertEqual(bindings.claudeModels, KeyBindings.defaultClaudeModels,
-                       "a codex-only config leaves the claude side alone")
+    func testAnEmptyClaudeEffortListFallsBackToDefaults() {
+        let bindings = parse(#"{"claude": {"efforts": []}}"#)
+        XCTAssertEqual(bindings.claudeEfforts, KeyBindings.defaultClaudeEfforts)
     }
 
     // MARK: - Dial selection

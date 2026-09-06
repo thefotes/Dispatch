@@ -12,8 +12,7 @@ import Foundation
 ///         "10+11": "Summarize what you are working on"
 ///       },
 ///       "dial":   "effort",
-///       "claude": { "models": ["fable", "opus"], "efforts": ["low", "high"] },
-///       "codex":  { "models": ["gpt-5.6-sol", "gpt-5.6-codex"] }
+///       "claude": { "efforts": ["low", "high"] }
 ///     }
 ///
 /// A bound string is injected into the focused agent's prompt, unsubmitted.
@@ -82,19 +81,8 @@ public struct KeyBindings: Sendable, Equatable {
 
     public private(set) var actions: [Int: KeyAction]
 
-    /// The models the joystick cycles through in Claude Code, in order.
-    /// Overridable with a top-level `"claude": {"models": [...]}` object.
-    public private(set) var claudeModels: [String]
-
     /// The effort ladder the dial climbs in Claude Code.
     public private(set) var claudeEfforts: [String]
-
-    /// Codex's own `/model` menu, in the order it lists them, from a
-    /// `"codex": {"models": [...]}` object. The joystick steers that menu
-    /// rather than owning it, so this is the user's copy of what it offers —
-    /// there is nothing to read it from, and no sensible default. Empty means
-    /// the panel shows the steering guide alone.
-    public private(set) var codexModels: [String]
 
     /// What the knob does. Set with a top-level `"dial"` string.
     public private(set) var dialSelection: DialSelection
@@ -111,22 +99,17 @@ public struct KeyBindings: Sendable, Equatable {
         9: .text("Open PRs for all active GitButler branches"),
         12: .text("Run but pull")
     ]
-    public static let defaultClaudeModels = ["fable", "opus", "sonnet", "haiku"]
     public static let defaultClaudeEfforts = ["low", "medium", "high", "xhigh", "max"]
 
     public init(
         actions: [Int: KeyAction] = KeyBindings.defaults,
-        claudeModels: [String] = KeyBindings.defaultClaudeModels,
         claudeEfforts: [String] = KeyBindings.defaultClaudeEfforts,
-        codexModels: [String] = [],
         dialSelection: DialSelection = .effort,
         dialWarning: String? = nil,
         providerSpec: ProviderSpec? = nil
     ) {
         self.actions = actions
-        self.claudeModels = claudeModels
         self.claudeEfforts = claudeEfforts
-        self.codexModels = codexModels
         self.dialSelection = dialSelection
         self.dialWarning = dialWarning
         self.providerSpec = providerSpec
@@ -175,18 +158,13 @@ public struct KeyBindings: Sendable, Equatable {
         }
 
         let claude = json["claude"] as? [String: Any]
-        let models = (claude?["models"] as? [String])?.filter { !$0.isEmpty }
         let efforts = (claude?["efforts"] as? [String])?.filter { !$0.isEmpty }
-        let codex = json["codex"] as? [String: Any]
-        let codexModels = (codex?["models"] as? [String])?.filter { !$0.isEmpty }
 
         let (dialSelection, dialWarning) = dial(from: json["dial"])
 
         return KeyBindings(
             actions: actions,
-            claudeModels: models?.isEmpty == false ? models! : defaultClaudeModels,
             claudeEfforts: efforts?.isEmpty == false ? efforts! : defaultClaudeEfforts,
-            codexModels: codexModels ?? [],
             dialSelection: dialSelection,
             dialWarning: dialWarning,
             providerSpec: providerSpec(from: json["provider"])

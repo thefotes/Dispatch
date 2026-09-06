@@ -81,6 +81,18 @@ final class ProviderTests: XCTestCase {
         XCTAssertEqual(fake.injectedTexts, ["hello"])
     }
 
+    /// A deflection reaches the provider as the typed direction — the
+    /// provider maps it onto whatever its own vocabulary is.
+    func testAMoveJoystickReachesTheProvider() async {
+        let fake = FakeProvider()
+        let bridge = await makeBridge(fake)
+        await bridge.start()
+        await bridge.moveJoystick(.west)
+        await bridge.moveJoystick(.south)
+        XCTAssertEqual(fake.joystickCalls, [.west, .south])
+        await bridge.stop()
+    }
+
     /// Pressing an agent key focuses the entity at that slot by whatever
     /// target `status()` reported for it.
     func testFocusSlotCallsProviderFocusWithTheEntitysTarget() async {

@@ -161,6 +161,13 @@ Params: `{"text": "<the configured macro string>"}`. Result: `{}`. Put this
 text wherever "the focused thing's input" is — unsubmitted, so a human
 still reviews it before it goes anywhere.
 
+### `provider.joystick`
+
+Params: `{"direction": "<north|south|east|west>"}`. Result: `{}`. One
+joystick deflection — move focus one pane over in that direction. A
+provider with no notion of panes just answers `{}`: a deflection that
+cannot move focus anywhere is a no-op, never an error.
+
 ## 5. `events.subscribe`
 
 Params: `{}`. Unlike the others, **the connection stays open.**
@@ -193,7 +200,7 @@ line above works unmodified against either one.
 
 ## 7. Writing your own
 
-The whole surface is six methods and one envelope shape. The reference
+The whole surface is seven methods and one envelope shape. The reference
 provider is under 150 lines of dependency-free Python — a template you can
 copy and modify, not a toy that stops working past a demo. To try it:
 

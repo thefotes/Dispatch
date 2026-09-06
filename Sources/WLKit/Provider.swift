@@ -30,6 +30,12 @@ public protocol Provider: Sendable {
     /// Injects text into whatever "focused" means for this provider.
     func inject(_ text: String) async throws
 
+    /// Moves focus one pane over — one joystick deflection. The four
+    /// directions are all the hardware can express, so this is an enum, not
+    /// a string; a provider that has no notion of panes implements it as a
+    /// no-op and nothing else in the app needs to know.
+    func joystick(_ direction: Pad.JoystickDirection) async throws
+
     /// Subscribes to change notifications — a new entity, a status flip, a
     /// focus change — debounced by the caller, not here. Call `cancel()` on
     /// the returned token to stop.
