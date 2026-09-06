@@ -159,7 +159,11 @@ public final class BridgeController: ObservableObject {
     // MARK: - Lifecycle
 
     public func toggle() async {
-        if isRunning { await stop() } else { await start() }
+        if isRunning {
+            await stop()
+        } else {
+            await start()
+        }
     }
 
     public func start() async {

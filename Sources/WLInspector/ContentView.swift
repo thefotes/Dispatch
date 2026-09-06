@@ -169,7 +169,11 @@ struct PadView: View {
         let state = model.keys[index]
         let selected = model.selection.contains(index)
         return Button {
-            if selected { model.selection.remove(index) } else { model.selection.insert(index) }
+            if selected {
+                model.selection.remove(index)
+            } else {
+                model.selection.insert(index)
+            }
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 6)
@@ -203,7 +207,7 @@ struct RawCallView: View {
         ("Announce host app", "host.focused_app", "{\"name\":\"WLInspector\",\"bundle_id\":\"cc.worklouder.inspector\"}"),
         ("Device status", "device.status", ""),
         ("Firmware version", "sys.version", ""),
-        ("List files", "fs.list", "{\"checksum\":false,\"rec\":true}"),
+        ("List files", "fs.list", "{\"checksum\":false,\"rec\":true}")
     ]
 
     var body: some View {
@@ -253,7 +257,11 @@ struct LogView: View {
                     Toggle(isOn: Binding(
                         get: { model.visibleKinds.contains(kind) },
                         set: { on in
-                            if on { model.visibleKinds.insert(kind) } else { model.visibleKinds.remove(kind) }
+                            if on {
+                                model.visibleKinds.insert(kind)
+                            } else {
+                                model.visibleKinds.remove(kind)
+                            }
                         }
                     )) {
                         Text(kind.rawValue)

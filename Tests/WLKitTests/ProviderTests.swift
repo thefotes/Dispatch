@@ -126,7 +126,7 @@ final class ProviderTests: XCTestCase {
 
     private let sampleModes = [
         ProviderDialMode(id: "agent", label: "Agent", raisesHost: true),
-        ProviderDialMode(id: "tab", label: "Tab", raisesHost: false),
+        ProviderDialMode(id: "tab", label: "Tab", raisesHost: false)
     ]
 
     func testEffortResolvesToNilWithNoWarning() {

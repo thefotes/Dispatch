@@ -39,7 +39,7 @@ public enum GitButler {
         "/usr/local/bin/but",
         "~/.cargo/bin/but",
         "~/.local/bin/but",
-        "/usr/bin/but",
+        "/usr/bin/but"
     ]
 
     private static let cache = BinaryCache()
@@ -85,6 +85,7 @@ public enum GitButler {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
 
+        // swiftlint:disable:next optional_data_string_conversion - see below
         let path = String(decoding: data, as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) else { return nil }
@@ -182,7 +183,7 @@ public enum GitButler {
         environment["TERM"] = "xterm-256color"
         environment["PATH"] = [
             (binary as NSString).deletingLastPathComponent,
-            environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin",
+            environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
         ].joined(separator: ":")
         process.environment = environment
 
@@ -208,6 +209,15 @@ public enum GitButler {
         watchdog.cancel()
 
         return StatusOutput(
+            // Deliberately against optional_data_string_conversion, in both
+            // this function and `resolve` above. The rule prefers the failable
+            // String(bytes:encoding:), but every caller here would answer its
+            // nil with `?? ""`, and that turns one bad byte into a silently
+            // empty status. String(decoding:) repairs invalid UTF-8 into
+            // U+FFFD instead, so the rest of the output survives. `but` emits
+            // ANSI-coloured text that a pipe can cut mid-codepoint, so this is
+            // a live case. Losing a glyph beats losing the report.
+            // swiftlint:disable:next optional_data_string_conversion
             text: String(decoding: data, as: UTF8.self),
             succeeded: process.terminationStatus == 0,
             directory: directory

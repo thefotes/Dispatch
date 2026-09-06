@@ -151,8 +151,8 @@ public final class WLDevice {
             kIOHIDVendorIDKey: WLDevice.vendorID,
             kIOHIDDeviceUsagePairsKey: [
                 [kIOHIDDeviceUsagePageKey: WLDevice.vendorUsagePage,
-                 kIOHIDDeviceUsageKey: WLDevice.vendorUsage],
-            ],
+                 kIOHIDDeviceUsageKey: WLDevice.vendorUsage]
+            ]
         ] as CFDictionary)
         let openResult = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         guard openResult == kIOReturnSuccess else {
@@ -396,9 +396,13 @@ public final class WLDevice {
         while index < rpcAccumulator.endIndex {
             let ch = rpcAccumulator[index]
             if inString {
-                if escaped { escaped = false }
-                else if ch == "\\" { escaped = true }
-                else if ch == "\"" { inString = false }
+                if escaped {
+                    escaped = false
+                } else if ch == "\\" {
+                    escaped = true
+                } else if ch == "\"" {
+                    inString = false
+                }
             } else if ch == "\"" {
                 inString = true
             } else if ch == "{" {

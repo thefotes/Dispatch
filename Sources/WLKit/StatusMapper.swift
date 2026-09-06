@@ -21,14 +21,14 @@ public struct BridgeConfig: Sendable {
         // quiet - so give them different colours.
         "done": 0x00B0FF,
         "idle": 0x00C853,
-        "unknown": 0x00C853,
+        "unknown": 0x00C853
     ]
     public var effects: [String: OAI.Effect] = [
         "blocked": .breath,
         "working": .solid,
         "idle": .solid,
         "done": .solid,
-        "unknown": .solid,
+        "unknown": .solid
     ]
     /// The stack key is not an agent, so it gets a colour of its own rather
     /// than borrowing one of the status colours.

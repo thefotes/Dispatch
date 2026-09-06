@@ -45,7 +45,7 @@ public enum AnsiHTML {
         "#3d434f", "#c93a44", "#18985a", "#a87d1c",
         "#2b6fd4", "#8f50c9", "#0d8fa3", "#3a4150",
         "#8a919e", "#e0525e", "#2fa96b", "#bd9430",
-        "#4a8ae8", "#a873dd", "#2aa2b8", "#1a1f28",
+        "#4a8ae8", "#a873dd", "#2aa2b8", "#1a1f28"
     ]
 
     public static func render(_ text: String) -> String {
@@ -183,7 +183,11 @@ public enum AnsiHTML {
             case 100...107: style.background = palette[code - 100 + 8]
             case 38, 48:
                 let extended = readExtendedColor(parameters, from: &index)
-                if code == 38 { style.foreground = extended } else { style.background = extended }
+                if code == 38 {
+                    style.foreground = extended
+                } else {
+                    style.background = extended
+                }
             default: break
             }
             index += 1
