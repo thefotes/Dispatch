@@ -47,6 +47,10 @@ public final class RemoteProvider: Provider, @unchecked Sendable {
         _ = try await request("provider.inject", params: ["text": text])
     }
 
+    public func perform(_ action: String) async throws {
+        _ = try await request("provider.perform", params: ["action": action])
+    }
+
     public func joystick(_ direction: Pad.JoystickDirection) async throws {
         _ = try await request("provider.joystick", params: ["direction": direction.rawValue])
     }

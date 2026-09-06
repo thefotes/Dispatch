@@ -30,6 +30,14 @@ public protocol Provider: Sendable {
     /// Injects text into whatever "focused" means for this provider.
     func inject(_ text: String) async throws
 
+    /// Carries out one of the actions this provider offered through
+    /// `describe()` — `action` is an opaque id from `ProviderAction`, the
+    /// same way `dial(_:mode:)` takes a dial-mode id. The protocol never
+    /// knows what "create a workspace" means; whichever provider offered
+    /// the id is the one that decides what it concretely does. A press of a
+    /// key bound to `{"action": ...}` in config.json lands here.
+    func perform(_ action: String) async throws
+
     /// Moves focus one pane over — one joystick deflection. The four
     /// directions are all the hardware can express, so this is an enum, not
     /// a string; a provider that has no notion of panes implements it as a
@@ -62,14 +70,24 @@ public struct ProviderDescription: Sendable, Equatable {
     /// in the app layer and never reaches a provider.
     public var dialModes: [ProviderDialMode]
 
+    /// Named actions this provider can `perform`, in menu order, each with
+    /// a short label. `BridgeController` checks a key's `{"action": ...}`
+    /// binding against these ids — a binding naming an action the active
+    /// provider never offered is a panel error, the same way an
+    /// unrecognized dial name is. Ids are the provider's own vocabulary:
+    /// the protocol knows nothing about what any of them do.
+    public var actions: [ProviderAction]
+
     public init(
         statePalette: [String: ProviderStateStyle] = [:],
         statePriority: [String] = [],
-        dialModes: [ProviderDialMode] = []
+        dialModes: [ProviderDialMode] = [],
+        actions: [ProviderAction] = []
     ) {
         self.statePalette = statePalette
         self.statePriority = statePriority
         self.dialModes = dialModes
+        self.actions = actions
     }
 }
 
@@ -92,6 +110,23 @@ public struct ProviderDialMode: Sendable, Equatable {
     /// way an agent key does — a per-mode fact only the provider can know
     /// (Herdr's `"agent"`/`"space"` do; `"tab"` does not, since you are
     /// already looking at the pane it stays within).
+    public var raisesHost: Bool
+
+    public init(id: String, label: String, raisesHost: Bool) {
+        self.id = id
+        self.label = label
+        self.raisesHost = raisesHost
+    }
+}
+
+/// One named action a provider offers through `perform`. The id is opaque
+/// to everything above the provider — the label is what the menu panel
+/// shows, and `raisesHost` is whether running the action should bring the
+/// host app forward, the same per-action fact `ProviderDialMode` carries
+/// for dial detents (creating a pane does; cycling a prompt does not).
+public struct ProviderAction: Sendable, Equatable {
+    public var id: String
+    public var label: String
     public var raisesHost: Bool
 
     public init(id: String, label: String, raisesHost: Bool) {

@@ -40,4 +40,55 @@ final class HerdrProviderTests: XCTestCase {
         XCTAssertEqual(modes.first { $0.id == "space" }?.raisesHost, true)
         XCTAssertEqual(modes.first { $0.id == "tab" }?.raisesHost, false)
     }
+
+    /// `perform`'s ids and the dial's are the provider's own vocabulary; pin
+    /// the action set so a rename can't silently orphan a `{"action": ...}`
+    /// binding.
+    func testActionsAreWorkspaceSplitAndCycle() async {
+        let ids = await HerdrProvider().describe().actions.map(\.id)
+        XCTAssertEqual(ids, ["new_workspace", "split_pane", "cycle_prompt"])
+    }
+
+    // MARK: - Prompt-tool cycle
+
+    private let tools = ["opencode", "claude", "codex"]
+
+    func testFirstPressTypesTheFirstToolAndErasesNothing() {
+        let (previous, next) = HerdrProvider.plannedCycle(
+            paneID: "p1", tools: tools, lastPaneID: nil, lastTool: nil)
+        XCTAssertNil(previous)
+        XCTAssertEqual(next, "opencode")
+    }
+
+    func testASecondPressInTheSamePaneAdvancesAndErasesThePrevious() {
+        let (previous, next) = HerdrProvider.plannedCycle(
+            paneID: "p1", tools: tools, lastPaneID: "p1", lastTool: "opencode")
+        XCTAssertEqual(previous, "opencode")
+        XCTAssertEqual(next, "claude")
+    }
+
+    func testTheCycleWrapsPastTheEndOfTheList() {
+        let (previous, next) = HerdrProvider.plannedCycle(
+            paneID: "p1", tools: tools, lastPaneID: "p1", lastTool: "codex")
+        XCTAssertEqual(previous, "codex")
+        XCTAssertEqual(next, "opencode")
+    }
+
+    /// Focus moved since the last press: the other pane's text is not ours
+    /// to backspace, so this press erases nothing and starts at the front.
+    func testAPressInADifferentPaneErasesNothingAndStartsOver() {
+        let (previous, next) = HerdrProvider.plannedCycle(
+            paneID: "p2", tools: tools, lastPaneID: "p1", lastTool: "claude")
+        XCTAssertNil(previous)
+        XCTAssertEqual(next, "opencode")
+    }
+
+    /// The remembered tool is no longer in a (reconfigured) list: it was
+    /// still typed, so it is still erased, then the cycle restarts.
+    func testAToolNoLongerInTheListIsErasedThenTheCycleRestarts() {
+        let (previous, next) = HerdrProvider.plannedCycle(
+            paneID: "p1", tools: tools, lastPaneID: "p1", lastTool: "aider")
+        XCTAssertEqual(previous, "aider")
+        XCTAssertEqual(next, "opencode")
+    }
 }

@@ -107,6 +107,82 @@ final class ProviderBridgeRoundTripTests: XCTestCase {
         XCTAssertEqual(fake.injectedTexts, ["ship it"])
     }
 
+    func testPerformForwardsTheActionName() async throws {
+        let fake = FakeProvider()
+        let (remote, server, _) = try makePair(fake)
+        defer { server.stop() }
+
+        try await remote.perform("new_workspace")
+        XCTAssertEqual(fake.performedActions, ["new_workspace"])
+    }
+
+    func testPerformWithoutAnActionIsRejected() async throws {
+        let fake = FakeProvider()
+        let (remote, server, path) = try makePair(fake)
+        defer { server.stop() }
+
+        // Hand-crafted envelope: the wire method exists but the required
+        // parameter is missing, which the server must refuse rather than
+        // forward an empty action to the provider. The reply is read
+        // before the connection closes — a write to a socket the peer has
+        // already dropped raises SIGPIPE, which kills the whole test run.
+        let reply = try Self.roundTripOnFreshConnection(
+            path: path,
+            envelope: ["id": "t", "method": "provider.perform", "params": [String: Any]()]
+        )
+        XCTAssertTrue(reply.contains("needs an action"), "unexpected reply: \(reply)")
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(fake.performedActions, [])
+    }
+
+    /// One request on its own connection, the same shape the server expects,
+    /// returning the reply line — the plain-socket stand-in for what
+    /// `RemoteProvider.request` does, for envelopes its API cannot express.
+    private static func roundTripOnFreshConnection(path: String, envelope: [String: Any]) throws -> String {
+        let payload = try JSONSerialization.data(withJSONObject: envelope) + Data("\n".utf8)
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else { throw HerdrError.cannotConnect(path, "socket() failed") }
+        defer { Darwin.close(fd) }
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        let maxLength = MemoryLayout.size(ofValue: addr.sun_path)
+        guard path.utf8.count < maxLength else {
+            throw HerdrError.cannotConnect(path, "socket path too long")
+        }
+        _ = withUnsafeMutablePointer(to: &addr.sun_path) { pathPtr in
+            path.withCString { source in
+                strncpy(UnsafeMutableRawPointer(pathPtr).assumingMemoryBound(to: CChar.self), source, maxLength - 1)
+            }
+        }
+        let size = socklen_t(MemoryLayout<sockaddr_un>.size)
+        let result = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(fd, $0, size) }
+        }
+        guard result == 0 else { throw HerdrError.cannotConnect(path, String(cString: strerror(errno))) }
+
+        var sent = 0
+        while sent < payload.count {
+            let n = payload.withUnsafeBytes { raw in
+                Darwin.write(fd, raw.baseAddress!.advanced(by: sent), raw.count - sent)
+            }
+            guard n > 0 else { throw HerdrError.closed("roundTripOnFreshConnection") }
+            sent += n
+        }
+
+        var buffer = Data()
+        var chunk = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let n = Darwin.read(fd, &chunk, chunk.count)
+            guard n > 0 else { break }
+            buffer.append(contentsOf: chunk[0..<n])
+            if buffer.contains(UInt8(ascii: "\n")) { break }
+        }
+        guard let line = String(data: buffer, encoding: .utf8), !line.isEmpty else {
+            throw HerdrError.closed("roundTripOnFreshConnection")
+        }
+        return line
+    }
+
     /// A thrown provider error crosses the socket as a message, same as any
     /// other `Provider` error `BridgeController` surfaces as `lastError`.
     func testAThrownErrorCrossesTheSocketAsAMessage() async throws {

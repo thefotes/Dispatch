@@ -152,6 +152,12 @@ public final class ProviderBridgeServer: @unchecked Sendable {
             }
             try await provider.inject(text)
             return [:]
+        case "provider.perform":
+            guard let action = params["action"] as? String, !action.isEmpty else {
+                throw HerdrError.badResponse("provider.perform needs an action")
+            }
+            try await provider.perform(action)
+            return [:]
         case "provider.joystick":
             guard let raw = params["direction"] as? String,
                   let direction = Pad.JoystickDirection(rawValue: raw) else {

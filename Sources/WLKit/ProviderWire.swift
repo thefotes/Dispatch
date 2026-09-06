@@ -14,6 +14,9 @@ enum ProviderWire {
             "statePriority": description.statePriority,
             "dialModes": description.dialModes.map {
                 ["id": $0.id, "label": $0.label, "raisesHost": $0.raisesHost]
+            },
+            "actions": description.actions.map {
+                ["id": $0.id, "label": $0.label, "raisesHost": $0.raisesHost]
             }
         ]
     }
@@ -38,7 +41,12 @@ enum ProviderWire {
             let raisesHost = entry["raisesHost"] as? Bool ?? false
             return ProviderDialMode(id: id, label: label, raisesHost: raisesHost)
         }
-        return ProviderDescription(statePalette: palette, statePriority: priority, dialModes: modes)
+        let actions = (json["actions"] as? [[String: Any]] ?? []).compactMap { entry -> ProviderAction? in
+            guard let id = entry["id"] as? String, let label = entry["label"] as? String else { return nil }
+            let raisesHost = entry["raisesHost"] as? Bool ?? false
+            return ProviderAction(id: id, label: label, raisesHost: raisesHost)
+        }
+        return ProviderDescription(statePalette: palette, statePriority: priority, dialModes: modes, actions: actions)
     }
 
     static func encode(_ agents: [HerdrAgent]) -> [String: Any] {

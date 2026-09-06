@@ -9,8 +9,13 @@ import Foundation
 ///       "keys": {
 ///         "9": "Open PRs for all active GitButler branches",
 ///         "12": "Run but pull",
-///         "10+11": "Summarize what you are working on"
+///         "10+11": "Summarize what you are working on",
+///         "6": { "action": "new_workspace" },
+///         "7": { "action": "split_pane" },
+///         "8": { "action": "cycle_prompt" }
 ///       },
+///       "herdr":  { "tools": ["opencode", "claude", "codex"],
+///                   "split_direction": "right" },
 ///       "dial":   "effort",
 ///       "claude": { "efforts": ["low", "high"] }
 ///     }
@@ -18,7 +23,15 @@ import Foundation
 /// A bound string is injected into the focused agent's prompt, unsubmitted.
 /// A key can also be bound to a system-wide keyboard shortcut instead —
 /// `{"shortcut": "cmd+shift+5"}` — synthesised regardless of what Herdr is
-/// doing. `"10+11"` addresses the wide key as one; `"10"` and `"11"` address
+/// doing, or to a named provider action — `{"action": "..."}` — resolved
+/// against what the active provider advertised through `describe()` and
+/// dispatched through `Provider.perform`, exactly the way `"dial"` names
+/// are resolved. What the names mean is entirely the provider's business;
+/// the knobs a provider's actions read (for the shipped Herdr provider:
+/// the `"tools"` list the cycle action rotates through and the
+/// `"split_direction"` its split action takes) live in that provider's own
+/// config section and are its to interpret. `"10+11"` addresses the
+/// wide key as one; `"10"` and `"11"` address
 /// its halves separately. Keys the file does not mention keep their
 /// defaults — 9 and 12 default to the text macros below, the wide key
 /// defaults to the voice key, and 6/7/8 default to stack/tabs/land. Binding
@@ -65,6 +78,11 @@ public struct KeyBindings: Sendable, Equatable {
     public enum KeyAction: Equatable, Sendable {
         case text(String)
         case shortcut(String)
+        /// A named provider action — `{"action": "..."}` — resolved against
+        /// what the active provider offered through `describe()` and handed
+        /// to `Provider.perform`. This file has no opinion on what the
+        /// names mean, exactly like `"dial"`.
+        case action(String)
         case off
     }
 
@@ -87,6 +105,15 @@ public struct KeyBindings: Sendable, Equatable {
     /// What the knob does. Set with a top-level `"dial"` string.
     public private(set) var dialSelection: DialSelection
 
+    /// The prompt names the `{"herdr": "cycle"}` key rotates through, in
+    /// order. Set with a top-level `"herdr": {"tools": [...]}` object.
+    public private(set) var herdrTools: [String]
+
+    /// Which side of the focused pane the `{"herdr": "pane"}` key's split
+    /// puts the new one on: "right", "down", "left" or "up". Set with a
+    /// top-level `"herdr": {"split_direction": ...}` string.
+    public private(set) var herdrSplitDirection: String
+
     /// Which provider to use, if not the in-process default.
     public private(set) var providerSpec: ProviderSpec?
 
@@ -100,16 +127,22 @@ public struct KeyBindings: Sendable, Equatable {
         12: .text("Run but pull")
     ]
     public static let defaultClaudeEfforts = ["low", "medium", "high", "xhigh", "max"]
+    public static let defaultHerdrTools = ["opencode", "claude", "codex"]
+    public static let defaultHerdrSplitDirection = "right"
 
     public init(
         actions: [Int: KeyAction] = KeyBindings.defaults,
         claudeEfforts: [String] = KeyBindings.defaultClaudeEfforts,
+        herdrTools: [String] = KeyBindings.defaultHerdrTools,
+        herdrSplitDirection: String = KeyBindings.defaultHerdrSplitDirection,
         dialSelection: DialSelection = .effort,
         dialWarning: String? = nil,
         providerSpec: ProviderSpec? = nil
     ) {
         self.actions = actions
         self.claudeEfforts = claudeEfforts
+        self.herdrTools = herdrTools
+        self.herdrSplitDirection = herdrSplitDirection
         self.dialSelection = dialSelection
         self.dialWarning = dialWarning
         self.providerSpec = providerSpec
@@ -160,11 +193,18 @@ public struct KeyBindings: Sendable, Equatable {
         let claude = json["claude"] as? [String: Any]
         let efforts = (claude?["efforts"] as? [String])?.filter { !$0.isEmpty }
 
+        let herdr = json["herdr"] as? [String: Any]
+        let tools = (herdr?["tools"] as? [String])?.filter { !$0.isEmpty }
+        let splitDirection = herdr?["split_direction"] as? String
+        let direction = (splitDirection?.isEmpty == false) ? splitDirection! : defaultHerdrSplitDirection
+
         let (dialSelection, dialWarning) = dial(from: json["dial"])
 
         return KeyBindings(
             actions: actions,
             claudeEfforts: efforts?.isEmpty == false ? efforts! : defaultClaudeEfforts,
+            herdrTools: tools?.isEmpty == false ? tools! : defaultHerdrTools,
+            herdrSplitDirection: direction,
             dialSelection: dialSelection,
             dialWarning: dialWarning,
             providerSpec: providerSpec(from: json["provider"])
@@ -222,8 +262,16 @@ public struct KeyBindings: Sendable, Equatable {
             return flag ? nil : .off
         }
         if let text = value as? String { return text.isEmpty ? nil : .text(text) }
-        if let object = value as? [String: Any], let shortcut = object["shortcut"] as? String {
-            return shortcut.isEmpty ? nil : .shortcut(shortcut)
+        if let object = value as? [String: Any] {
+            if let shortcut = object["shortcut"] as? String {
+                return shortcut.isEmpty ? nil : .shortcut(shortcut)
+            }
+            // Shape-level only: a non-empty action name. Whether the active
+            // provider actually offers it is `BridgeController`'s concern,
+            // resolved against `describe()` the way dial names are.
+            if let name = object["action"] as? String, !name.isEmpty {
+                return .action(name)
+            }
         }
         return nil
     }

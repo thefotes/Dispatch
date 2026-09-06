@@ -10,6 +10,7 @@ final class FakeProvider: Provider, @unchecked Sendable {
     var injectedTexts: [String] = []
     var injectError: Error?
     var joystickCalls: [Pad.JoystickDirection] = []
+    var performedActions: [String] = []
     var descriptionToReturn = ProviderDescription()
     private var onChangeCallback: (@Sendable () -> Void)?
 
@@ -30,6 +31,10 @@ final class FakeProvider: Provider, @unchecked Sendable {
 
     func joystick(_ direction: Pad.JoystickDirection) async throws {
         joystickCalls.append(direction)
+    }
+
+    func perform(_ action: String) async throws {
+        performedActions.append(action)
     }
 
     func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription {
