@@ -44,6 +44,11 @@ final class ForegroundInstanceDetector {
     /// The AX element behind each cached window id, kept so a remote agent
     /// key press can raise exactly the right window.
     private var windowElements: [CGWindowID: AXUIElement] = [:]
+    /// Windows calibration failed to identify, keyed by `CGWindowID` with
+    /// the earliest moment they may be retried. A plain shell window or an
+    /// instance behind a downed tunnel must not trigger a calibration pass
+    /// on every poll — see `calibrate`.
+    private var unknownUntil: [CGWindowID: Date] = [:]
     private var observer: AXObserver?
     private var runLoopSource: CFRunLoopSource?
     private var workspaceObserver: NSObjectProtocol?
@@ -87,6 +92,7 @@ final class ForegroundInstanceDetector {
         clients = [:]
         windowCache = [:]
         windowElements = [:]
+        unknownUntil = [:]
     }
 
     /// Brings an instance's terminal window forward — the hook
@@ -126,12 +132,18 @@ final class ForegroundInstanceDetector {
         windowElements[windowID] = axWindow
 
         if let known = windowCache[windowID] {
+            unknownUntil[windowID] = nil
             reportActive(known)
             return
         }
         // Unknown window in front — it may be a new instance window, or an
-        // unrelated one. Calibrate to find out; the switch itself happens
-        // only on a positive identification.
+        // unrelated one (a plain shell window, or an instance whose tunnel
+        // is down and could not be calibrated). Either way the last
+        // calibration failed to identify it, do not retry on every tick:
+        // each pass stamps markers into the user's real window titles. Wait
+        // out the negative entry first; a genuinely new window calibrates
+        // within a retry interval.
+        if let retryAt = unknownUntil[windowID], retryAt > Date() { return }
         Task { await self.calibrate(focusedWindowID: windowID) }
     }
 
@@ -153,6 +165,12 @@ final class ForegroundInstanceDetector {
     /// calibration at a time (off the hot path: two socket round trips per
     /// instance); a user switching windows concurrently just makes the next
     /// poll recalibrate.
+    ///
+    /// When the focused window ends up unidentified — it belongs to no
+    /// instance (a plain shell window), or an instance was unreachable this
+    /// pass — it gets a TTL'd negative entry so `poll` stops retrying it on
+    /// every tick. Otherwise calibration would run forever, flickering
+    /// marker titles into the user's windows every poll interval.
     private func calibrate(focusedWindowID: CGWindowID) async {
         guard !calibrating else { return }
         calibrating = true
@@ -168,6 +186,7 @@ final class ForegroundInstanceDetector {
             }
             if let (windowID, element) = windowCarrying(title: instance.calibrationMarker) {
                 discovered[windowID] = instance.id
+                unknownUntil[windowID] = nil
                 windowElements[windowID] = element
                 if windowID == focusedWindowID { reportActive(instance.id) }
             }
@@ -176,7 +195,23 @@ final class ForegroundInstanceDetector {
             try? await client.clearWindowTitle()
         }
         windowCache = discovered
+
+        // Drop expired negatives while here, then record the outcome for
+        // the window that triggered this pass.
+        let now = Date()
+        unknownUntil = unknownUntil.filter { $0.value > now }
+        if discovered[focusedWindowID] == nil {
+            unknownUntil[focusedWindowID] = now.addingTimeInterval(Self.unknownWindowRetryInterval)
+        } else {
+            unknownUntil[focusedWindowID] = nil
+        }
     }
+
+    /// How long an unidentified window is left alone before calibration
+    /// may look at it again. Long enough that a dead tunnel coming back is
+    /// noticed within half a minute; short enough that a genuinely new
+    /// instance window maps quickly.
+    static let unknownWindowRetryInterval: TimeInterval = 30
 
     /// Reads the AX title of every window of the terminal app, looking for
     /// the one a marker landed on.

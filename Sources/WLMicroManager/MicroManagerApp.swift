@@ -125,17 +125,25 @@ struct MicroManagerApp: App {
                         // A child that fails is isolated inside the routing
                         // provider — it never throws to the bridge — so its
                         // reason has to be relayed where the panel shows
-                        // errors. A cleared reason needs no relay: the
-                        // bridge clears `lastError` itself on the next
-                        // refresh where every child answered.
-                        Task { [weak bridge] in
-                            var relayed: String?
+                        // errors. Two things try to hide it: the bridge
+                        // clears `lastError` on every refresh its (never-
+                        // throwing) `provider.status()` succeeds, and the
+                        // identical message recurs until the child recovers.
+                        // So re-note the same message whenever the bridge
+                        // has wiped it, for as long as the child keeps
+                        // failing; a cleared routing error needs no relay —
+                        // the panel goes quiet on the next refresh.
+                        Task { @MainActor [weak bridge] in
+                            var lastRoutingError: String?
                             while !Task.isCancelled {
                                 try? await Task.sleep(nanoseconds: 2_500_000_000)
-                                let error = routing.lastError
-                                if let error, error != relayed {
-                                    relayed = error
-                                    bridge?.noteError(error)
+                                guard let bridge else { return }
+                                let routingError = routing.lastError
+                                if routingError != lastRoutingError {
+                                    lastRoutingError = routingError
+                                    if let routingError { bridge.noteError(routingError) }
+                                } else if let routingError, bridge.lastError == nil {
+                                    bridge.noteError(routingError)
                                 }
                             }
                         }

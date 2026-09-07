@@ -220,13 +220,18 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
             try await activeChild().provider.focus(raw)
             return
         }
-        // A target naming an instance that is no longer configured falls
-        // back to the active child rather than dropping the press on the
-        // floor. The raise hook fires only for a positively identified
-        // instance — there is no window to raise for a ghost.
-        let identified = child(named: instanceID)
-        try await (identified ?? activeChild()).provider.focus(raw)
-        if identified != nil { onFocusInstance?(instanceID) }
+        // A namespaced target names its owner, and pane ids collide freely
+        // across instances — that collision is the whole reason for the
+        // namespace. A target whose owner is no longer configured (the
+        // instance was renamed or removed while a merged list is in memory)
+        // is therefore not addressable anywhere: dispatching its raw id to
+        // the active child could focus an unrelated pane on the wrong
+        // machine. The press is dropped, loudly enough to surface.
+        guard let child = child(named: instanceID) else {
+            throw HerdrError.api("No Herdr instance named \"\(instanceID)\" is configured — its agent can no longer be focused.")
+        }
+        try await child.provider.focus(raw)
+        onFocusInstance?(instanceID)
     }
 
     public func dial(_ step: Int, mode: String) async throws {

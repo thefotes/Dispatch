@@ -219,10 +219,20 @@ final class RoutingProviderTests: XCTestCase {
         XCTAssertTrue(jarvis.focusCalls.isEmpty)
     }
 
-    func testAFocusForAnUnknownInstanceFallsBackToTheActiveChild() async throws {
+    /// A namespaced target names its owner, and pane ids collide across
+    /// instances — a target whose owner is gone is not addressable anywhere,
+    /// so the press is dropped rather than handed to the active child, where
+    /// the raw id could match an unrelated pane on the wrong machine.
+    func testAFocusForAnUnknownInstanceIsDroppedWithAnError() async throws {
         let (routing, local, _) = makeRouting()
-        try await routing.focus("ghost\u{1}w1:p1")
-        XCTAssertEqual(local.focusCalls, ["w1:p1"])
+        do {
+            try await routing.focus("ghost\u{1}w1:p1")
+            XCTFail("a ghost-instance target must not silently route anywhere")
+        } catch let error as HerdrError {
+            guard case .api(let message) = error else { return XCTFail("unexpected error: \(error)") }
+            XCTAssertTrue(message.contains("ghost"), message)
+        }
+        XCTAssertTrue(local.focusCalls.isEmpty, "the raw id never reaches any child")
     }
 
     // MARK: - Subscribe fan-out
