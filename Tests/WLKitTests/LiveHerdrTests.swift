@@ -6,11 +6,11 @@ import XCTest
 final class LiveHerdrTests: XCTestCase {
 
     private func serverRunning() -> Bool {
-        FileManager.default.fileExists(atPath: HerdrClient.socketPath())
+        FileManager.default.fileExists(atPath: HerdrClient.defaultSocketPath())
     }
 
-    func testSocketPathResolves() {
-        let path = HerdrClient.socketPath()
+    func testDefaultSocketPathResolves() {
+        let path = HerdrClient.defaultSocketPath()
         XCTAssertTrue(path.hasSuffix("herdr/herdr.sock") || !path.isEmpty)
     }
 

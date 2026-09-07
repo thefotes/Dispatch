@@ -15,7 +15,13 @@ import Foundation
 ///         "8": { "action": "cycle_prompt" }
 ///       },
 ///       "herdr":  { "tools": ["opencode", "claude", "codex"],
-///                   "split_direction": "right" },
+///                   "split_direction": "right",
+///                   "instances": [
+///                     { "id": "local",  "name": "Mac Mini",
+///                       "socket_path": "~/.config/herdr/herdr.sock" },
+///                     { "id": "jarvis", "name": "Jarvis",
+///                       "socket_path": "$TMPDIR/jarvis-herdr.sock" }
+///                   ] },
 ///       "dial":   "effort",
 ///       "claude": { "efforts": ["low", "high"] },
 ///       "agent_keys": "priority"
@@ -122,6 +128,13 @@ public struct KeyBindings: Sendable, Equatable {
     /// top-level `"herdr": {"split_direction": ...}` string.
     public private(set) var herdrSplitDirection: String
 
+    /// The Herdr instances the pad talks to, in config order — the order
+    /// merged status is built in and `herdr.next_instance` cycles through.
+    /// Set with `"herdr": {"instances": [{"id": ..., "name": ...,
+    /// "socket_path": ...}, ...]}`. Absent or empty means one default local
+    /// instance, so every existing config keeps working unchanged.
+    public private(set) var herdrInstances: [HerdrInstance]
+
     /// Which provider to use, if not the in-process default.
     public private(set) var providerSpec: ProviderSpec?
 
@@ -144,12 +157,14 @@ public struct KeyBindings: Sendable, Equatable {
     public static let defaultClaudeEfforts = ["low", "medium", "high", "xhigh", "max"]
     public static let defaultHerdrTools = ["opencode", "claude", "codex"]
     public static let defaultHerdrSplitDirection = "right"
+    public static let defaultHerdrInstances = [HerdrInstance.local()]
 
     public init(
         actions: [Int: KeyAction] = KeyBindings.defaults,
         claudeEfforts: [String] = KeyBindings.defaultClaudeEfforts,
         herdrTools: [String] = KeyBindings.defaultHerdrTools,
         herdrSplitDirection: String = KeyBindings.defaultHerdrSplitDirection,
+        herdrInstances: [HerdrInstance] = KeyBindings.defaultHerdrInstances,
         dialSelection: DialSelection = .effort,
         dialWarning: String? = nil,
         providerSpec: ProviderSpec? = nil,
@@ -159,6 +174,7 @@ public struct KeyBindings: Sendable, Equatable {
         self.claudeEfforts = claudeEfforts
         self.herdrTools = herdrTools
         self.herdrSplitDirection = herdrSplitDirection
+        self.herdrInstances = herdrInstances
         self.dialSelection = dialSelection
         self.dialWarning = dialWarning
         self.providerSpec = providerSpec
@@ -214,6 +230,7 @@ public struct KeyBindings: Sendable, Equatable {
         let tools = (herdr?["tools"] as? [String])?.filter { !$0.isEmpty }
         let splitDirection = herdr?["split_direction"] as? String
         let direction = (splitDirection?.isEmpty == false) ? splitDirection! : defaultHerdrSplitDirection
+        let instances = herdrInstances(from: herdr?["instances"])
 
         let (dialSelection, dialWarning) = dial(from: json["dial"])
 
@@ -222,6 +239,7 @@ public struct KeyBindings: Sendable, Equatable {
             claudeEfforts: efforts?.isEmpty == false ? efforts! : defaultClaudeEfforts,
             herdrTools: tools?.isEmpty == false ? tools! : defaultHerdrTools,
             herdrSplitDirection: direction,
+            herdrInstances: instances,
             dialSelection: dialSelection,
             dialWarning: dialWarning,
             providerSpec: providerSpec(from: json["provider"]),
@@ -252,6 +270,42 @@ public struct KeyBindings: Sendable, Equatable {
             return (.effort, "\"dial\" must not be empty — keeping \"effort\".")
         }
         return name == "effort" ? (.effort, nil) : (.provider(name), nil)
+    }
+
+    /// The `"herdr": {"instances": [...]}` list. Absent or empty is the
+    /// single default local instance; malformed entries are skipped rather
+    /// than failing the whole file. `socket_path` values have `~` and
+    /// `$TMPDIR` expanded — forwarded remote sockets belong under `$TMPDIR`,
+    /// since macOS caps `sun_path` at 104 bytes.
+    private static func herdrInstances(from value: Any?) -> [HerdrInstance] {
+        guard let raw = value as? [[String: Any]], !raw.isEmpty else {
+            return defaultHerdrInstances
+        }
+        var parsed: [HerdrInstance] = []
+        for entry in raw {
+            guard let id = entry["id"] as? String, !id.isEmpty,
+                  let path = entry["socket_path"] as? String, !path.isEmpty
+            else { continue }
+            // A duplicate id would make focus-target namespaces ambiguous —
+            // the first entry in config order wins.
+            guard !parsed.contains(where: { $0.id == id }) else { continue }
+            let name = (entry["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? id
+            parsed.append(HerdrInstance(id: id, name: name, socketPath: expandingPath(path)))
+        }
+        return parsed.isEmpty ? defaultHerdrInstances : parsed
+    }
+
+    /// Expands a leading `~` to the home directory and `$TMPDIR` to the
+    /// per-user temporary directory. Both are the forms the config examples
+    /// use; nothing else is interpreted.
+    static func expandingPath(_ path: String) -> String {
+        if path == "~" || path.hasPrefix("~/") {
+            return (NSHomeDirectory() as NSString).appendingPathComponent(String(path.dropFirst(2)))
+        }
+        if path.hasPrefix("$TMPDIR"), let tmpdir = ProcessInfo.processInfo.environment["TMPDIR"] {
+            return tmpdir + path.dropFirst("$TMPDIR".count)
+        }
+        return path
     }
 
     /// `{"connect": "path"}`, `{"launch": "cmd"}` (optionally with `"args"`),

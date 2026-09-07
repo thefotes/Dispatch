@@ -5,6 +5,8 @@
 /// and `ProviderBridgeRoundTripTests`.
 final class FakeProvider: Provider, @unchecked Sendable {
     var agentsToReturn: [HerdrAgent] = []
+    var statusError: Error?
+    private(set) var statusCallCount = 0
     var focusCalls: [String] = []
     var dialCalls: [(step: Int, mode: String)] = []
     var injectedTexts: [String] = []
@@ -16,7 +18,11 @@ final class FakeProvider: Provider, @unchecked Sendable {
 
     func describe() async -> ProviderDescription { descriptionToReturn }
 
-    func status() async throws -> [HerdrAgent] { agentsToReturn }
+    func status() async throws -> [HerdrAgent] {
+        statusCallCount += 1
+        if let statusError { throw statusError }
+        return agentsToReturn
+    }
 
     func focus(_ target: String) async throws { focusCalls.append(target) }
 

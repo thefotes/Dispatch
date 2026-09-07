@@ -325,4 +325,82 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertFalse(parse(#"{"agent_keys": "nonsense"}"#).prioritizeAgentKeys)
         XCTAssertFalse(parse(#"{"keys": {"9": "Ship it"}}"#).prioritizeAgentKeys)
     }
+
+    // MARK: - Herdr instances
+
+    /// Absent or empty `instances` must keep every existing config working:
+    /// one default local instance, exactly the pre-multi-instance shape.
+    func testMissingInstancesMeanOneDefaultLocalInstance() {
+        XCTAssertEqual(KeyBindings().herdrInstances, [HerdrInstance.local()])
+        XCTAssertEqual(parse("{}").herdrInstances, [HerdrInstance.local()])
+        XCTAssertEqual(parse(#"{"herdr": {}}"#).herdrInstances, [HerdrInstance.local()])
+        XCTAssertEqual(parse(#"{"herdr": {"instances": []}}"#).herdrInstances, [HerdrInstance.local()])
+    }
+
+    func testInstancesParseInConfigOrder() {
+        let bindings = parse(#"""
+            {"herdr": {"instances": [
+                {"id": "local",  "name": "Mac Mini", "socket_path": "~/.config/herdr/herdr.sock"},
+                {"id": "jarvis", "name": "Jarvis",   "socket_path": "$TMPDIR/jarvis-herdr.sock"}
+            ]}}
+            """#)
+        XCTAssertEqual(bindings.herdrInstances.map(\.id), ["local", "jarvis"])
+        XCTAssertEqual(bindings.herdrInstances.map(\.name), ["Mac Mini", "Jarvis"])
+    }
+
+    func testSocketPathHomeIsExpanded() {
+        let bindings = parse(#"{"herdr": {"instances": [{"id": "l", "socket_path": "~/.config/herdr/herdr.sock"}]}}"#)
+        XCTAssertTrue(bindings.herdrInstances[0].socketPath.hasSuffix("/.config/herdr/herdr.sock"))
+        XCTAssertFalse(bindings.herdrInstances[0].socketPath.hasPrefix("~"))
+    }
+
+    func testSocketPathTMPDIRIsExpanded() {
+        let bindings = parse(#"{"herdr": {"instances": [{"id": "j", "socket_path": "$TMPDIR/jarvis-herdr.sock"}]}}"#)
+        XCTAssertTrue(bindings.herdrInstances[0].socketPath.hasSuffix("jarvis-herdr.sock"))
+        XCTAssertFalse(bindings.herdrInstances[0].socketPath.hasPrefix("$"))
+    }
+
+    /// A name is display-only; falling back to the id keeps a minimal config
+    /// honest in the panel.
+    func testAMissingNameFallsBackToTheID() {
+        let bindings = parse(#"{"herdr": {"instances": [{"id": "jarvis", "socket_path": "/tmp/x.sock"}]}}"#)
+        XCTAssertEqual(bindings.herdrInstances[0].name, "jarvis")
+    }
+
+    /// Malformed entries are skipped, not fatal — but if nothing valid
+    /// remains, the default single instance wins rather than a dead pad.
+    func testMalformedEntriesAreSkippedAndAnAllBadListFallsBackToDefault() {
+        let skipped = parse(#"""
+            {"herdr": {"instances": [
+                {"name": "no id"},
+                {"id": "j", "socket_path": "/tmp/x.sock"}
+            ]}}
+            """#)
+        XCTAssertEqual(skipped.herdrInstances.map(\.id), ["j"])
+
+        let allBad = parse(#"{"herdr": {"instances": [{"id": "j"}]}}"#)
+        XCTAssertEqual(allBad.herdrInstances, [HerdrInstance.local()])
+    }
+
+    /// An id that is not unique would make focus-target namespaces ambiguous;
+    /// later duplicates are dropped.
+    func testDuplicateIDsKeepOnlyTheFirst() {
+        let bindings = parse(#"""
+            {"herdr": {"instances": [
+                {"id": "local", "socket_path": "/tmp/a.sock"},
+                {"id": "local", "socket_path": "/tmp/b.sock"}
+            ]}}
+            """#)
+        XCTAssertEqual(bindings.herdrInstances.map(\.socketPath), ["/tmp/a.sock"])
+    }
+
+    func testInstanceExpansionHandlesABareTilde() {
+        XCTAssertEqual(KeyBindings.expandingPath("~"), NSHomeDirectory())
+        XCTAssertEqual(KeyBindings.expandingPath("/plain/path"), "/plain/path")
+    }
+
+    func testACalibrationMarkerNamesItsInstance() {
+        XCTAssertEqual(HerdrInstance(id: "jarvis", name: "Jarvis", socketPath: "/tmp").calibrationMarker,
+                       "⟦wl:jarvis⟧")
+    }
 }

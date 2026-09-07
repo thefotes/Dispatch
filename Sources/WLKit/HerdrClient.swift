@@ -18,6 +18,11 @@ public struct HerdrAgent: Equatable, Sendable {
     public var cwd: String?
     public var foregroundCwd: String?
     public var focused: Bool
+    /// Which Herdr instance this agent came from — stamped by
+    /// `RoutingProvider` when several instances' statuses are merged. Nil
+    /// means the single default instance; pane ids are only unique within
+    /// one instance, so merged lists must be namespaced to stay addressable.
+    public var instanceID: String?
 
     /// The target to hand to `agent.focus`, which resolves **pane ids only**:
     /// a `terminal_id` comes back as `agent_not_found` (Herdr 0.7.5). Herdr
@@ -25,7 +30,39 @@ public struct HerdrAgent: Equatable, Sendable {
     /// jump failed while the read-only paths — which never call `agent.focus` —
     /// kept working. Terminal id stays as a fallback for a Herdr that omits
     /// `pane_id`.
-    public var focusTarget: String? { paneID ?? terminalID }
+    ///
+    /// When `instanceID` is set the target is namespaced —
+    /// `instanceID \u{1} raw` — because pane ids collide freely across
+    /// instances. `HerdrClient.splitFocusTarget` undoes this; the separator
+    /// never appears in a Herdr id, so no instance can be mistaken for
+    /// another.
+    public var focusTarget: String? {
+        guard let raw = paneID ?? terminalID else { return nil }
+        guard let instanceID else { return raw }
+        return Self.namespacedFocusTarget(instanceID: instanceID, raw: raw)
+    }
+
+    /// The separator that joins an instance id to a raw target inside a
+    /// namespaced focus target. A control character: no Herdr id contains it.
+    public static let focusTargetSeparator = "\u{1}"
+
+    public static func namespacedFocusTarget(instanceID: String, raw: String) -> String {
+        instanceID + focusTargetSeparator + raw
+    }
+
+    /// Splits a focus target back into the instance that owns it and the raw
+    /// target to hand that instance's `agent.focus`. Nil instance id means the
+    /// target was never namespaced — it belongs to whichever instance is
+    /// active, which keeps single-instance behaviour identical.
+    public static func splitFocusTarget(_ target: String) -> (instanceID: String?, raw: String) {
+        guard let separator = target.firstIndex(of: Character(focusTargetSeparator)) else {
+            return (nil, target)
+        }
+        let instance = String(target[..<separator])
+        let raw = String(target[target.index(after: separator)...])
+        guard !instance.isEmpty, !raw.isEmpty else { return (nil, target) }
+        return (instance, raw)
+    }
 
     /// Where the agent is actually working. `foreground_cwd` follows a `cd`
     /// inside the pane; `cwd` is only where the pane started.
@@ -62,7 +99,8 @@ public struct HerdrAgent: Equatable, Sendable {
         terminalID: String? = nil,
         cwd: String? = nil,
         foregroundCwd: String? = nil,
-        focused: Bool = false
+        focused: Bool = false,
+        instanceID: String? = nil
     ) {
         self.agent = agent
         self.status = status
@@ -73,6 +111,7 @@ public struct HerdrAgent: Equatable, Sendable {
         self.cwd = cwd
         self.foregroundCwd = foregroundCwd
         self.focused = focused
+        self.instanceID = instanceID
     }
 
 }
@@ -139,9 +178,20 @@ public enum HerdrError: LocalizedError {
     }
 }
 
-public enum HerdrClient {
+public struct HerdrClient: Sendable {
 
-    public static func socketPath() -> String {
+    /// The socket this instance talks to. Each `HerdrClient` instance is one
+    /// Herdr server; multiple instances (a local one and a forwarded remote
+    /// one) coexist as separate values.
+    public let socketPath: String
+
+    public init(socketPath: String = HerdrClient.defaultSocketPath()) {
+        self.socketPath = socketPath
+    }
+
+    /// The former `socketPath()`: the `HERDR_SOCKET_PATH` override, then
+    /// XDG_CONFIG_HOME, then `~/.config/herdr/herdr.sock`.
+    public static func defaultSocketPath() -> String {
         let env = ProcessInfo.processInfo.environment
         if let explicit = env["HERDR_SOCKET_PATH"], !explicit.isEmpty { return explicit }
         let base = env["XDG_CONFIG_HOME"].flatMap { $0.isEmpty ? nil : $0 }
@@ -149,15 +199,20 @@ public enum HerdrClient {
         return (base as NSString).appendingPathComponent("herdr/herdr.sock")
     }
 
+    /// Backs every static below, so out-of-scope callers — `LandPanel`,
+    /// `StackPanel`, `TuneController`, the tests — keep working unchanged.
+    /// They talk to the default (local) instance.
+    public static let shared = HerdrClient()
+
     // MARK: - Requests
 
-    public static func request(
+    public func request(
         _ method: String,
         params: [String: Any] = [:],
         timeout: TimeInterval = 5
     ) async throws -> [String: Any] {
         try await withCheckedThrowingContinuation { continuation in
-            let conn = SocketConnection(path: socketPath())
+            let conn = SocketConnection(path: socketPath)
             // `finish` races: the socket read-loop queue and the timeout
             // closure below can both reach it, and resuming a continuation
             // twice is undefined behavior. Guard it with a lock.
@@ -205,7 +260,7 @@ public enum HerdrClient {
                 return
             }
 
-            let envelope: [String: Any] = ["id": nextID(), "method": method, "params": params]
+            let envelope: [String: Any] = ["id": Self.nextID(), "method": method, "params": params]
             guard let payload = try? JSONSerialization.data(withJSONObject: envelope) else {
                 finish(.failure(HerdrError.badResponse("could not encode params")))
                 return
@@ -225,8 +280,8 @@ public enum HerdrClient {
     /// Slot N is element N, so the pad reads like the sidebar. Do not re-sort:
     /// an earlier version ordered by ID strings here, and IDs do not sort the
     /// way the sidebar displays.
-    public static func listAgents() async throws -> [HerdrAgent] {
-        let result = try await request("agent.list")
+    public func listAgents(timeout: TimeInterval = 5) async throws -> [HerdrAgent] {
+        let result = try await request("agent.list", timeout: timeout)
         let raw = result["agents"] as? [[String: Any]] ?? []
         return raw.map(HerdrAgent.init(json:))
     }
@@ -234,32 +289,32 @@ public enum HerdrClient {
     /// The agent whose pane has focus in Herdr, if any. Fetched fresh rather
     /// than read off the bridge's poll, since focus is exactly the thing that
     /// changes between polls.
-    public static func focusedAgent() async throws -> HerdrAgent? {
+    public func focusedAgent() async throws -> HerdrAgent? {
         try await listAgents().first(where: \.focused)
     }
 
     /// The id of the pane the cursor is in — `pane.current`, which reports
     /// every focused pane, not just the ones `agent.list` knows an agent
     /// for. Nil only when Herdr reports no current pane at all.
-    public static func focusedPaneID() async throws -> String? {
+    public func focusedPaneID() async throws -> String? {
         let result = try await request("pane.current")
         let pane = result["pane"] as? [String: Any]
         return pane?["pane_id"] as? String
     }
 
-    public static func focusAgent(_ target: String) async throws {
+    public func focusAgent(_ target: String) async throws {
         _ = try await request("agent.focus", params: ["target": target])
     }
 
     /// Workspaces (Herdr's "spaces") in `number` order — the sidebar order.
-    public static func listWorkspaces() async throws -> [HerdrWorkspace] {
+    public func listWorkspaces() async throws -> [HerdrWorkspace] {
         let result = try await request("workspace.list")
         let raw = result["workspaces"] as? [[String: Any]] ?? []
         return raw.map(HerdrWorkspace.init(json:)).sorted { $0.number < $1.number }
     }
 
     /// Focuses a workspace; Herdr restores that space's own active tab and pane.
-    public static func focusWorkspace(_ workspaceID: String) async throws {
+    public func focusWorkspace(_ workspaceID: String) async throws {
         _ = try await request("workspace.focus", params: ["workspace_id": workspaceID])
     }
 
@@ -268,7 +323,7 @@ public enum HerdrClient {
     /// reply does not focus (it comes back `focused: false`), so the focus is
     /// an explicit second call; without it the pad's new-workspace key would
     /// create a space you then had to go find.
-    public static func createWorkspace() async throws {
+    public func createWorkspace() async throws {
         let result = try await request("workspace.create")
         // The reply nests the new workspace under "workspace"; a flat
         // "workspace_id" is accepted too, in case a future Herdr flattens it.
@@ -283,7 +338,7 @@ public enum HerdrClient {
     /// without promising focus, so this asserts it the same way
     /// `createWorkspace` does. `direction` is which side the new pane takes
     /// ("right", "down", "left", "up") and is required by Herdr.
-    public static func splitPane(direction: String) async throws {
+    public func splitPane(direction: String) async throws {
         let result = try await request("pane.split", params: ["direction": direction])
         let pane = result["pane"] as? [String: Any]
         if let paneID = pane?["pane_id"] as? String ?? result["pane_id"] as? String {
@@ -291,7 +346,7 @@ public enum HerdrClient {
         }
     }
 
-    public static func listTabs(workspaceID: String? = nil) async throws -> [HerdrTab] {
+    public func listTabs(workspaceID: String? = nil) async throws -> [HerdrTab] {
         var params: [String: Any] = [:]
         if let workspaceID { params["workspace_id"] = workspaceID }
         let result = try await request("tab.list", params: params)
@@ -299,9 +354,51 @@ public enum HerdrClient {
         return raw.map(HerdrTab.init(json:))
     }
 
-    public static func focusTab(_ tabID: String) async throws {
+    public func focusTab(_ tabID: String) async throws {
         _ = try await request("tab.focus", params: ["tab_id": tabID])
     }
+
+    /// Moves pane focus one pane over within the focused pane's own split
+    /// tree — the same moves Herdr's prefix+h/j/k/l make. Herdr answers
+    /// with the resulting layout whether or not focus actually moved — a
+    /// lone pane has no neighbour, which is a plain `no_neighbor` answer,
+    /// not an error.
+    public func focusPane(direction: PaneDirection) async throws {
+        _ = try await request("pane.focus_direction", params: ["direction": direction.rawValue])
+    }
+
+    /// Injects key chords into a pane, crossterm-style names ("ctrl+alt+v",
+    /// "f13", "enter"). The pane's terminal encodes them as if typed.
+    public func sendKeys(paneID: String, keys: [String]) async throws {
+        _ = try await request("pane.send_keys", params: ["pane_id": paneID, "keys": keys])
+    }
+
+    /// Types a string into a pane — bracketed-pasted when the pane supports
+    /// it, so multi-word text lands as one block and nothing auto-submits.
+    public func sendText(paneID: String, text: String) async throws {
+        _ = try await request("pane.send_text", params: ["pane_id": paneID, "text": text])
+    }
+
+    /// Focuses the tab `step` places from the focused one in its workspace,
+    /// wrapping at either end. Tabs in other workspaces are left alone: cycling
+    /// is a within-window gesture, not a window switcher.
+    public func cycleTabs(_ step: Int = 1) async throws {
+        guard let next = Self.adjacentTab(in: try await listTabs(), step: step) else { return }
+        try await focusTab(next.tabID)
+    }
+
+    /// Sets the focused client's window title — how `ForegroundInstanceDetector`
+    /// calibrates which Ghostty window belongs to which instance.
+    public func setWindowTitle(_ title: String) async throws {
+        _ = try await request("window_title.set", params: ["title": title])
+    }
+
+    /// Undoes `setWindowTitle`, letting Herdr's own titles back.
+    public func clearWindowTitle() async throws {
+        _ = try await request("window_title.clear")
+    }
+
+    // MARK: - Pure helpers
 
     /// Herdr's own pane-focus vocabulary — the four directions its
     /// `pane.focus_direction` (and its prefix+h/j/k/l) speak.
@@ -317,35 +414,6 @@ public enum HerdrClient {
             case .west: self = .left
             }
         }
-    }
-
-    /// Moves pane focus one pane over within the focused pane's own split
-    /// tree — the same moves Herdr's prefix+h/j/k/l make. Herdr answers
-    /// with the resulting layout whether or not focus actually moved — a
-    /// lone pane has no neighbour, which is a plain `no_neighbor` answer,
-    /// not an error.
-    public static func focusPane(direction: PaneDirection) async throws {
-        _ = try await request("pane.focus_direction", params: ["direction": direction.rawValue])
-    }
-
-    /// Injects key chords into a pane, crossterm-style names ("ctrl+alt+v",
-    /// "f13", "enter"). The pane's terminal encodes them as if typed.
-    public static func sendKeys(paneID: String, keys: [String]) async throws {
-        _ = try await request("pane.send_keys", params: ["pane_id": paneID, "keys": keys])
-    }
-
-    /// Types a string into a pane — bracketed-pasted when the pane supports
-    /// it, so multi-word text lands as one block and nothing auto-submits.
-    public static func sendText(paneID: String, text: String) async throws {
-        _ = try await request("pane.send_text", params: ["pane_id": paneID, "text": text])
-    }
-
-    /// Focuses the tab `step` places from the focused one in its workspace,
-    /// wrapping at either end. Tabs in other workspaces are left alone: cycling
-    /// is a within-window gesture, not a window switcher.
-    public static func cycleTabs(_ step: Int = 1) async throws {
-        guard let next = adjacentTab(in: try await listTabs(), step: step) else { return }
-        try await focusTab(next.tabID)
     }
 
     /// The tab `step` places from the focused one, wrapping, or nil when there
@@ -391,6 +459,85 @@ public enum HerdrClient {
         ((index % count) + count) % count
     }
 
+    // MARK: - Statics (default instance)
+
+    /// One request per connection, against the default instance.
+    public static func request(
+        _ method: String,
+        params: [String: Any] = [:],
+        timeout: TimeInterval = 5
+    ) async throws -> [String: Any] {
+        try await shared.request(method, params: params, timeout: timeout)
+    }
+
+    public static func listAgents(timeout: TimeInterval = 5) async throws -> [HerdrAgent] {
+        try await shared.listAgents(timeout: timeout)
+    }
+
+    public static func listAgents() async throws -> [HerdrAgent] {
+        try await shared.listAgents()
+    }
+
+    public static func focusedAgent() async throws -> HerdrAgent? {
+        try await shared.focusedAgent()
+    }
+
+    public static func focusedPaneID() async throws -> String? {
+        try await shared.focusedPaneID()
+    }
+
+    public static func focusAgent(_ target: String) async throws {
+        try await shared.focusAgent(target)
+    }
+
+    public static func listWorkspaces() async throws -> [HerdrWorkspace] {
+        try await shared.listWorkspaces()
+    }
+
+    public static func focusWorkspace(_ workspaceID: String) async throws {
+        try await shared.focusWorkspace(workspaceID)
+    }
+
+    public static func createWorkspace() async throws {
+        try await shared.createWorkspace()
+    }
+
+    public static func splitPane(direction: String) async throws {
+        try await shared.splitPane(direction: direction)
+    }
+
+    public static func listTabs(workspaceID: String? = nil) async throws -> [HerdrTab] {
+        try await shared.listTabs(workspaceID: workspaceID)
+    }
+
+    public static func focusTab(_ tabID: String) async throws {
+        try await shared.focusTab(tabID)
+    }
+
+    public static func focusPane(direction: PaneDirection) async throws {
+        try await shared.focusPane(direction: direction)
+    }
+
+    public static func sendKeys(paneID: String, keys: [String]) async throws {
+        try await shared.sendKeys(paneID: paneID, keys: keys)
+    }
+
+    public static func sendText(paneID: String, text: String) async throws {
+        try await shared.sendText(paneID: paneID, text: text)
+    }
+
+    public static func cycleTabs(_ step: Int = 1) async throws {
+        try await shared.cycleTabs(step)
+    }
+
+    public static func setWindowTitle(_ title: String) async throws {
+        try await shared.setWindowTitle(title)
+    }
+
+    public static func clearWindowTitle() async throws {
+        try await shared.clearWindowTitle()
+    }
+
     private static let counter = Counter()
     private static func nextID() -> String { "wl_\(counter.next())" }
 
@@ -419,9 +566,9 @@ public final class HerdrEventStream {
     private var ready = false
     private var stopped = false
 
-    public init(subscriptions: [[String: Any]]) {
+    public init(subscriptions: [[String: Any]], socketPath: String = HerdrClient.defaultSocketPath()) {
         self.subscriptions = subscriptions
-        self.conn = SocketConnection(path: HerdrClient.socketPath())
+        self.conn = SocketConnection(path: socketPath)
     }
 
     @discardableResult

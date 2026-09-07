@@ -236,6 +236,54 @@ Writing your own provider — in Swift or anything else — is documented in
 complete second implementation in dependency-free Python, under 150 lines,
 proving the protocol is not Swift-specific.
 
+### Multiple Herdr instances
+
+The pad can talk to more than one Herdr server at once — a local one and a
+remote one, say. List them under `"herdr": {"instances": [...]}`; absent or
+empty keeps the single default instance every older config already uses:
+
+```json
+{
+  "herdr": {
+    "tools": ["opencode", "claude", "codex"],
+    "instances": [
+      { "id": "local",  "name": "Mac Mini", "socket_path": "~/.config/herdr/herdr.sock" },
+      { "id": "jarvis", "name": "Jarvis",   "socket_path": "$TMPDIR/jarvis-herdr.sock" }
+    ]
+  }
+}
+```
+
+With two or more instances:
+
+- The underglow reflects **both** machines — an agent going red on either box
+  turns it red, no matter which one you are looking at.
+- Pad input (agent keys, dial, joystick, macros, provider actions) goes to
+  whichever instance's terminal window is frontmost. Detection uses
+  **Accessibility** (already required for the wide key) to tell the two
+  Ghostty windows apart; without that grant it degrades to manual switching.
+- The `{"action": "herdr.next_instance"}` binding flips between instances by
+  hand — the manual override, and the only mechanism when Accessibility is
+  off.
+- The active instance's agents take the pad's agent keys first; the rest fill
+  the remaining slots. Every agent stays counted in the underglow.
+- A dead remote never blanks the local pad: its agents drop out and the
+  panel names the failure, while the local instance keeps working.
+
+A remote instance's socket has to be forwarded locally before the app can
+speak to it — OpenSSH forwards a Unix socket to a Unix socket, giving a local
+path that speaks Herdr's byte-identical protocol:
+
+```bash
+ssh -f -N -o ExitOnForwardFailure=yes \
+  -L "${TMPDIR}jarvis-herdr.sock:/home/you/.config/herdr/herdr.sock" jarvis
+```
+
+Keep forwarded sockets under `$TMPDIR` — macOS caps Unix socket paths at 104
+bytes, so a path under the repo will fail to connect. Run that command from a
+launchd agent (or leave a terminal open) until the app manages the tunnel
+itself.
+
 | variable | what it overrides |
 |---|---|
 | `WL_TERMINAL_BUNDLE_ID` | the terminal to raise (default Ghostty) |
