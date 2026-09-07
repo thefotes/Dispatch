@@ -27,13 +27,26 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
         /// on: "right", "down", "left" or "up" — Herdr's own vocabulary,
         /// passed through verbatim.
         public var splitDirection: String
+        /// Which Herdr server this provider talks to. Defaults to the usual
+        /// socket (`HERDR_SOCKET_PATH`, then `~/.config/herdr/herdr.sock`);
+        /// a multi-instance setup points a second provider at a forwarded
+        /// remote socket instead.
+        public var socketPath: String
+        /// Timeout for `status()`'s `agent.list`. A remote instance behind a
+        /// wedged tunnel accepts connections but never answers, so a shorter
+        /// timeout keeps a dead remote from stalling every refresh.
+        public var statusTimeout: TimeInterval
 
         public init(
             tools: [String] = Options.defaultTools,
-            splitDirection: String = Options.defaultSplitDirection
+            splitDirection: String = Options.defaultSplitDirection,
+            socketPath: String = HerdrClient.defaultSocketPath(),
+            statusTimeout: TimeInterval = 5
         ) {
             self.tools = tools
             self.splitDirection = splitDirection
+            self.socketPath = socketPath
+            self.statusTimeout = statusTimeout
         }
 
         public static let defaultTools = ["opencode", "claude", "codex"]
@@ -41,9 +54,11 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     }
 
     private let options: Options
+    private let client: HerdrClient
 
     public init(options: Options = Options()) {
         self.options = options
+        self.client = HerdrClient(socketPath: options.socketPath)
     }
 
     /// Herdr's status vocabulary, the agent/tab/space navigation the dial
@@ -86,46 +101,46 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     }
 
     public func status() async throws -> [HerdrAgent] {
-        let agents = try await HerdrClient.listAgents()
+        let agents = try await client.listAgents(timeout: options.statusTimeout)
         reconcileStatusStreams(agents)
         return agents
     }
 
     public func focus(_ target: String) async throws {
-        try await HerdrClient.focusAgent(target)
+        try await client.focusAgent(target)
     }
 
     public func dial(_ step: Int, mode: String) async throws {
         switch mode {
         case "agent":
-            guard let next = HerdrClient.adjacentAgent(in: try await HerdrClient.listAgents(), step: step),
+            guard let next = HerdrClient.adjacentAgent(in: try await client.listAgents(), step: step),
                   let target = next.focusTarget
             else { return }
-            try await HerdrClient.focusAgent(target)
+            try await client.focusAgent(target)
         case "tab":
-            try await HerdrClient.cycleTabs(step)
+            try await client.cycleTabs(step)
         case "space", "workspace":
-            guard let next = HerdrClient.adjacentWorkspace(in: try await HerdrClient.listWorkspaces(), step: step)
+            guard let next = HerdrClient.adjacentWorkspace(in: try await client.listWorkspaces(), step: step)
             else { return }
-            try await HerdrClient.focusWorkspace(next.workspaceID)
+            try await client.focusWorkspace(next.workspaceID)
         default:
             break   // an unrecognized mode does nothing, same as `.effort` never reaching here
         }
     }
 
     public func inject(_ text: String) async throws {
-        guard let agent = try await HerdrClient.focusedAgent(), let pane = agent.paneID else {
+        guard let agent = try await client.focusedAgent(), let pane = agent.paneID else {
             throw HerdrError.api("Nothing has focus in Herdr right now.")
         }
-        try await HerdrClient.sendText(paneID: pane, text: text)
+        try await client.sendText(paneID: pane, text: text)
     }
 
     public func perform(_ action: String) async throws {
         switch action {
         case "new_workspace":
-            try await HerdrClient.createWorkspace()
+            try await client.createWorkspace()
         case "split_pane":
-            try await HerdrClient.splitPane(direction: options.splitDirection)
+            try await client.splitPane(direction: options.splitDirection)
         case "cycle_prompt":
             try await cyclePromptTools(options.tools)
         default:
@@ -146,7 +161,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
         // is to pick which agent CLI to launch, so a plain shell prompt is a
         // valid target. `focusedAgent()` would miss every pane Herdr has not
         // attached an agent to.
-        guard let pane = try await HerdrClient.focusedPaneID() else {
+        guard let pane = try await client.focusedPaneID() else {
             throw HerdrError.api("Nothing has focus in Herdr right now.")
         }
 
@@ -160,12 +175,12 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
         }
 
         if let previous, !previous.isEmpty {
-            try await HerdrClient.sendKeys(
+            try await client.sendKeys(
                 paneID: pane,
                 keys: Array(repeating: "backspace", count: previous.count)
             )
         }
-        try await HerdrClient.sendText(paneID: pane, text: next)
+        try await client.sendText(paneID: pane, text: next)
 
         // Commit the memory only now that the pane actually holds `next`. A
         // Herdr failure between the plan and here would otherwise leave the
@@ -212,21 +227,21 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     /// a single `agent.focus`, never a walk pane-by-pane — walking would
     /// mark every pane it passed through "seen" in Herdr.
     public func joystick(_ direction: Pad.JoystickDirection) async throws {
-        let before = (try? await HerdrClient.listAgents()) ?? []
+        let before = (try? await client.listAgents()) ?? []
         let fromPane = before.first(where: \.focused)?.paneID
         let wrapTarget = Self.wrapTarget(direction, panes: Self.panesInFocusedTab(before))
 
         do {
-            try await HerdrClient.focusPane(direction: HerdrClient.PaneDirection(direction))
+            try await client.focusPane(direction: HerdrClient.PaneDirection(direction))
         } catch HerdrError.api(let message)
             where message.contains("no_neighbor") || message.contains("no neighbor") {
             // Treated as "did not move" — the wrap check below handles it.
         }
 
         guard let fromPane, let wrapTarget,
-              (try? await HerdrClient.focusedAgent())?.paneID == fromPane
+              (try? await client.focusedAgent())?.paneID == fromPane
         else { return }
-        try await HerdrClient.focusAgent(wrapTarget)
+        try await client.focusAgent(wrapTarget)
     }
 
     /// The panes sharing the focused pane's tab, in Herdr's own list order.
@@ -279,7 +294,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             ["type": "pane.closed"],
             ["type": "pane.exited"],
             ["type": "pane.agent_detected"]
-        ])
+        ], socketPath: options.socketPath)
         stream.onEvent = { [weak self] _ in self?.changeNotifier.notify() }
         stream.onClosed = { [weak self] _ in
             guard let self else { return }
@@ -315,7 +330,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
         for paneID in toStart {
             let stream = HerdrEventStream(subscriptions: [
                 ["type": "pane.agent_status_changed", "pane_id": paneID]
-            ])
+            ], socketPath: options.socketPath)
             stream.onEvent = { [weak self] _ in self?.changeNotifier.notify() }
             stream.onClosed = { [weak self] _ in
                 guard let self else { return }

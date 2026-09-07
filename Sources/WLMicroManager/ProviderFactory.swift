@@ -12,6 +12,11 @@ enum ProviderFactory {
     /// terminate it on quit rather than leaving it running.
     private(set) static var launchedProcess: Process?
 
+    /// Set only when `make()` built a multi-instance `RoutingProvider`, so
+    /// the app can wire the foreground detector and window-raising hook to
+    /// it. nil for every single-provider setup.
+    private(set) static var routingProvider: RoutingProvider?
+
     static func make() -> Provider {
         let bindings = KeyBindings.load()
         switch bindings.providerSpec {
@@ -36,10 +41,35 @@ enum ProviderFactory {
     }
 
     private static func makeDefault(_ bindings: KeyBindings) -> Provider {
-        HerdrProvider(options: HerdrProvider.Options(
-            tools: bindings.herdrTools,
-            splitDirection: bindings.herdrSplitDirection
-        ))
+        let instances = bindings.herdrInstances
+        // One instance: the plain provider, exactly as it has always been.
+        // Only two or more justify the routing layer.
+        guard instances.count > 1 else {
+            routingProvider = nil
+            return HerdrProvider(options: HerdrProvider.Options(
+                tools: bindings.herdrTools,
+                splitDirection: bindings.herdrSplitDirection,
+                socketPath: instances[0].socketPath
+            ))
+        }
+        // Remote instances sit behind an SSH forward that can wedge —
+        // accepting connections but never answering — so their status polls
+        // get a shorter timeout than the local server's. RoutingProvider
+        // additionally backs an instance off after a timeout.
+        let children = instances.enumerated().map { index, instance -> (instance: HerdrInstance, provider: Provider) in
+            let provider = HerdrProvider(options: HerdrProvider.Options(
+                tools: bindings.herdrTools,
+                splitDirection: bindings.herdrSplitDirection,
+                socketPath: instance.socketPath,
+                // The first instance (the local one, config order) gets the
+                // ordinary 5s; remotes behind a forward get less.
+                statusTimeout: index == 0 ? 5 : 2
+            ))
+            return (instance, provider)
+        }
+        let routing = RoutingProvider(children: children)
+        routingProvider = routing
+        return routing
     }
 
     /// Launches the configured command through `/usr/bin/env`, so a bare

@@ -14,6 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // spec — otherwise there is no subprocess to clean up.
         ProviderFactory.terminateLaunchedProcess()
     }
+
+    /// Kept alive for the app's lifetime: the detector watching which
+    /// Herdr instance's terminal window is frontmost. nil unless
+    /// config.json configured two or more Herdr instances.
+    nonisolated(unsafe) static var foregroundDetector: ForegroundInstanceDetector?
 }
 
 @main
@@ -99,6 +104,50 @@ struct MicroManagerApp: App {
                     // rebuilds the device, so doing it after would tear down a
                     // connection we just made.
                     await bridge.useEmulator(BridgeSettings.emulate)
+
+                    // With two or more Herdr instances configured, the
+                    // detector makes the active instance follow the frontmost
+                    // terminal window, and a routed focus raises that
+                    // instance's window in return. Single-instance setups
+                    // never see any of this.
+                    if let routing = ProviderFactory.routingProvider {
+                        let detector = ForegroundInstanceDetector()
+                        detector.onActiveInstanceChange = { routing.setActiveInstance($0) }
+                        detector.onWarning = { [weak bridge] message in
+                            bridge?.noteError(message)
+                        }
+                        routing.onFocusInstance = { instanceID in
+                            Task { @MainActor in detector.activate(instanceID: instanceID) }
+                        }
+                        detector.start(instances: routing.instances)
+                        AppDelegate.foregroundDetector = detector
+
+                        // A child that fails is isolated inside the routing
+                        // provider — it never throws to the bridge — so its
+                        // reason has to be relayed where the panel shows
+                        // errors. Two things try to hide it: the bridge
+                        // clears `lastError` on every refresh its (never-
+                        // throwing) `provider.status()` succeeds, and the
+                        // identical message recurs until the child recovers.
+                        // So re-note the same message whenever the bridge
+                        // has wiped it, for as long as the child keeps
+                        // failing; a cleared routing error needs no relay —
+                        // the panel goes quiet on the next refresh.
+                        Task { @MainActor [weak bridge] in
+                            var lastRoutingError: String?
+                            while !Task.isCancelled {
+                                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                                guard let bridge else { return }
+                                let routingError = routing.lastError
+                                if routingError != lastRoutingError {
+                                    lastRoutingError = routingError
+                                    if let routingError { bridge.noteError(routingError) }
+                                } else if let routingError, bridge.lastError == nil {
+                                    bridge.noteError(routingError)
+                                }
+                            }
+                        }
+                    }
 
                     // Come back up in whatever state it was left in, so a
                     // login-item launch resumes rather than sitting idle.
