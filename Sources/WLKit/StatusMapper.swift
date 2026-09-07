@@ -9,9 +9,21 @@ import SwiftUI
 ///
 /// Kept in step with `lib/status.js`; the defaults below are that file's.
 public struct BridgeConfig: Sendable {
-    /// Highest priority first: the first state present across all agents wins
-    /// the underglow.
-    public var priority: [String] = ["blocked", "working", "unknown", "idle", "done"]
+    /// Highest priority first — a ranking of "how much this wants me". The
+    /// first state present across all agents wins the underglow, and, when
+    /// `prioritizeAgentKeys` is on, the same order floats the agents that
+    /// need attention onto the six keys. `done` (finished, unread) outranks
+    /// `working` (busy, doesn't need you) on purpose: blue is "look at me",
+    /// amber is "leave me alone". This deliberately diverges from
+    /// `lib/status.js`, which still ranks `working` above `done`.
+    public var priority: [String] = ["blocked", "done", "working", "unknown", "idle"]
+    /// When on, the six agent keys show the six highest-priority agents in
+    /// `priority` order rather than the first six in Herdr's sidebar order —
+    /// so a blocked agent that would have sorted past the last key still
+    /// lands on one. Off by default: the mapping then shifts as statuses
+    /// change, which not everyone wants. Set from `config.json`'s
+    /// `"agent_keys": "priority"`.
+    public var prioritizeAgentKeys = false
     public var colors: [String: Int] = [
         "blocked": 0xFF2D2D,
         "working": 0xFFA000,
@@ -69,6 +81,34 @@ public enum StatusMapper {
         let present = Set(agents.map(\.status))
         for state in cfg.priority where present.contains(state) { return state }
         return "unknown"
+    }
+
+    /// The agents in the order the six agent keys should show them.
+    ///
+    /// Sidebar order by default — element N is Herdr's Nth agent, unchanged.
+    /// With `cfg.prioritizeAgentKeys`, a *stable* sort by `cfg.priority`
+    /// floats the agents that need attention to the front: an agent that
+    /// would have sorted past the sixth key still lands on one if it is
+    /// blocked or done. Agents in the same state keep Herdr's order relative
+    /// to each other, so the pad only reshuffles when a status actually
+    /// changes. Every agent is returned — `threads(for:)` still does the
+    /// truncating.
+    public static func agentsInKeyOrder(
+        _ agents: [HerdrAgent],
+        _ cfg: BridgeConfig = BridgeConfig()
+    ) -> [HerdrAgent] {
+        guard cfg.prioritizeAgentKeys else { return agents }
+        func rank(_ agent: HerdrAgent) -> Int {
+            cfg.priority.firstIndex(of: agent.status) ?? cfg.priority.count
+        }
+        // `sorted(by:)` is not guaranteed stable, so carry the original
+        // index and use it as the tie-breaker to make it so.
+        return agents.enumerated()
+            .sorted { lhs, rhs in
+                let (left, right) = (rank(lhs.element), rank(rhs.element))
+                return left == right ? lhs.offset < rhs.offset : left < right
+            }
+            .map(\.element)
     }
 
     /// One thread entry per agent key: agent slot N takes `Pad.agentKeyIDs[N]`

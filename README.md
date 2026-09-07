@@ -41,8 +41,16 @@ them. Colors are red (blocked, breathing), amber (working), blue (done —
 finished but not yet looked at) and green (idle — finished and seen). Herdr
 distinguishes done from idle by whether you have focused the pane yet, so blue
 means something is waiting to be read and green means quiet. The **underglow**
-carries the worst state across all agents, so "does anything need me?" is
-readable from across the room.
+carries the worst state across all agents — red beats blue beats amber beats
+green — so "does anything need me?" is readable from across the room.
+
+Herdr often has more than six agents (one per pane, across every workspace),
+and the extra ones fall off the end of the key row. By default that end is
+"whatever sorted past the sixth slot" in Herdr's order. Set `"agent_keys":
+"priority"` in `config.json` to instead light the six that most want
+attention — a blocked or unread agent keeps a key even when a quiet one would
+have taken it. The trade-off is that a key then points at a different agent
+as statuses change, which is why it is off by default.
 
 Pressing an agent key focuses that agent in Herdr **and brings the terminal
 forward** — Herdr selects the pane but leaves the window where it was, so an

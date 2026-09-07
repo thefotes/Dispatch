@@ -17,8 +17,16 @@ import Foundation
 ///       "herdr":  { "tools": ["opencode", "claude", "codex"],
 ///                   "split_direction": "right" },
 ///       "dial":   "effort",
-///       "claude": { "efforts": ["low", "high"] }
+///       "claude": { "efforts": ["low", "high"] },
+///       "agent_keys": "priority"
 ///     }
+///
+/// `"agent_keys"` is `"sidebar"` (the default) or `"priority"`. Sidebar
+/// order lights the first six agents Herdr lists; `"priority"` instead
+/// lights the six that most want attention — a blocked or unread agent
+/// keeps a key even when it would have sorted past the sixth. The
+/// trade-off is that a key then points at a different agent as statuses
+/// change, so it is opt-in. Any other value falls back to `"sidebar"`.
 ///
 /// A bound string is injected into the focused agent's prompt, unsubmitted.
 /// A key can also be bound to a system-wide keyboard shortcut instead —
@@ -117,6 +125,13 @@ public struct KeyBindings: Sendable, Equatable {
     /// Which provider to use, if not the in-process default.
     public private(set) var providerSpec: ProviderSpec?
 
+    /// Whether the six agent keys light the highest-priority agents rather
+    /// than the first six in sidebar order. Set with a top-level
+    /// `"agent_keys": "priority"`; anything else means sidebar order.
+    /// `BridgeController` copies this into `BridgeConfig.prioritizeAgentKeys`
+    /// on every `start()`.
+    public private(set) var prioritizeAgentKeys: Bool
+
     /// Set when `"dial"` was present but the wrong JSON shape (not a string,
     /// or an empty one) — a name that is simply unrecognized by the active
     /// provider is a `BridgeController`-time concern, not this file's.
@@ -137,7 +152,8 @@ public struct KeyBindings: Sendable, Equatable {
         herdrSplitDirection: String = KeyBindings.defaultHerdrSplitDirection,
         dialSelection: DialSelection = .effort,
         dialWarning: String? = nil,
-        providerSpec: ProviderSpec? = nil
+        providerSpec: ProviderSpec? = nil,
+        prioritizeAgentKeys: Bool = false
     ) {
         self.actions = actions
         self.claudeEfforts = claudeEfforts
@@ -146,6 +162,7 @@ public struct KeyBindings: Sendable, Equatable {
         self.dialSelection = dialSelection
         self.dialWarning = dialWarning
         self.providerSpec = providerSpec
+        self.prioritizeAgentKeys = prioritizeAgentKeys
     }
 
     /// The action bound to a key, or nil when the key does whatever it does
@@ -207,8 +224,16 @@ public struct KeyBindings: Sendable, Equatable {
             herdrSplitDirection: direction,
             dialSelection: dialSelection,
             dialWarning: dialWarning,
-            providerSpec: providerSpec(from: json["provider"])
+            providerSpec: providerSpec(from: json["provider"]),
+            prioritizeAgentKeys: agentKeyOrderIsPriority(json["agent_keys"])
         )
+    }
+
+    /// `"priority"` (case-insensitive) turns on priority ordering for the
+    /// agent keys. Missing, `"sidebar"`, or any other shape means the
+    /// sidebar order the pad has always used.
+    private static func agentKeyOrderIsPriority(_ value: Any?) -> Bool {
+        (value as? String)?.lowercased() == "priority"
     }
 
     /// Shape-level only: is this a non-empty string? Content — whether the

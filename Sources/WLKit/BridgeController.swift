@@ -182,6 +182,7 @@ public final class BridgeController: ObservableObject {
         lastError = nil
         contendingClient = false
         keyBindings = KeyBindings.load()
+        config.prioritizeAgentKeys = keyBindings.prioritizeAgentKeys
         // A mistyped "dial" keeps its fallback; say so where the panel shows
         // the bridge's other errors, the same way an unrecognized shortcut does.
         if let warning = keyBindings.dialWarning { lastError = warning }
@@ -381,7 +382,12 @@ public final class BridgeController: ObservableObject {
             return
         }
         lastError = nil
-        agents = fetched
+        // The order the keys — and `focusSlot`, and the panel mirror — see.
+        // Identity unless `config.prioritizeAgentKeys` is set, in which case
+        // the agents that want attention sort to the front so they keep a
+        // key. The aggregate below still runs over the whole set, so the
+        // underglow is unaffected either way.
+        agents = StatusMapper.agentsInKeyOrder(fetched, config)
 
         let state = StatusMapper.aggregate(fetched, config)
         // Every overridable key shares this light: a binding (text or
@@ -406,7 +412,7 @@ public final class BridgeController: ObservableObject {
                 }
             }
         }
-        let threads = StatusMapper.threads(for: fetched, config) + flexKeys
+        let threads = StatusMapper.threads(for: agents, config) + flexKeys
 
         // Fingerprint the whole rendered picture, not just the aggregate, so
         // one agent changing still repaints when the worst state has not.

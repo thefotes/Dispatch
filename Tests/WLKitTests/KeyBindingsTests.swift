@@ -307,4 +307,22 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertEqual(bindings.herdrTools, KeyBindings.defaultHerdrTools)
         XCTAssertEqual(bindings.herdrSplitDirection, "right")
     }
+
+    // MARK: - agent_keys
+
+    func testAgentKeyOrderDefaultsToSidebar() {
+        XCTAssertFalse(KeyBindings().prioritizeAgentKeys)
+        XCTAssertFalse(parse(#"{"agent_keys": "sidebar"}"#).prioritizeAgentKeys)
+    }
+
+    func testAgentKeyOrderPriorityIsRecognized() {
+        XCTAssertTrue(parse(#"{"agent_keys": "priority"}"#).prioritizeAgentKeys)
+        XCTAssertTrue(parse(#"{"agent_keys": "Priority"}"#).prioritizeAgentKeys)
+    }
+
+    func testAgentKeyOrderIgnoresJunkAndFallsBackToSidebar() {
+        XCTAssertFalse(parse(#"{"agent_keys": true}"#).prioritizeAgentKeys)
+        XCTAssertFalse(parse(#"{"agent_keys": "nonsense"}"#).prioritizeAgentKeys)
+        XCTAssertFalse(parse(#"{"keys": {"9": "Ship it"}}"#).prioritizeAgentKeys)
+    }
 }
