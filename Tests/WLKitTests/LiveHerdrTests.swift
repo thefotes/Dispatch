@@ -34,6 +34,18 @@ final class LiveHerdrTests: XCTestCase {
         XCTAssertEqual(focused?.paneID, all.first(where: \.focused)?.paneID)
     }
 
+    /// `pane.current` reports a focused pane whether or not it runs an agent,
+    /// so the cycler can target a plain shell prompt. When a focused pane
+    /// does run an agent, the two agree.
+    func testFocusedPaneIDMatchesTheFocusedAgentWhenThereIsOne() async throws {
+        try XCTSkipUnless(serverRunning(), "no herdr server")
+        let paneID = try await HerdrClient.focusedPaneID()
+        XCTAssertNotNil(paneID, "a running Herdr always has a current pane")
+        if let agentPane = try await HerdrClient.focusedAgent()?.paneID {
+            XCTAssertEqual(paneID, agentPane)
+        }
+    }
+
     func testSecondRequestOnAFreshConnectionWorks() async throws {
         try XCTSkipUnless(serverRunning(), "no herdr server")
         // The server closes after one request; each call must open its own
