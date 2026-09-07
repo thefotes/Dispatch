@@ -43,10 +43,13 @@ final class HerdrProviderTests: XCTestCase {
 
     /// `perform`'s ids and the dial's are the provider's own vocabulary; pin
     /// the action set so a rename can't silently orphan a `{"action": ...}`
-    /// binding.
-    func testActionsAreWorkspaceSplitAndCycle() async {
-        let ids = await HerdrProvider().describe().actions.map(\.id)
-        XCTAssertEqual(ids, ["new_workspace", "split_pane", "cycle_prompt"])
+    /// binding. All three raise the terminal — new workspace and split so
+    /// you land on what you made, cycle so you can see the tool name before
+    /// hitting return on it.
+    func testActionsAreWorkspaceSplitAndCycleAndAllRaiseTheHost() async {
+        let actions = await HerdrProvider().describe().actions
+        XCTAssertEqual(actions.map(\.id), ["new_workspace", "split_pane", "cycle_prompt"])
+        XCTAssertTrue(actions.allSatisfy(\.raisesHost))
     }
 
     // MARK: - Prompt-tool cycle

@@ -238,6 +238,15 @@ public enum HerdrClient {
         try await listAgents().first(where: \.focused)
     }
 
+    /// The id of the pane the cursor is in — `pane.current`, which reports
+    /// every focused pane, not just the ones `agent.list` knows an agent
+    /// for. Nil only when Herdr reports no current pane at all.
+    public static func focusedPaneID() async throws -> String? {
+        let result = try await request("pane.current")
+        let pane = result["pane"] as? [String: Any]
+        return pane?["pane_id"] as? String
+    }
+
     public static func focusAgent(_ target: String) async throws {
         _ = try await request("agent.focus", params: ["target": target])
     }

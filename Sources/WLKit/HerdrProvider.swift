@@ -74,8 +74,10 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
             actions: [
                 ProviderAction(id: "new_workspace", label: "New Herdr workspace", raisesHost: true),
                 ProviderAction(id: "split_pane", label: "Split Herdr pane", raisesHost: true),
-                // Cycling types into a prompt you are already looking at.
-                ProviderAction(id: "cycle_prompt", label: "Cycle prompt tool", raisesHost: false)
+                // Cycling types an unsubmitted tool name into the focused
+                // pane; raise the terminal so you can see what you are about
+                // to launch and hit return on it.
+                ProviderAction(id: "cycle_prompt", label: "Cycle prompt tool", raisesHost: true)
             ]
         )
     }
@@ -137,7 +139,11 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     private func cyclePromptTools(_ tools: [String]) async throws {
         let ordered = tools.filter { !$0.isEmpty }
         guard !ordered.isEmpty else { return }
-        guard let agent = try await HerdrClient.focusedAgent(), let pane = agent.paneID else {
+        // The pane the cursor is in, agent or not — the point of the cycler
+        // is to pick which agent CLI to launch, so a plain shell prompt is a
+        // valid target. `focusedAgent()` would miss every pane Herdr has not
+        // attached an agent to.
+        guard let pane = try await HerdrClient.focusedPaneID() else {
             throw HerdrError.api("Nothing has focus in Herdr right now.")
         }
 
