@@ -2,7 +2,9 @@ import XCTest
 import SwiftUI
 @testable import WLKit
 
-/// Mirrors test/status.test.js so the two implementations cannot drift.
+/// Tracks test/status.test.js so the two implementations cannot drift —
+/// except the aggregate priority order, which deliberately ranks "done"
+/// above "working" here (see `testDoneOutranksWorkingWhichOutranksIdle`).
 final class StatusMapperTests: XCTestCase {
 
     private func agent(_ status: String, pane: String = "w1:p1") -> HerdrAgent {
@@ -25,10 +27,17 @@ final class StatusMapperTests: XCTestCase {
         XCTAssertEqual(StatusMapper.zone(for: state)?.color, 0xFF2D2D)
     }
 
-    func testWorkingOutranksIdleAndDone() {
-        let state = StatusMapper.aggregate([agent("done"), agent("idle"), agent("working")])
-        XCTAssertEqual(state, "working")
-        XCTAssertEqual(StatusMapper.zone(for: state)?.color, 0xFFA000)
+    /// Diverges from `test/status.test.js` on purpose: an unread "done" agent
+    /// (blue, "look at me") outranks a "working" one (amber, "busy, leave me
+    /// alone"), which in turn outranks "idle".
+    func testDoneOutranksWorkingWhichOutranksIdle() {
+        let state = StatusMapper.aggregate([agent("idle"), agent("working"), agent("done")])
+        XCTAssertEqual(state, "done")
+        XCTAssertEqual(StatusMapper.zone(for: state)?.color, 0x00B0FF)
+
+        let noneUnread = StatusMapper.aggregate([agent("idle"), agent("working")])
+        XCTAssertEqual(noneUnread, "working")
+        XCTAssertEqual(StatusMapper.zone(for: noneUnread)?.color, 0xFFA000)
     }
 
     func testUnrecognizedStatusStillYieldsAState() {
@@ -73,6 +82,50 @@ final class StatusMapperTests: XCTestCase {
     func testMoreAgentsThanKeysDoesNotOverflow() {
         let many = (0..<9).map { _ in agent("working") }
         XCTAssertEqual(StatusMapper.threads(for: many).count, 6)
+    }
+
+    // MARK: - Agent key order
+
+    private func named(_ status: String, _ pane: String) -> HerdrAgent {
+        HerdrAgent(status: status, paneID: pane)
+    }
+
+    func testKeyOrderIsSidebarOrderByDefault() {
+        let input = [named("idle", "a"), named("blocked", "b"), named("working", "c")]
+        XCTAssertEqual(StatusMapper.agentsInKeyOrder(input).map(\.paneID),
+                       ["a", "b", "c"], "no reordering unless asked for")
+    }
+
+    func testPriorityOrderFloatsAttentionAgentsToTheFront() {
+        var cfg = BridgeConfig()
+        cfg.prioritizeAgentKeys = true
+        // Seven agents: the blocked and done ones sit past the sixth slot in
+        // sidebar order and would never light a key today.
+        let input = [
+            named("idle", "s0"), named("working", "s1"), named("idle", "s2"),
+            named("idle", "s3"), named("working", "s4"), named("idle", "s5"),
+            named("blocked", "s6"), named("done", "s7")
+        ]
+        let order = StatusMapper.agentsInKeyOrder(input, cfg).map(\.paneID)
+        XCTAssertEqual(Array(order.prefix(4)), ["s6", "s7", "s1", "s4"],
+                       "blocked, then done, then working — in sidebar order within each tier")
+        XCTAssertEqual(order.count, input.count, "every agent is still returned")
+    }
+
+    func testPriorityOrderIsStableWithinAState() {
+        var cfg = BridgeConfig()
+        cfg.prioritizeAgentKeys = true
+        let input = (0..<5).map { named("working", "w\($0)") }
+        XCTAssertEqual(StatusMapper.agentsInKeyOrder(input, cfg).map(\.paneID),
+                       ["w0", "w1", "w2", "w3", "w4"])
+    }
+
+    func testPriorityOrderSendsUnknownStatusesLast() {
+        var cfg = BridgeConfig()
+        cfg.prioritizeAgentKeys = true
+        let input = [named("mystery", "m"), named("idle", "i"), named("blocked", "b")]
+        XCTAssertEqual(StatusMapper.agentsInKeyOrder(input, cfg).map(\.paneID),
+                       ["b", "i", "m"])
     }
 
     func testConfigOverridesAreHonored() {

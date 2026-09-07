@@ -62,7 +62,10 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
                 "idle": ProviderStateStyle(color: 0x00C853, effect: .solid),
                 "unknown": ProviderStateStyle(color: 0x00C853, effect: .solid)
             ],
-            statePriority: ["blocked", "working", "unknown", "idle", "done"],
+            // "how much this wants me", worst first — blue "done" (unread)
+            // above amber "working" (busy). Pinned equal to
+            // `BridgeConfig.priority` by `HerdrProviderTests`.
+            statePriority: ["blocked", "done", "working", "unknown", "idle"],
             dialModes: [
                 // Agent and space bring the terminal forward, the way an
                 // agent key does; tab does not, since you are already
