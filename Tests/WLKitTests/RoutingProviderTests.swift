@@ -185,9 +185,32 @@ final class RoutingProviderTests: XCTestCase {
         jarvis.statusError = HerdrError.timeout("agent.list")
         _ = try await routing.status()
         XCTAssertEqual(jarvis.statusCallCount, 1)
+        let held = routing.lastError
+        XCTAssertNotNil(held)
         _ = try await routing.status()
         XCTAssertEqual(jarvis.statusCallCount, 1, "backed off — not retried immediately")
-        XCTAssertNil(routing.lastError, "a backed-off instance is skipped, not re-failed")
+        XCTAssertEqual(routing.lastError, held,
+                       "a backed-off instance is skipped, but still says why it is down")
+    }
+
+    /// Backoff exists for the wedged tunnel, which is exactly the failure you
+    /// cannot spot by looking at the terminal. Skipping its poll must not
+    /// also silence it, or the panel claims a healthy pad for the whole
+    /// backoff window — which doubles up to five minutes.
+    func testABackedOffInstanceKeepsReportingUntilItAnswers() async throws {
+        let (routing, _, jarvis) = makeRouting(localAgents: [agent("w1:p1")])
+        jarvis.statusError = HerdrError.timeout("agent.list")
+        _ = try await routing.status()
+
+        // Several refreshes deep into the backoff, still saying why.
+        for _ in 0..<3 { _ = try await routing.status() }
+        XCTAssertEqual(jarvis.statusCallCount, 1, "still backed off")
+        XCTAssertEqual(routing.lastError, "Jarvis: Timed out waiting for agent.list.")
+
+        // The local instance is untouched throughout — a wedged remote
+        // reports itself without ever blanking the pad.
+        let agents = try await routing.status()
+        XCTAssertEqual(agents.map(\.paneID), ["w1:p1"])
     }
 
     func testARefusedConnectionIsRetriedEveryRefresh() async throws {

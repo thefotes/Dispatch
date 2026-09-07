@@ -64,6 +64,10 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
         var backoffUntil: Date?
         /// Consecutive timeouts, driving the backoff doubling.
         var timeoutStreak: Int
+        /// Why this child last failed, phrased for the panel. Held across a
+        /// backoff so a skipped poll still reports the reason — a backed-off
+        /// child is known-bad, not absent. Cleared the moment it answers.
+        var lastFailure: String?
     }
 
     private let lock = NSLock()
@@ -90,7 +94,8 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
     public init(children: [(instance: HerdrInstance, provider: Provider)]) {
         precondition(!children.isEmpty, "RoutingProvider needs at least one instance")
         self.children = children.map {
-            Child(instance: $0.instance, provider: $0.provider, backoffUntil: nil, timeoutStreak: 0)
+            Child(instance: $0.instance, provider: $0.provider, backoffUntil: nil,
+                  timeoutStreak: 0, lastFailure: nil)
         }
         self.activeIndex = 0
     }
@@ -158,16 +163,26 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
     /// than throwing: a dead remote never blanks the local pad. Ordering is
     /// stable at every instant (reported order, never sorted by status), so
     /// keys only move when the active instance moves.
+    ///
+    /// A backed-off child keeps reporting its reason through `lastError`.
+    /// Backoff exists for the wedged tunnel — accepting connections, never
+    /// answering — which is precisely the failure you cannot see by looking
+    /// at the terminal, so going quiet for the whole backoff window (up to
+    /// five minutes) would leave the panel claiming a healthy pad.
     public func status() async throws -> [HerdrAgent] {
         var merged: [HerdrAgent] = []
         var failure: String?
 
         for index in children.indices {
-            let (instance, provider, backedOff) = lock.withLock {
+            let (instance, provider, backedOff, heldFailure) = lock.withLock {
                 (children[index].instance, children[index].provider,
-                 children[index].backoffUntil.map { $0 > Date() } ?? false)
+                 children[index].backoffUntil.map { $0 > Date() } ?? false,
+                 children[index].lastFailure)
             }
-            if backedOff { continue }
+            if backedOff {
+                failure = failure ?? heldFailure
+                continue
+            }
             do {
                 let agents = try await provider.status()
                 clearBackoff(at: index)
@@ -177,8 +192,9 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
                     return stamped
                 })
             } catch {
-                recordFailure(at: index, error: error)
-                failure = failure ?? "\(instance.name): \(error.localizedDescription)"
+                let reason = "\(instance.name): \(error.localizedDescription)"
+                recordFailure(at: index, error: error, reason: reason)
+                failure = failure ?? reason
             }
         }
 
@@ -194,6 +210,7 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
         lock.lock()
         children[index].backoffUntil = nil
         children[index].timeoutStreak = 0
+        children[index].lastFailure = nil
         lock.unlock()
     }
 
@@ -201,10 +218,14 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
     /// costs the full request timeout every refresh if retried blindly. Back
     /// off with doubling gaps (30s first, capped at 5 minutes); any other
     /// failure retries next refresh, since a refused connection is cheap.
-    private func recordFailure(at index: Int, error: Error) {
+    ///
+    /// `reason` is held so the skipped polls a backoff causes can still say
+    /// why the child is down.
+    private func recordFailure(at index: Int, error: Error, reason: String) {
         lock.lock()
         defer { lock.unlock() }
         guard children.indices.contains(index) else { return }
+        children[index].lastFailure = reason
         if case HerdrError.timeout = error {
             children[index].timeoutStreak += 1
             let seconds = min(30.0 * pow(2, Double(children[index].timeoutStreak - 1)), 300)
