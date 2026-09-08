@@ -97,7 +97,10 @@ final class ProviderTests: XCTestCase {
     /// target `status()` reported for it.
     func testFocusSlotCallsProviderFocusWithTheEntitysTarget() async {
         let fake = FakeProvider()
-        fake.agentsToReturn = [HerdrAgent(status: "idle", paneID: "pane-1")]
+        // Not "idle": `start()` reads the real config.json, and on a
+        // multi-instance machine its `agent_keys_drop_idle` default would
+        // drop an idle agent from the slots before this press.
+        fake.agentsToReturn = [HerdrAgent(status: "working", paneID: "pane-1")]
         let bridge = await makeBridge(fake)
         await bridge.start()
         await bridge.focusSlot(0)

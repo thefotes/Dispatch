@@ -24,6 +24,14 @@ public struct BridgeConfig: Sendable {
     /// change, which not everyone wants. Set from `config.json`'s
     /// `"agent_keys": "priority"`.
     public var prioritizeAgentKeys = false
+    /// When on, agents whose status is `idle` are dropped from the agent
+    /// key slots entirely — a key only lights an agent that wants attention,
+    /// so idle agents cannot crowd out busier ones. Off by default: the
+    /// keys then mirror the sidebar exactly, which is what a single-machine
+    /// setup wants. Set from `config.json`'s `"agent_keys_drop_idle"`;
+    /// `KeyBindings` defaults it to on whenever more than one Herdr
+    /// instance is configured.
+    public var dropIdleAgentKeys = false
     public var colors: [String: Int] = [
         "blocked": 0xFF2D2D,
         "working": 0xFFA000,
@@ -97,12 +105,21 @@ public enum StatusMapper {
     /// would have sorted past the sixth key still lands on one if it is
     /// blocked or done. Agents in the same state keep Herdr's order relative
     /// to each other, so the pad only reshuffles when a status actually
-    /// changes. Every agent is returned — `threads(for:)` still does the
-    /// truncating.
+    /// changes.
+    ///
+    /// With `cfg.dropIdleAgentKeys`, idle agents are removed before either
+    /// ordering — on a multi-machine setup five quiet remote shells would
+    /// otherwise eat every slot while the one agent that needs a look sorts
+    /// off the pad. Every remaining agent is still returned —
+    /// `threads(for:)` still does the truncating.
     public static func agentsInKeyOrder(
         _ agents: [HerdrAgent],
         _ cfg: BridgeConfig = BridgeConfig()
     ) -> [HerdrAgent] {
+        var agents = agents
+        if cfg.dropIdleAgentKeys {
+            agents = agents.filter { $0.status != "idle" }
+        }
         guard cfg.prioritizeAgentKeys else { return agents }
         func rank(_ agent: HerdrAgent) -> Int {
             cfg.priority.firstIndex(of: agent.status) ?? cfg.priority.count

@@ -2,6 +2,9 @@
 
 Written 2026-09-08, after live-testing PR #14 against Herdr 0.9.0
 (protocol 22) with two machines: Local (Mac mini) and Jarvis (Linux).
+Updated the same day: the two things that could be done without upstream
+(retiring `ForegroundInstanceDetector`, dropping idle agents from key
+slots) are done; the cross-machine work still waits on the API answer.
 
 ## The one-sentence version
 
@@ -90,28 +93,28 @@ Roughly a day's work, in this order:
 
 ### 3. Independent of upstream: retire the two-window machinery
 
-`ForegroundInstanceDetector` exists to tell **two Ghostty windows** apart by
-stamping marker titles and reading them back over Accessibility. Herdr 0.9
-put every machine in one window, so:
+**Done 2026-09-08.** `ForegroundInstanceDetector` is deleted.
 
-- `activate(instanceID:)` can never find a window to raise and silently
-  no-ops,
-- `onFocusInstance` is fire-and-forget and cannot report that,
-- calibration has nothing to discriminate.
+It existed to tell **two Ghostty windows** apart by stamping marker titles
+and reading them back over Accessibility. Herdr 0.9 put every machine in
+one window, so it was dead weight and actively misleading — a failed raise
+looked like a successful landing, and that cost most of the debugging time.
 
-It is dead weight under 0.9 and actively misleading — it makes a failed
-raise look like a successful landing. Either delete it, or keep it behind an
-explicit "one window per machine" config for anyone still on 0.8. Worth
-doing on its own; it does not depend on the API request.
+Removed along with it, all of it existing only to serve the detector:
+
+- `HerdrInstance.calibrationMarker` (`⟦wl:id⟧`)
+- `RoutingProvider.onFocusInstance` and both call sites
+- `HerdrClient.setWindowTitle` / `clearWindowTitle` (`window_title.set/clear`)
+- The detector wiring in `MicroManagerApp`; `herdr.next_instance` and
+  `setActiveInstance` are the only ways the active instance changes now.
 
 ### 4. Sharpen the six-key ceiling
 
-Eleven agents, six keys. Priority order is the current answer and it works,
-but idle slots still go to the active machine first. Worth considering:
-drop idle agents from key slots entirely when more than one machine is
-configured, so the keys only ever show what wants attention. Cheap, and it
-would have made the difference in testing — five idle remote shells were
-eating the whole pad.
+**Done 2026-09-08.** Idle agents are dropped from the key slots whenever
+more than one Herdr instance is configured — `"agent_keys_drop_idle": false`
+in config.json opts back in. With one machine nothing changes. Five idle
+remote shells no longer eat the whole pad; the keys only light agents that
+want attention, while the underglow still folds over every agent.
 
 ## Environment notes that cost time
 

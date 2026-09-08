@@ -25,12 +25,6 @@ public struct HerdrInstance: Sendable, Equatable {
         HerdrInstance(id: "local", name: "Local", socketPath: HerdrClient.defaultSocketPath())
     }
 
-    /// The window title `ForegroundInstanceDetector` stamps on a terminal
-    /// window to learn which instance it belongs to. Briefly visible during
-    /// calibration, then cleared.
-    public var calibrationMarker: String {
-        "⟦wl:\(id)⟧"
-    }
 }
 
 /// A `Provider` that fronts two or more `HerdrProvider`s — a local Herdr and
@@ -40,9 +34,8 @@ public struct HerdrInstance: Sendable, Equatable {
 ///
 /// `BridgeController` is never taught that more than one Herdr exists: this
 /// is one long-lived provider, and the routing happens inside it. The active
-/// instance changes two ways — the `herdr.next_instance` action bound from
-/// `config.json`, or `setActiveInstance` driven by the app layer's
-/// `ForegroundInstanceDetector`, which tracks the frontmost terminal window.
+/// instance changes through the `herdr.next_instance` action bound from
+/// `config.json`, or `setActiveInstance`.
 ///
 /// Per-child failure isolation is a requirement, not a nicety: a dead remote
 /// (its tunnel down, or worse, wedged — accepting connections but never
@@ -78,12 +71,6 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
     /// for why the honest default on Herdr 0.9 is off.
     private let crossesMachines: Bool
     private let changeNotifier = ProviderChangeNotifier()
-
-    /// Called after a namespaced focus target routed to a specific instance —
-    /// the app layer uses this to bring *that instance's* terminal window
-    /// forward, since raising the terminal app alone cannot discriminate two
-    /// Ghostty windows. AppKit lives in the app layer; this stays a hook.
-    public var onFocusInstance: (@Sendable (String) -> Void)?
 
     /// The most recent per-child failure from `status()`, phrased for the
     /// panel. Nil when every child answered on the last refresh.
@@ -123,10 +110,6 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
 
     /// Switches the instance pad input drives. Unknown ids are ignored —
     /// silently retargeting the pad on a typo would be worse than no-op.
-    /// This is also the manual override: when foreground detection cannot
-    /// decide (no Accessibility, no known window frontmost), the active
-    /// instance stays wherever the last positive identification or this
-    /// call put it.
     public func setActiveInstance(_ id: String) {
         let changed: Bool = lock.withLock {
             guard let index = children.firstIndex(where: { $0.instance.id == id }),
@@ -261,7 +244,6 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
             throw HerdrError.api("No Herdr instance named \"\(instanceID)\" is configured — its agent can no longer be focused.")
         }
         try await child.provider.focus(raw)
-        onFocusInstance?(instanceID)
     }
 
     /// Dial turns cross machines **when `crossesMachines` is set**; without
@@ -330,8 +312,7 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
 
     /// Makes `index` the active instance and tells everyone — the change
     /// notification repaints the keys (the active instance's agents take the
-    /// key slots first), and the focus hook raises the terminal window that
-    /// belongs to the machine just landed on.
+    /// key slots first).
     private func activate(index: Int, instanceID: String) {
         let changed: Bool = lock.withLock {
             guard activeIndex != index else { return false }
@@ -339,7 +320,6 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
             return true
         }
         if changed { changeNotifier.notify() }
-        onFocusInstance?(instanceID)
     }
 
     public func inject(_ text: String) async throws {

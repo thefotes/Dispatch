@@ -13,8 +13,8 @@ enum ProviderFactory {
     private(set) static var launchedProcess: Process?
 
     /// Set only when `make()` built a multi-instance `RoutingProvider`, so
-    /// the app can wire the foreground detector and window-raising hook to
-    /// it. nil for every single-provider setup.
+    /// the app can relay per-child failures to the panel. nil for every
+    /// single-provider setup.
     private(set) static var routingProvider: RoutingProvider?
 
     static func make() -> Provider {

@@ -196,6 +196,7 @@ public final class BridgeController: ObservableObject {
         contendingClient = false
         keyBindings = KeyBindings.load()
         config.prioritizeAgentKeys = keyBindings.prioritizeAgentKeys
+        config.dropIdleAgentKeys = keyBindings.dropIdleAgentKeys
         // A mistyped "dial" keeps its fallback; say so where the panel shows
         // the bridge's other errors, the same way an unrecognized shortcut does.
         if let warning = keyBindings.dialWarning { lastError = warning }

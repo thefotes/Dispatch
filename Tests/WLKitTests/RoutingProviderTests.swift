@@ -18,14 +18,6 @@ final class RoutingProviderTests: XCTestCase {
         var value: Int { lock.lock(); defer { lock.unlock() }; return count }
     }
 
-    /// A thread-safe last-value box for `@Sendable` callbacks.
-    private final class Box<T: Sendable>: @unchecked Sendable {
-        private let lock = NSLock()
-        private var value: T?
-        func set(_ value: T) { lock.lock(); self.value = value; lock.unlock() }
-        var current: T? { lock.lock(); defer { lock.unlock() }; return value }
-    }
-
     private func agent(_ pane: String, status: String = "idle") -> HerdrAgent {
         HerdrAgent(status: status, paneID: pane, terminalID: "t-\(pane)")
     }
@@ -226,14 +218,11 @@ final class RoutingProviderTests: XCTestCase {
 
     // MARK: - Focus routing
 
-    func testANamespacedFocusGoesToItsOwnInstanceAndRaisesIt() async throws {
+    func testANamespacedFocusGoesToItsOwnInstance() async throws {
         let (routing, local, jarvis) = makeRouting()
-        let raisedFor = Box<String>()
-        routing.onFocusInstance = { raisedFor.set($0) }
         try await routing.focus("jarvis\u{1}w13:p1")
         XCTAssertTrue(local.focusCalls.isEmpty)
         XCTAssertEqual(jarvis.focusCalls, ["w13:p1"], "the namespace prefix is stripped before agent.focus")
-        XCTAssertEqual(raisedFor.current, "jarvis")
     }
 
     func testAnUnnamespacedFocusGoesToTheActiveChildUnchanged() async throws {
@@ -300,19 +289,16 @@ final class RoutingProviderTests: XCTestCase {
     }
 
     /// A step off the end of the active machine's list spills onto the next
-    /// machine in config order, landing on its first entity, raising that
-    /// machine's terminal, and making it the active instance.
+    /// machine in config order, landing on its first entity and making it
+    /// the active instance.
     func testSteppingOffTheEndSpillsOntoTheNextMachine() async throws {
         let (routing, local, jarvis) = makeRouting(crossesMachines: true)
-        let raisedFor = Box<String>()
-        routing.onFocusInstance = { raisedFor.set($0) }
         local.stepResult = false
         try await routing.dial(1, mode: "space")
         XCTAssertEqual(local.stepCalls.count, 1)
         XCTAssertEqual(jarvis.landCalls.count, 1)
         XCTAssertEqual(jarvis.landCalls.first?.step, 1, "the landing end matches the step direction")
         XCTAssertEqual(routing.activeInstanceID, "jarvis")
-        XCTAssertEqual(raisedFor.current, "jarvis")
     }
 
     /// Stepping backwards off the start of the list walks to the previous

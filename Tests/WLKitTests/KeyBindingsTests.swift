@@ -399,10 +399,6 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertEqual(KeyBindings.expandingPath("/plain/path"), "/plain/path")
     }
 
-    func testACalibrationMarkerNamesItsInstance() {
-        XCTAssertEqual(HerdrInstance(id: "jarvis", name: "Jarvis", socketPath: "/tmp").calibrationMarker,
-                       "⟦wl:jarvis⟧")
-    }
     // MARK: - agent_keys default, and the cross-machine dial gate
 
     /// One machine keeps sidebar order: it is stable, and keys do not move
@@ -439,6 +435,47 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertFalse(forced.prioritizeAgentKeys, "explicit sidebar survives two instances")
         XCTAssertTrue(parse(#"{"agent_keys": "priority"}"#).prioritizeAgentKeys,
                       "explicit priority survives one instance")
+    }
+
+    // MARK: - agent_keys_drop_idle
+
+    /// One machine keeps idle agents on the keys — the keys mirroring the
+    /// sidebar is the whole point there.
+    func testIdleKeysAreKeptWithOneInstance() {
+        XCTAssertFalse(parse("{}").dropIdleAgentKeys)
+        let one = parse(#"{"herdr": {"instances": [{"id": "l", "socket_path": "/tmp/a.sock"}]}}"#)
+        XCTAssertFalse(one.dropIdleAgentKeys)
+    }
+
+    /// More than one machine drops them by default: idle agents on the
+    /// active instance would otherwise crowd the other machine off the six
+    /// slots entirely.
+    func testIdleKeysAreDroppedWithMoreThanOneInstance() {
+        let two = parse(#"""
+            {"herdr": {"instances": [
+                {"id": "local",  "socket_path": "/tmp/a.sock"},
+                {"id": "jarvis", "socket_path": "/tmp/b.sock"}
+            ]}}
+        """#)
+        XCTAssertTrue(two.dropIdleAgentKeys)
+    }
+
+    /// An explicit boolean wins over the instance-count default, both ways.
+    func testExplicitDropIdleBeatsTheDefault() {
+        let kept = parse(#"""
+            {"agent_keys_drop_idle": false, "herdr": {"instances": [
+                {"id": "local",  "socket_path": "/tmp/a.sock"},
+                {"id": "jarvis", "socket_path": "/tmp/b.sock"}
+            ]}}
+        """#)
+        XCTAssertFalse(kept.dropIdleAgentKeys, "explicit keep survives two instances")
+        XCTAssertTrue(parse(#"{"agent_keys_drop_idle": true}"#).dropIdleAgentKeys,
+                      "explicit drop survives one instance")
+    }
+
+    /// A non-boolean is ignored, like the cross-machine dial's flag.
+    func testANonBooleanDropIdleIsIgnored() {
+        XCTAssertFalse(parse(#"{"agent_keys_drop_idle": "yes"}"#).dropIdleAgentKeys)
     }
 
     func testDialDoesNotCrossMachinesUnlessAsked() {
