@@ -115,6 +115,9 @@ public final class BridgeController: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     private var reopenTask: Task<Void, Never>?
+    /// Which arm of the reopen loop is the live one, so a cancelled loop
+    /// cannot clear its successor's handle on the way out.
+    private var reopenGeneration = 0
     private var heartbeatTask: Task<Void, Never>?
     private var sleepObserver: NSObjectProtocol?
     private var wakeObserver: NSObjectProtocol?
@@ -833,8 +836,14 @@ extension BridgeController {
         }
     }
 
+    /// Whether a retry loop is currently up. The state `systemWillSleep`
+    /// stands down and the heartbeat restores.
+    var isRetryingToReopen: Bool { reopenTask != nil }
+
     private func scheduleReopen() {
         guard isRunning, reopenTask == nil else { return }
+        reopenGeneration &+= 1
+        let generation = reopenGeneration
         reopenTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
@@ -846,7 +855,12 @@ extension BridgeController {
                     break
                 }
             }
-            self?.reopenTask = nil
+            // Only clear the handle if it is still this loop's. A cancel
+            // followed by a fresh arm — a sleep, then the wake — would
+            // otherwise have the old loop null out the new one's on its way
+            // out, and the guard above would then let a second loop through.
+            guard let self, self.reopenGeneration == generation else { return }
+            self.reopenTask = nil
         }
     }
 
@@ -889,11 +903,20 @@ extension BridgeController {
         wakeObserver = nil
     }
 
-    /// Closes the session without arming the reopen loop: there is nothing to
-    /// reopen until the Mac is awake again, and retrying every 3 s across a
-    /// sleep would only bank failures to report on the other side.
+    /// Closes the session and stands the reopen loop down: there is nothing to
+    /// reopen until the Mac is awake again, and a loop left armed keeps
+    /// calling `IOHIDManagerOpen` right through the transition into sleep,
+    /// banking failures to report on the other side.
+    ///
+    /// Standing it down is safe because three separate things arm it again —
+    /// the wake, a failed open, and the heartbeat, which treats "running,
+    /// disconnected, nothing retrying" as a state to fix rather than a state
+    /// to sit in.
     func systemWillSleep() {
-        guard isRunning, device.isConnected else { return }
+        guard isRunning else { return }
+        reopenTask?.cancel()
+        reopenTask = nil
+        guard device.isConnected else { return }
         device.disconnect(reason: nil)
         deviceConnected = false
         lastFingerprint = nil
@@ -934,7 +957,16 @@ extension BridgeController {
     /// A failed round trip drops the handle and hands over to the reopen
     /// loop, the same route `apply()`'s write failure takes.
     func heartbeatTick() async {
-        guard isRunning, deviceConnected else { return }
+        guard isRunning else { return }
+        guard deviceConnected else {
+            // Running, disconnected, and nothing retrying is a state nothing
+            // should be able to reach — a wake notification that never
+            // arrived, a loop stood down for a sleep that then did not
+            // happen, a mistake made later. Re-arm rather than sit there
+            // dark; `scheduleReopen` is a no-op when a loop is already up.
+            scheduleReopen()
+            return
+        }
         // Traffic the bridge sent anyway counts as proof: on a pad that is
         // being repainted, this never sends a thing.
         if let last = lastDeviceContact, last + config.heartbeatInterval > .now() { return }

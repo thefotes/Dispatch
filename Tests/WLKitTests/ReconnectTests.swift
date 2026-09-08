@@ -111,6 +111,38 @@ final class ReconnectTests: XCTestCase {
         await bridge.stop()
     }
 
+    /// And stands the retry loop down with it: a loop left armed keeps
+    /// calling into IOKit right through the transition into sleep, for a pad
+    /// that is on its way off the bus.
+    func testGoingToSleepStandsDownTheRetryLoop() async {
+        let (bridge, emulator) = await startedBridge()
+        emulator.failEveryCall = wedged
+        await bridge.probeLiveness()
+        XCTAssertTrue(bridge.isRetryingToReopen, "a dropped session arms the loop")
+
+        bridge.systemWillSleep()
+
+        XCTAssertFalse(bridge.isRetryingToReopen, "nothing to retry until the Mac is awake")
+        await bridge.stop()
+    }
+
+    /// Which is only safe because the loop gets armed again from more than
+    /// one place. If the wake never arrives — the notification missed, the
+    /// sleep abandoned — the heartbeat is what notices that a running bridge
+    /// has nothing retrying and puts it back.
+    func testTheHeartbeatRearmsARetryThatWentMissing() async {
+        let (bridge, emulator) = await startedBridge()
+        emulator.failEveryCall = wedged
+        await bridge.probeLiveness()
+        bridge.systemWillSleep()
+        XCTAssertFalse(bridge.isRetryingToReopen)
+
+        await bridge.heartbeatTick()
+
+        XCTAssertTrue(bridge.isRetryingToReopen)
+        await bridge.stop()
+    }
+
     /// The other half. Note what is *not* required here: the emulator was
     /// never disconnected, so this is the case where the sleep notification
     /// never arrived and the handle looks perfectly fine. It is opened again
