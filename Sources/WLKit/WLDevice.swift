@@ -35,6 +35,11 @@ public final class WLDevice {
         public var serial: String
         public var usagePage: Int
         public var interfaceCount: Int
+        /// The IORegistry entry id of the interface this session opened —
+        /// stable for as long as the device is on the bus, and what
+        /// `connect(excluding:)` names when a caller wants the *next*
+        /// interface instead of this one.
+        public var registryID: UInt64 = 0
     }
 
     public static let vendorUsagePage = 0xFF00
@@ -43,6 +48,7 @@ public final class WLDevice {
     public enum Failure: LocalizedError {
         case notFound
         case noVendorCollection
+        case allCandidatesRejected
         case openFailed(IOReturn)
         case notConnected
         case writeFailed(IOReturn)
@@ -55,6 +61,8 @@ public final class WLDevice {
                 return "No Work Louder device on the HID bus. If it is a Bluetooth pad it may have gone to sleep — press a key to wake it."
             case .noVendorCollection:
                 return "Found the device, but not its vendor collection (usage page 0xFF00). Nothing to talk to."
+            case .allCandidatesRejected:
+                return "Every interface the pad offers opened, and none of them answered. The session is wedged rather than missing."
             case .openFailed(let r):
                 if r == kIOReturnNotPrivileged || UInt32(bitPattern: r) == 0xE00002C1 {
                     return "Open refused (0xE00002C1). Grant Input Monitoring to the process running this app, under System Settings → Privacy & Security → Input Monitoring."
@@ -113,9 +121,109 @@ public final class WLDevice {
 
     deinit { inputBuffer.deallocate() }
 
+    // MARK: - Choosing an interface
+
+    /// One matched IOHIDDevice, reduced to the properties the choice actually
+    /// turns on — so the ordering rule below can be exercised without a HID
+    /// bus under it.
+    struct Candidate: Equatable {
+        var registryID: UInt64
+        var primaryUsagePage: Int
+        /// Every usage page in `DeviceUsagePairs`, primary included.
+        var usagePages: [Int]
+        /// `kIOHIDTransportKey` — "USB", "Bluetooth", "Bluetooth Low Energy".
+        var transport: String
+
+        /// Whether this interface carries the vendor collection at all. An
+        /// interface without it is not a candidate: report id 6 writes to it
+        /// are silently dropped.
+        var hasVendorCollection: Bool {
+            primaryUsagePage == WLDevice.vendorUsagePage
+                || usagePages.contains(WLDevice.vendorUsagePage)
+        }
+
+        var isVendorPrimary: Bool { primaryUsagePage == WLDevice.vendorUsagePage }
+    }
+
+    /// USB first, unknown transports next, Bluetooth last.
+    ///
+    /// Both transports advertise the same vendor collection, so both open
+    /// happily — but a pad that is on the wire is on the wire for a reason,
+    /// and the BLE node is the one that comes back after a sleep with a
+    /// session that accepts writes and does nothing with them. Given the
+    /// choice, take the cable.
+    static func transportRank(_ transport: String) -> Int {
+        let name = transport.lowercased()
+        if name.contains("usb") { return 0 }
+        if name.contains("bluetooth") || name.contains("ble") { return 2 }
+        return 1
+    }
+
+    /// Match on vendor plus the vendor usage pair. Vendor alone opens every
+    /// Espressif-vendor HID device on the bus — other ESP32 gadgets, second
+    /// pads — and each extra non-exclusive open on a keyboard collection
+    /// raises the odds of HID contention. Over Bluetooth the pad presents a
+    /// single IOHIDDevice whose *primary* usage is keyboard, with the vendor
+    /// collection alongside it in DeviceUsagePairs, so the pair still matches
+    /// it.
+    static let matching: CFDictionary = [
+        kIOHIDVendorIDKey: WLDevice.vendorID,
+        kIOHIDDeviceUsagePairsKey: [
+            [kIOHIDDeviceUsagePageKey: WLDevice.vendorUsagePage,
+             kIOHIDDeviceUsageKey: WLDevice.vendorUsage]
+        ]
+    ] as CFDictionary
+
+    /// Every interface the pad is currently offering, best first — the list
+    /// `connect` works through. Opens nothing, so it is safe to ask while
+    /// something else holds the device: this is the diagnostic view, for a
+    /// test or an inspector that wants to say which interface it got and what
+    /// the alternatives were.
+    func availableInterfaces() throws -> [Candidate] {
+        let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+        IOHIDManagerSetDeviceMatching(manager, WLDevice.matching)
+        let openResult = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        defer { IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone)) }
+        guard openResult == kIOReturnSuccess else { throw Failure.openFailed(openResult) }
+        guard let set = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>, !set.isEmpty else {
+            throw Failure.notFound
+        }
+        return WLDevice.orderedCandidates(set.map(describe))
+    }
+
+    /// The order interfaces are tried in, best first.
+    ///
+    /// Transport decides first (see `transportRank`), then the shape of the
+    /// interface: a *vendor-primary* one is the better match, because a
+    /// firmware that splits the vendor collection onto its own interface
+    /// would put it there — today's firmware puts all four collections on one
+    /// keyboard-primary interface, so this clause never fires over USB. The
+    /// registry id is the last word purely so the order is deterministic:
+    /// `IOHIDManagerCopyDevices` hands back a `Set`, and picking its first
+    /// element made "which pad did we open" a coin flip whenever the pad was
+    /// on both transports at once.
+    static func orderedCandidates(_ candidates: [Candidate]) -> [Candidate] {
+        candidates
+            .filter(\.hasVendorCollection)
+            .sorted { lhs, rhs in
+                let (left, right) = (transportRank(lhs.transport), transportRank(rhs.transport))
+                if left != right { return left < right }
+                if lhs.isVendorPrimary != rhs.isVendorPrimary { return lhs.isVendorPrimary }
+                return lhs.registryID < rhs.registryID
+            }
+    }
+
     // MARK: - Connect
 
-    public func connect() throws {
+    /// Opens the pad, preferring the interface most likely to answer.
+    ///
+    /// `excluding` names registry ids already tried and found silent, so a
+    /// caller that opened an interface and got nothing back can come straight
+    /// here for the next one. That is not a theoretical case: an open only
+    /// proves macOS handed over the interface, and a dead Bluetooth session
+    /// opens exactly as readily as a live USB one — see
+    /// `BridgeController.openDevice`, which does the proving.
+    public func connect(excluding rejected: Set<UInt64> = []) throws {
         disconnect(reason: nil)
 
         if let emulator {
@@ -140,20 +248,7 @@ public final class WLDevice {
         // then fails with kIOReturnNotOpen.
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         self.manager = manager
-        // Match on vendor plus the vendor usage pair. Vendor alone opens every
-        // Espressif-vendor HID device on the bus — other ESP32 gadgets, second
-        // pads — and each extra non-exclusive open on a keyboard collection
-        // raises the odds of HID contention. Over Bluetooth the pad presents a
-        // single IOHIDDevice whose *primary* usage is keyboard, with the vendor
-        // collection alongside it in DeviceUsagePairs, so the pair still
-        // matches it.
-        IOHIDManagerSetDeviceMatching(manager, [
-            kIOHIDVendorIDKey: WLDevice.vendorID,
-            kIOHIDDeviceUsagePairsKey: [
-                [kIOHIDDeviceUsagePageKey: WLDevice.vendorUsagePage,
-                 kIOHIDDeviceUsageKey: WLDevice.vendorUsage]
-            ]
-        ] as CFDictionary)
+        IOHIDManagerSetDeviceMatching(manager, WLDevice.matching)
         let openResult = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         guard openResult == kIOReturnSuccess else {
             // Close and drop the manager before throwing: an open manager held
@@ -171,34 +266,56 @@ public final class WLDevice {
         // macOS makes one IOHIDDevice per HID *interface*, not per top-level
         // collection, and this pad puts all four of its collections (boot
         // keyboard, two consumer, and the vendor channel we want) on a single
-        // interface. So on both transports it enumerates as exactly ONE
+        // interface. So on each transport it enumerates as exactly ONE
         // IOHIDDevice whose PrimaryUsagePage is 1 (keyboard) — the vendor pair
         // 0xFF00/1 appears only in DeviceUsagePairs. Verified 2026-09-05 over
         // USB: one IOUSBHostInterface, bInterfaceNumber 0, and report id 6
         // writes to that keyboard-primary device succeed.
         //
-        // The first clause is therefore the one that never fires today; it is
-        // kept because a firmware that splits the vendor collection onto its own
-        // interface would be the better match. Do not "simplify" this to the
-        // first vendor-id match: on a device that does split, that lands on the
+        // Do not "simplify" this to the first vendor-id match: on a firmware
+        // that splits the collections across interfaces, that lands on the
         // keyboard and every report id 6 write is silently dropped.
-        guard let dev = set.first(where: { primaryUsagePage($0) == WLDevice.vendorUsagePage })
-            ?? set.first(where: { hasVendorCollection($0) })
-        else {
-            throw Failure.noVendorCollection
+        var devices: [UInt64: IOHIDDevice] = [:]
+        var candidates: [Candidate] = []
+        for dev in set {
+            let candidate = describe(dev)
+            candidates.append(candidate)
+            devices[candidate.registryID] = dev
         }
+        let ordered = WLDevice.orderedCandidates(candidates)
+        guard !ordered.isEmpty else { throw Failure.noVendorCollection }
+        let remaining = ordered.filter { !rejected.contains($0.registryID) }
+        guard !remaining.isEmpty else { throw Failure.allCandidatesRejected }
 
-        let result = IOHIDDeviceOpen(dev, IOOptionBits(kIOHIDOptionsTypeNone))
-        guard result == kIOReturnSuccess else { throw Failure.openFailed(result) }
+        // Try them in order rather than betting everything on the first: an
+        // interface can be open elsewhere (the vendor's own Input app, a
+        // second copy of this one), and the next one down is often fine.
+        var lastFailure: IOReturn?
+        for candidate in remaining {
+            guard let dev = devices[candidate.registryID] else { continue }
+            let result = IOHIDDeviceOpen(dev, IOOptionBits(kIOHIDOptionsTypeNone))
+            guard result == kIOReturnSuccess else {
+                lastFailure = result
+                continue
+            }
+            adopt(dev, candidate: candidate, interfaceCount: set.count)
+            return
+        }
+        throw Failure.openFailed(lastFailure ?? kIOReturnNoDevice)
+    }
 
+    /// Takes ownership of a freshly opened interface: records what it is, and
+    /// starts listening on it.
+    private func adopt(_ dev: IOHIDDevice, candidate: Candidate, interfaceCount: Int) {
         device = dev
         info = Info(
             product: string(dev, kIOHIDProductKey) ?? "Work Louder device",
             productID: number(dev, kIOHIDProductIDKey) ?? 0,
-            transport: string(dev, kIOHIDTransportKey) ?? "?",
+            transport: candidate.transport.isEmpty ? "?" : candidate.transport,
             serial: string(dev, kIOHIDSerialNumberKey) ?? "",
-            usagePage: primaryUsagePage(dev) ?? 0,
-            interfaceCount: set.count
+            usagePage: candidate.primaryUsagePage,
+            interfaceCount: interfaceCount,
+            registryID: candidate.registryID
         )
 
         let context = Unmanaged.passUnretained(self).toOpaque()
@@ -438,12 +555,25 @@ public final class WLDevice {
         number(dev, kIOHIDPrimaryUsagePageKey)
     }
 
-    /// True when this IOHIDDevice exposes the vendor collection, either as its
-    /// primary usage or as one of its DeviceUsagePairs.
-    private func hasVendorCollection(_ dev: IOHIDDevice) -> Bool {
-        if primaryUsagePage(dev) == WLDevice.vendorUsagePage { return true }
-        guard let pairs = IOHIDDeviceGetProperty(dev, kIOHIDDeviceUsagePairsKey as CFString) as? [[String: Any]]
-        else { return false }
-        return pairs.contains { ($0[kIOHIDDeviceUsagePageKey] as? Int) == WLDevice.vendorUsagePage }
+    /// Reads an IOHIDDevice down to the fields the selection rule reads.
+    private func describe(_ dev: IOHIDDevice) -> Candidate {
+        let pairs = IOHIDDeviceGetProperty(dev, kIOHIDDeviceUsagePairsKey as CFString) as? [[String: Any]]
+        return Candidate(
+            registryID: registryID(dev) ?? 0,
+            primaryUsagePage: primaryUsagePage(dev) ?? 0,
+            usagePages: pairs?.compactMap { $0[kIOHIDDeviceUsagePageKey] as? Int } ?? [],
+            transport: string(dev, kIOHIDTransportKey) ?? ""
+        )
+    }
+
+    /// The IORegistry entry id behind an IOHIDDevice — unique on the bus and
+    /// stable while the device is on it, which the serial number is not: the
+    /// pad reports the same serial on USB and Bluetooth at once.
+    private func registryID(_ dev: IOHIDDevice) -> UInt64? {
+        let service = IOHIDDeviceGetService(dev)
+        guard service != 0 else { return nil }
+        var id: UInt64 = 0
+        guard IORegistryEntryGetRegistryEntryID(service, &id) == KERN_SUCCESS else { return nil }
+        return id
     }
 }

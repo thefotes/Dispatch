@@ -325,10 +325,24 @@ never issued is a reliable tell.
 
 ## When the pad stops responding
 
-Lit but inert — the dial and keys do nothing, usually after a sleep/wake. The
-panel will name the error; if it ends in `0xE00002E2`, that is
+Lit but inert — the dial and keys do nothing, usually after a sleep/wake.
+
+**The app handles this itself now, and should need nothing from you.** It
+closes the HID session on the way into a sleep and opens a fresh one on the way
+out, a heartbeat catches any other kind of wedge within ~15 s, and a session
+that opens but does not answer is refused rather than reported as connected —
+which is what used to make toggling the bridge off and on useless while a quit
+and relaunch "fixed" it. Where the pad is on USB and also paired over
+Bluetooth, the cable wins; the Bluetooth node is the one that comes back from a
+sleep opening happily and answering nothing.
+
+So if the panel says connected, it has had an answer out of the pad. If it says
+disconnected, it will keep retrying every 3 s and will name what it last saw.
+
+That leaves the case the app cannot fix from inside: a session wedged
+kernel-side. The panel names the error; if it ends in `0xE00002E2`, that is
 `kIOReturnNotPermitted`, which means either Input Monitoring is not granted or
-the HID session has wedged.
+the session has wedged.
 
 If Input Monitoring is already granted, it is a wedged session, and **only
 restarting the Mac clears it**. Power-cycling the pad, toggling Bluetooth,

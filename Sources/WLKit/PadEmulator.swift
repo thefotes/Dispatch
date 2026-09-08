@@ -46,6 +46,13 @@ public final class PadEmulator: ObservableObject {
     /// Set by `WLDevice` to deliver device-pushed notifications.
     var onNotify: ((String, Any?) -> Void)?
 
+    /// When set, every call comes back with this error instead of a result —
+    /// the wedged session, which is the failure worth rehearsing here because
+    /// it is invisible from the outside. A real pad reaches it after a
+    /// sleep/wake over Bluetooth: the handle is open, `IOHIDDeviceOpen`
+    /// succeeded, writes go out, and nothing ever comes back.
+    @Published public var failEveryCall: String?
+
     private var keymap: [String: Any] = PadEmulator.stockKeymap()
 
     public init() { refreshBinding() }
@@ -57,6 +64,10 @@ public final class PadEmulator: ObservableObject {
     /// (result, error) shape mirrors `WLDevice`'s completion, so the caller
     /// hands it straight on.
     func handle(_ method: String, params: Any?) -> (result: Any?, error: String?) {
+        if let failEveryCall {
+            note("\(method) — wedged session, no reply")
+            return (nil, failEveryCall)
+        }
         switch method {
         case "sys.version":
             note("sys.version")
