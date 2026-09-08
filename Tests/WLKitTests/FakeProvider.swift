@@ -19,6 +19,8 @@ final class FakeProvider: Provider, @unchecked Sendable {
     var stepResult: Bool?
     var stepError: Error?
     var landError: Error?
+    /// nil = the protocol default: dial and report a landing.
+    var landResult: Bool?
     var descriptionToReturn = ProviderDescription()
     private var onChangeCallback: (@Sendable () -> Void)?
 
@@ -44,10 +46,12 @@ final class FakeProvider: Provider, @unchecked Sendable {
         return true
     }
 
-    func landFromOtherMachine(_ step: Int, mode: String) async throws {
+    func landFromOtherMachine(_ step: Int, mode: String) async throws -> Bool {
         landCalls.append((step, mode))
         if let landError { throw landError }
+        if let landResult { return landResult }
         try await dial(step, mode: mode)
+        return true
     }
 
     func inject(_ text: String) async throws {

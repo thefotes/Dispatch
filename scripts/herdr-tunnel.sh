@@ -72,6 +72,7 @@ if [[ "${1:-}" == "--install" ]]; then
 </dict>
 </plist>
 EOF
+    launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
     launchctl bootstrap "gui/$(id -u)" "$PLIST"
     echo "Installed $LABEL — forwarding $HOST to $LOCAL"
     echo 'Add this machine as an instance in ~/.config/micromanager/config.json:'
@@ -85,14 +86,25 @@ LOCAL="${3:-$(default_local_path "$HOST")}"
 
 # Default remote path: Herdr's socket in the remote account's config dir.
 # The path is resolved on the remote, so ask it for its own home rather
-# than assuming it matches the local one.
-if [[ -z "$REMOTE" ]]; then
-    REMOTE="$(ssh -o ConnectTimeout=10 "$HOST" 'echo -n $HOME')/.config/herdr/herdr.sock"
-fi
-
-echo "$(date '+%F %T') forwarding $HOST:$REMOTE to $LOCAL" >&2
+# than assuming it matches the local one. Failure returns nonzero and
+# leaves $REMOTE empty — the caller retries, because a remote that is
+# down when launchd starts the agent (the common case after a reboot)
+# must not poison the path for every reconnect forever after.
+resolve_remote() {
+    [[ -n "$REMOTE" ]] && return 0
+    local home
+    home="$(ssh -o ConnectTimeout=10 "$HOST" 'echo -n $HOME' 2>/dev/null)" || return 1
+    [[ -n "$home" ]] || return 1
+    REMOTE="$home/.config/herdr/herdr.sock"
+    echo "$(date '+%F %T') resolved remote socket: $HOST:$REMOTE" >&2
+}
 
 while true; do
+    if ! resolve_remote; then
+        echo "$(date '+%F %T') cannot reach $HOST to resolve its socket path; retrying in 5s" >&2
+        sleep 5
+        continue
+    fi
     rm -f "$LOCAL"
     # -N no remote command; -L local unix socket -> remote unix socket.
     # ExitOnForwardFailure so a bind failure loops into a retry instead of
@@ -105,6 +117,9 @@ while true; do
         -o ConnectTimeout=10 \
         -L "$LOCAL:$REMOTE" \
         "$HOST"
+    # The remote's home could differ next time (account moved, Herdr's
+    # config path changed) — re-resolve rather than trusting the old one.
+    REMOTE=""
     echo "$(date '+%F %T') tunnel to $HOST dropped; reconnecting in 5s" >&2
     sleep 5
 done

@@ -35,9 +35,11 @@ public protocol Provider: Sendable {
     func stepWithinMachine(_ step: Int, mode: String) async throws -> Bool
 
     /// Where a cross-machine step lands: the first entity for `mode` when
-    /// `step` is positive, the last when negative. The default dials, which
-    /// suits a provider that does no routing of its own.
-    func landFromOtherMachine(_ step: Int, mode: String) async throws
+    /// `step` is positive, the last when negative. Returns false when this
+    /// machine has nothing focusable — the routing layer then walks past it
+    /// as it would a dead machine. The default dials and reports a landing,
+    /// which suits a provider that does no routing of its own.
+    func landFromOtherMachine(_ step: Int, mode: String) async throws -> Bool
 
     /// Injects text into whatever "focused" means for this provider.
     func inject(_ text: String) async throws
@@ -68,8 +70,9 @@ public extension Provider {
         return true
     }
 
-    func landFromOtherMachine(_ step: Int, mode: String) async throws {
+    func landFromOtherMachine(_ step: Int, mode: String) async throws -> Bool {
         try await dial(step, mode: mode)
+        return true
     }
 }
 

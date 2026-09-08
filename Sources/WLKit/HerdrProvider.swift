@@ -54,11 +54,17 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     }
 
     private let options: Options
-    private let client: HerdrClient
+    private let client: any HerdrServicing
 
     public init(options: Options = Options()) {
         self.options = options
         self.client = HerdrClient(socketPath: options.socketPath)
+    }
+
+    /// For tests: a provider that drives a fake service instead of a socket.
+    init(options: Options = Options(), client: any HerdrServicing) {
+        self.options = options
+        self.client = client
     }
 
     /// Herdr's status vocabulary, the agent/tab/space navigation the dial
@@ -113,7 +119,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     public func dial(_ step: Int, mode: String) async throws {
         switch mode {
         case "agent":
-            guard let next = HerdrClient.adjacentAgent(in: try await client.listAgents(), step: step),
+            guard let next = HerdrClient.adjacentAgent(in: try await client.listAgents(timeout: options.statusTimeout), step: step),
                   let target = next.focusTarget
             else { return }
             try await client.focusAgent(target)
@@ -128,11 +134,15 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
         }
     }
 
-    /// One dial turn confined to this machine. Returns false when the step
-    /// ran off either end of the machine's list without moving focus — the
+    /// One dial turn confined to this machine. Returns false when the turn
+    /// cannot stay here — the step ran off either end of the machine's
+    /// list, or the machine has nothing focusable at all — which is the
     /// signal `RoutingProvider` uses to spill the turn onto the next
     /// machine. A machine with nothing focused treats the turn as entering
-    /// it: the first (or last) entity is focused instead.
+    /// it: the first (or last) entity is focused instead. An agent that
+    /// reports no focus target mid-list (no pane id and no terminal id) is
+    /// skipped rather than mistaken for the end of the list — the spill
+    /// signal means "exhausted", never "one dead entry in the middle".
     ///
     /// "tab" and unrecognized modes never cross machines, so they dial and
     /// report handled, exactly as `dial` would.
@@ -140,20 +150,22 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
         switch mode {
         case "agent":
             let agents = try await client.listAgents(timeout: options.statusTimeout)
-            guard agents.first(where: \.focused) != nil else {
-                try await landOnAgent(in: agents, step: step)
-                return true
+            guard let focusedIndex = agents.firstIndex(where: \.focused) else {
+                return try await landOnAgent(in: agents, step: step)
             }
-            guard let next = HerdrClient.steppedAgent(in: agents, step: step),
-                  let target = next.focusTarget
-            else { return false }
-            try await client.focusAgent(target)
-            return true
+            var target = focusedIndex + step
+            while agents.indices.contains(target) {
+                if let focus = agents[target].focusTarget {
+                    try await client.focusAgent(focus)
+                    return true
+                }
+                target += step >= 0 ? 1 : -1
+            }
+            return false
         case "space", "workspace":
             let spaces = try await client.listWorkspaces()
             guard spaces.first(where: \.focused) != nil else {
-                try await landOnWorkspace(in: spaces, step: step)
-                return true
+                return try await landOnWorkspace(in: spaces, step: step)
             }
             guard let next = HerdrClient.steppedWorkspace(in: spaces, step: step)
             else { return false }
@@ -167,29 +179,36 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
 
     /// Where a cross-machine step lands: this machine's first entity for
     /// `mode` when `step` is positive, its last when negative — matching
-    /// which end the previous machine's list was walked off.
-    public func landFromOtherMachine(_ step: Int, mode: String) async throws {
+    /// which end the previous machine's list was walked off. Returns false
+    /// when this machine has nothing focusable, so the routing layer walks
+    /// past it exactly as it would a dead machine — an empty list must not
+    /// absorb the turn and wedge the dial on a machine with nothing to
+    /// focus.
+    public func landFromOtherMachine(_ step: Int, mode: String) async throws -> Bool {
         switch mode {
         case "agent":
-            try await landOnAgent(in: try await client.listAgents(timeout: options.statusTimeout), step: step)
+            return try await landOnAgent(in: try await client.listAgents(timeout: options.statusTimeout), step: step)
         case "space", "workspace":
-            try await landOnWorkspace(in: try await client.listWorkspaces(), step: step)
+            return try await landOnWorkspace(in: try await client.listWorkspaces(), step: step)
         default:
-            break
+            return false
         }
     }
 
-    private func landOnAgent(in agents: [HerdrAgent], step: Int) async throws {
-        guard let agent = step >= 0 ? agents.first : agents.last,
+    private func landOnAgent(in agents: [HerdrAgent], step: Int) async throws -> Bool {
+        let candidates = step >= 0 ? agents : agents.reversed()
+        guard let agent = candidates.first(where: { $0.focusTarget != nil }),
               let target = agent.focusTarget
-        else { return }
+        else { return false }
         try await client.focusAgent(target)
+        return true
     }
 
-    private func landOnWorkspace(in spaces: [HerdrWorkspace], step: Int) async throws {
+    private func landOnWorkspace(in spaces: [HerdrWorkspace], step: Int) async throws -> Bool {
         let ordered = spaces.sorted { $0.number < $1.number }
-        guard let space = step >= 0 ? ordered.first : ordered.last else { return }
+        guard let space = step >= 0 ? ordered.first : ordered.last else { return false }
         try await client.focusWorkspace(space.workspaceID)
+        return true
     }
 
     public func inject(_ text: String) async throws {
@@ -291,7 +310,7 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
     /// a single `agent.focus`, never a walk pane-by-pane — walking would
     /// mark every pane it passed through "seen" in Herdr.
     public func joystick(_ direction: Pad.JoystickDirection) async throws {
-        let before = (try? await client.listAgents()) ?? []
+        let before = (try? await client.listAgents(timeout: options.statusTimeout)) ?? []
         let fromPane = before.first(where: \.focused)?.paneID
         let wrapTarget = Self.wrapTarget(direction, panes: Self.panesInFocusedTab(before))
 

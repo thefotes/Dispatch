@@ -269,8 +269,12 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
     /// A machine that cannot answer — the tunnel down, the request timing
     /// out — is walked past the same way an empty list would be: the turn
     /// tries the following machine rather than dying, because a dead remote
-    /// must not eat dial turns any more than it eats status polls. If no
-    /// machine lands, the last error is rethrown so the panel can say why.
+    /// must not eat dial turns any more than it eats status polls. A machine
+    /// that answers but has nothing focusable reports that through its
+    /// landing result, so an empty remote is walked past too instead of
+    /// becoming active with nothing focused and absorbing every later turn.
+    /// If no machine lands, the last error is rethrown so the panel can say
+    /// why.
     public func dial(_ step: Int, mode: String) async throws {
         guard Self.dialCrossesMachines(mode: mode), children.count > 1 else {
             try await activeChild().provider.dial(step, mode: mode)
@@ -286,9 +290,10 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
                 if offset == 0 {
                     if try await child.provider.stepWithinMachine(step, mode: mode) { return }
                 } else {
-                    try await child.provider.landFromOtherMachine(step, mode: mode)
-                    activate(index: index, instanceID: child.instance.id)
-                    return
+                    if try await child.provider.landFromOtherMachine(step, mode: mode) {
+                        activate(index: index, instanceID: child.instance.id)
+                        return
+                    }
                 }
             } catch {
                 lastError = error

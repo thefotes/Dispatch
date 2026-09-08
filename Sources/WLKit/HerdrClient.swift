@@ -1,5 +1,24 @@
 import Foundation
 
+/// The slice of Herdr's socket API `HerdrProvider` drives. Exists so
+/// `HerdrProvider`'s dial navigation can be tested against a fake — the
+/// boundary math there decides which machine a dial turn lands on, and a
+/// live socket cannot rehearse that. `HerdrClient` is the real thing.
+public protocol HerdrServicing: Sendable {
+    func listAgents(timeout: TimeInterval) async throws -> [HerdrAgent]
+    func listWorkspaces() async throws -> [HerdrWorkspace]
+    func focusAgent(_ target: String) async throws
+    func focusWorkspace(_ workspaceID: String) async throws
+    func focusedAgent() async throws -> HerdrAgent?
+    func focusedPaneID() async throws -> String?
+    func focusPane(direction: HerdrClient.PaneDirection) async throws
+    func createWorkspace() async throws
+    func cycleTabs(_ step: Int) async throws
+    func splitPane(direction: String) async throws
+    func sendText(paneID: String, text: String) async throws
+    func sendKeys(paneID: String, keys: [String]) async throws
+}
+
 /// Client for the Herdr socket API: newline-delimited JSON over a Unix socket.
 ///
 /// The server handles **exactly one request per connection** and then closes,
@@ -178,7 +197,7 @@ public enum HerdrError: LocalizedError {
     }
 }
 
-public struct HerdrClient: Sendable {
+public struct HerdrClient: Sendable, HerdrServicing {
 
     /// The socket this instance talks to. Each `HerdrClient` instance is one
     /// Herdr server; multiple instances (a local one and a forwarded remote
