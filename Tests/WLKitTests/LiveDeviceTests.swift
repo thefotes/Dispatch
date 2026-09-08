@@ -32,4 +32,34 @@ final class LiveDeviceTests: XCTestCase {
         XCTAssertEqual(keymap[at.row][at.column], "KV_OAI_AG06")
         XCTAssertTrue(KeymapManager.isAgentKeymapApplied(config))
     }
+
+    /// A pad that has ever been paired offers more than one interface — the
+    /// cable and the Bluetooth node both carry the vendor collection, and
+    /// both open. `connect` has to take the best one on the bus rather than
+    /// whatever `IOHIDManagerCopyDevices` happened to put first in its `Set`;
+    /// taking the other one is a session that opens, reports connected, and
+    /// answers nothing.
+    func testTheLivePadOpensTheBestInterfaceOnTheBus() throws {
+        let device = WLDevice()
+        let interfaces: [WLDevice.Candidate]
+        do {
+            interfaces = try device.availableInterfaces()
+        } catch {
+            throw XCTSkip("no pad: \(error.localizedDescription)")
+        }
+        for interface in interfaces {
+            print("candidate: registry id \(interface.registryID) · \(interface.transport)"
+                  + " · primary usage page \(String(format: "0x%04X", interface.primaryUsagePage))")
+        }
+
+        try device.connect()
+        defer { device.disconnect(reason: nil) }
+        let info = try XCTUnwrap(device.info)
+        print("opened: \(info.product) · \(info.transport) · registry id \(info.registryID)")
+
+        XCTAssertEqual(info.registryID, interfaces.first?.registryID,
+                       "connect must take the head of the preference order, not a Set's first element")
+        XCTAssertNotEqual(info.registryID, 0,
+                          "an interface that cannot be named cannot be skipped on a retry")
+    }
 }

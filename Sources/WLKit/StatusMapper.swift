@@ -66,6 +66,12 @@ public struct BridgeConfig: Sendable {
     public var manageKeymap = true
     public var pollInterval: TimeInterval = 2.5
     public var debounce: TimeInterval = 0.1
+    /// How long the bridge will go without hearing from the pad before it
+    /// asks. Only silence counts: traffic the bridge sends anyway resets the
+    /// clock, so on a pad that is being repainted this never sends anything.
+    /// See `BridgeController.heartbeatTick` for why polling the *provider* is
+    /// not enough on its own.
+    public var heartbeatInterval: TimeInterval = 15
 
     public init() {}
 

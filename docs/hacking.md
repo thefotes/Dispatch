@@ -704,6 +704,33 @@ The failure this section is about: the pad is lit and the Mac lists it, but the
 dial and keys do nothing and every write fails with **`0xE00002E2`**. Typically
 after a sleep/wake.
 
+### First: is it the pad, or is it us?
+
+There is a second failure that looks identical from the outside, and its
+recovery ladder is nothing like the one below. On 2026-09-08 the app spent a
+morning "connected" to a pad that had stopped listening overnight — and the
+ladder below would have had you restart the Mac for a bug that was ours.
+
+Three app-side faults, all now fixed, all worth knowing about because the
+symptom they produce is "the hardware is wedged":
+
+- **Nothing watched for sleep or wake.** The bus powers down under a handle
+  that stays non-nil, and macOS often never delivers the removal callback, so
+  `deviceConnected` stayed true and the reopen loop was never armed.
+- **Nothing tested the session.** `refresh()` returns at its fingerprint guard
+  when the picture has not changed, so an idle night wrote nothing to the pad
+  and so discovered nothing. A heartbeat now asks directly after ~15 s of
+  silence.
+- **An open counted as a connection.** The pad's BLE node advertises the same
+  vendor collection USB does, so a dead Bluetooth session opened just as
+  readily as a live cable — and the `sys.version` probe that would have caught
+  it was a `try?` whose result was discarded. The probe decides now, and the
+  cable outranks the air.
+
+So before you conclude the session is wedged kernel-side: if the panel says
+**disconnected** and keeps retrying, believe it — that is the app working. The
+ladder below is for a pad that will not come back at all.
+
 ### Decode the error code first
 
 `0xE00002E2` is **`kIOReturnNotPermitted`**. It is *not* `kIOReturnOverrun`,

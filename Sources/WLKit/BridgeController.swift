@@ -115,6 +115,15 @@ public final class BridgeController: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     private var reopenTask: Task<Void, Never>?
+    private var heartbeatTask: Task<Void, Never>?
+    private var sleepObserver: NSObjectProtocol?
+    private var wakeObserver: NSObjectProtocol?
+    /// When the pad last answered something. The heartbeat's clock.
+    private var lastDeviceContact: DispatchTime?
+    /// Guards `openDevice` against itself: a wake can land while the reopen
+    /// loop is mid-attempt, and two opens racing would tear down each other's
+    /// handle — `WLDevice.connect` starts by disconnecting.
+    private var opening = false
     private var lastFingerprint: String?
     private var issuedIDs = Set<Int>()
     private var warnedPermission = false
@@ -147,6 +156,7 @@ public final class BridgeController: ObservableObject {
             guard let self else { return }
             self.deviceConnected = false
             self.lastFingerprint = nil
+            self.lastDeviceContact = nil
             if self.isRunning { self.scheduleReopen() }
         }
         device.onTX = { [weak self] _, _, id in
@@ -188,6 +198,7 @@ public final class BridgeController: ObservableObject {
         if let warning = keyBindings.dialWarning { lastError = warning }
         await applyProviderDescription()
 
+        observeSleepWake()
         await openDevice()
         providerSubscription = provider.subscribe { [weak self] in
             Task { @MainActor in self?.schedule() }
@@ -203,6 +214,16 @@ public final class BridgeController: ObservableObject {
                 await self.refresh()
             }
         }
+
+        heartbeatTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                let interval = self.config.heartbeatInterval
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                if Task.isCancelled { break }
+                await self.heartbeatTick()
+            }
+        }
     }
 
     public func stop() async {
@@ -210,8 +231,11 @@ public final class BridgeController: ObservableObject {
         pollTask?.cancel(); pollTask = nil
         debounceTask?.cancel(); debounceTask = nil
         reopenTask?.cancel(); reopenTask = nil
+        heartbeatTask?.cancel(); heartbeatTask = nil
         providerSubscription?.cancel(); providerSubscription = nil
+        stopObservingSleepWake()
         lastFingerprint = nil
+        lastDeviceContact = nil
 
         // Switching off clears the lights but deliberately leaves the keymap
         // alone: rebinding is a flash write, and the keys light instantly on
@@ -261,96 +285,6 @@ public final class BridgeController: ObservableObject {
         return (nil, warning)
     }
 
-    // MARK: - Device
-
-    private func openDevice() async {
-        // Ask for Input Monitoring explicitly. hidapi-style opens just fail
-        // with a privilege violation without ever raising the prompt, which
-        // reads as a bug rather than a permission.
-        if IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted {
-            _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
-        }
-
-        do {
-            try device.connect()
-            deviceConnected = true
-            permissionDenied = false
-            warnedPermission = false
-            deviceName = device.info?.product ?? "Work Louder device"
-            lastError = nil
-        } catch {
-            deviceConnected = false
-            // Ask the API that knows about the grant rather than reading the
-            // error code, which says "not permitted" for a wedged pad too.
-            let granted = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
-            switch DeviceOpenFailure.classify(accessGranted: granted, message: error.localizedDescription) {
-            case .permissionMissing:
-                permissionDenied = true
-                if !warnedPermission {
-                    warnedPermission = true
-                    lastError = DeviceOpenFailure.permissionMissing.message
-                }
-            case .deviceUnavailable(let underlying):
-                permissionDenied = false
-                lastError = DeviceOpenFailure.deviceUnavailable(underlying).message
-            }
-            scheduleReopen()
-            return
-        }
-
-        if let version = try? await device.callAsync("sys.version"),
-           let dict = version as? [String: Any],
-           let text = dict["version"] as? String {
-            firmware = text
-        }
-        if let status = try? await device.callAsync("device.status"),
-           let dict = status as? [String: Any],
-           let percent = dict["battery"] as? Int {
-            let charging = (dict["is_charging"] as? Bool) == true
-            battery = "\(percent)%\(charging ? " ⚡" : "")"
-        }
-
-        await ensureKeymap()
-    }
-
-    /// Per-key lighting only works on keys bound to `KV_OAI_AG*` on the active
-    /// layer, and nothing reports a mismatch — `v.oai.thstatus` answers
-    /// `{"ok":1}` for a key it cannot light. So check rather than assume.
-    private func ensureKeymap() async {
-        do {
-            if config.manageKeymap {
-                _ = try await KeymapManager.apply(device)
-                keymapReady = true
-            } else {
-                let cfg = try await KeymapManager.read(device)
-                keymapReady = KeymapManager.isAgentKeymapApplied(cfg)
-                if !keymapReady {
-                    lastError = "The agent keys and the stack key are not bound to KV_OAI_AG00..AG06, so per-key colors will do nothing."
-                }
-            }
-        } catch {
-            keymapReady = false
-            lastError = "Keymap: \(error.localizedDescription)"
-        }
-    }
-
-    private func scheduleReopen() {
-        guard isRunning, reopenTask == nil else { return }
-        reopenTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                guard let self, self.isRunning else { return }
-                if self.deviceConnected { break }
-                await self.openDevice()
-                if self.deviceConnected {
-                    await self.forceRepaint()
-                    break
-                }
-            }
-            self?.reopenTask = nil
-        }
-    }
-
     // MARK: - Provider events
 
     private func schedule() {
@@ -381,7 +315,13 @@ public final class BridgeController: ObservableObject {
             lastError = error.localizedDescription
             return
         }
-        lastError = nil
+        // A good fetch clears the *provider's* trouble — but `lastError` is
+        // one channel and the device's trouble is on it too. A pad that is
+        // not answering is still not answering however healthy Herdr is, and
+        // wiping the reason every poll left the panel blank next to a bridge
+        // that was plainly not working. `openDevice` clears it on the way
+        // back in.
+        if deviceConnected { lastError = nil }
         // The order the keys — and `focusSlot`, and the panel mirror — see.
         // Identity unless `config.prioritizeAgentKeys` is set, in which case
         // the agents that want attention sort to the front so they keep a
@@ -453,6 +393,9 @@ public final class BridgeController: ObservableObject {
                     ambient: zone
                 )
             )
+            // Two answered round trips: the heartbeat has nothing to add for
+            // another interval.
+            noteDeviceContact()
         } catch {
             lastError = error.localizedDescription
             // A write failure this deep almost always means the HID session
@@ -744,5 +687,273 @@ public final class BridgeController: ObservableObject {
         if app.activate(options: []) { return }
         guard let url = app.bundleURL else { return }
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+    }
+}
+
+/// The pad session: opening one, proving it works, and rebuilding it when it
+/// stops.
+///
+/// Split off from the body above because it is a concern of its own —
+/// everything here is about the handle, not about what the lights mean. It
+/// stays in this file so it can keep reaching the controller's private state
+/// directly; the fuller extraction into a session type of its own is a
+/// refactor, not a bug fix.
+extension BridgeController {
+
+    // MARK: - Device
+
+    /// How many interfaces an open will work through before giving up and
+    /// waiting for the retry loop. The pad presents one per transport, so two
+    /// is the real number and this leaves room.
+    private static let maxOpenAttempts = 4
+
+    /// Opens the pad — and makes it answer before calling it connected.
+    ///
+    /// A successful `IOHIDDeviceOpen` only means macOS handed over the
+    /// interface. It says nothing about whether the pad behind it is
+    /// listening: a Bluetooth session that died in a sleep opens exactly as
+    /// readily as a live one, and the app would then sit there reporting
+    /// "connected" against a pad that ignores every write — which is what
+    /// toggling the bridge off and on used to do, over and over, while a
+    /// quit and relaunch fixed it by landing on the USB interface instead.
+    /// So the first round trip decides, and an interface that does not answer
+    /// is rejected and its neighbour tried in its place.
+    private func openDevice() async {
+        // Ask for Input Monitoring explicitly. hidapi-style opens just fail
+        // with a privilege violation without ever raising the prompt, which
+        // reads as a bug rather than a permission.
+        if IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted {
+            _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+        }
+
+        guard !opening else { return }
+        opening = true
+        defer { opening = false }
+
+        var rejected: Set<UInt64> = []
+        var silence: String?
+        for _ in 0..<Self.maxOpenAttempts {
+            do {
+                try device.connect(excluding: rejected)
+            } catch {
+                deviceConnected = false
+                report(openFailure: error)
+                scheduleReopen()
+                return
+            }
+
+            if let reason = await probeFailure() {
+                silence = reason
+                let interface = device.info?.registryID ?? 0
+                device.disconnect(reason: nil)
+                // An interface that cannot be named cannot be excluded, and
+                // asking again would just open the same silent one forever.
+                guard rejected.insert(interface).inserted else { break }
+                continue
+            }
+
+            deviceConnected = true
+            permissionDenied = false
+            warnedPermission = false
+            deviceName = device.info?.product ?? "Work Louder device"
+            lastError = nil
+            noteDeviceContact()
+
+            if let status = try? await device.callAsync("device.status"),
+               let dict = status as? [String: Any],
+               let percent = dict["battery"] as? Int {
+                let charging = (dict["is_charging"] as? Bool) == true
+                battery = "\(percent)%\(charging ? " ⚡" : "")"
+            }
+
+            await ensureKeymap()
+            return
+        }
+
+        deviceConnected = false
+        lastError = "The pad opened but never answered (\(silence ?? "no reply")). Retrying."
+        scheduleReopen()
+    }
+
+    /// One round trip against a freshly opened handle: nil when the pad
+    /// answered, the reason when it did not.
+    ///
+    /// Any reply counts, including one this app cannot parse — a firmware
+    /// that words `sys.version` differently is still a firmware that is
+    /// listening, and rejecting its interface over that would strand the pad
+    /// on a session that works.
+    private func probeFailure() async -> String? {
+        do {
+            let answer = try await device.callAsync("sys.version")
+            if let dict = answer as? [String: Any], let text = dict["version"] as? String {
+                firmware = text
+            }
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// Turns a failed open into something a reader can act on.
+    private func report(openFailure error: Error) {
+        // Ask the API that knows about the grant rather than reading the
+        // error code, which says "not permitted" for a wedged pad too.
+        let granted = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+        switch DeviceOpenFailure.classify(accessGranted: granted, message: error.localizedDescription) {
+        case .permissionMissing:
+            permissionDenied = true
+            if !warnedPermission {
+                warnedPermission = true
+                lastError = DeviceOpenFailure.permissionMissing.message
+            }
+        case .deviceUnavailable(let underlying):
+            permissionDenied = false
+            lastError = DeviceOpenFailure.deviceUnavailable(underlying).message
+        }
+    }
+
+    /// Per-key lighting only works on keys bound to `KV_OAI_AG*` on the active
+    /// layer, and nothing reports a mismatch — `v.oai.thstatus` answers
+    /// `{"ok":1}` for a key it cannot light. So check rather than assume.
+    private func ensureKeymap() async {
+        do {
+            if config.manageKeymap {
+                _ = try await KeymapManager.apply(device)
+                keymapReady = true
+            } else {
+                let cfg = try await KeymapManager.read(device)
+                keymapReady = KeymapManager.isAgentKeymapApplied(cfg)
+                if !keymapReady {
+                    lastError = "The agent keys and the stack key are not bound to KV_OAI_AG00..AG06, so per-key colors will do nothing."
+                }
+            }
+        } catch {
+            keymapReady = false
+            lastError = "Keymap: \(error.localizedDescription)"
+        }
+    }
+
+    private func scheduleReopen() {
+        guard isRunning, reopenTask == nil else { return }
+        reopenTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                guard let self, self.isRunning else { return }
+                if self.deviceConnected { break }
+                await self.openDevice()
+                if self.deviceConnected {
+                    await self.forceRepaint()
+                    break
+                }
+            }
+            self?.reopenTask = nil
+        }
+    }
+
+    // MARK: - Sleep and wake
+
+    /// A sleep is the one event that reliably breaks the HID session without
+    /// telling anybody.
+    ///
+    /// The bus powers down under a handle that stays non-nil, and macOS often
+    /// never delivers the removal callback for it: `isConnected` keeps
+    /// answering true, `onDisconnect` never fires, and the reopen loop is
+    /// never armed. Nothing notices, either, because `refresh()` only writes
+    /// when the rendered picture changes — an idle night never touches the
+    /// pad — and a stale handle takes key presses the same way it takes
+    /// writes, which is to say silently. The morning after, the app believes
+    /// it is talking to a pad that stopped listening hours ago, and only a
+    /// relaunch clears it.
+    ///
+    /// So: drop the handle on the way into the sleep, while the bus is still
+    /// there to close it cleanly, and build a fresh one on the way out.
+    private func observeSleepWake() {
+        let center = NSWorkspace.shared.notificationCenter
+        sleepObserver = center.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.systemWillSleep() }
+        }
+        wakeObserver = center.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in await self?.systemDidWake() }
+        }
+    }
+
+    private func stopObservingSleepWake() {
+        let center = NSWorkspace.shared.notificationCenter
+        if let sleepObserver { center.removeObserver(sleepObserver) }
+        if let wakeObserver { center.removeObserver(wakeObserver) }
+        sleepObserver = nil
+        wakeObserver = nil
+    }
+
+    /// Closes the session without arming the reopen loop: there is nothing to
+    /// reopen until the Mac is awake again, and retrying every 3 s across a
+    /// sleep would only bank failures to report on the other side.
+    func systemWillSleep() {
+        guard isRunning, device.isConnected else { return }
+        device.disconnect(reason: nil)
+        deviceConnected = false
+        lastFingerprint = nil
+        lastDeviceContact = nil
+    }
+
+    /// Opens a fresh session rather than trusting the one from before the
+    /// sleep — belt and braces on `systemWillSleep`, which a sleep that never
+    /// delivered its notification (or delivered it too late for the close to
+    /// land) leaves holding a handle that looks open and is not.
+    func systemDidWake() async {
+        guard isRunning else { return }
+        if device.isConnected { device.disconnect(reason: nil) }
+        deviceConnected = false
+        lastFingerprint = nil
+        lastDeviceContact = nil
+        // Straight to an open rather than `scheduleReopen()`, which sleeps its
+        // 3 s before the first try: the pad is usually already back by the
+        // time the wake notification lands, and this is the difference
+        // between a pad that is lit when you look at it and one that lights a
+        // few seconds later. `openDevice` arms the retry loop itself if the
+        // bus is not back yet.
+        await openDevice()
+        if deviceConnected { await forceRepaint() }
+    }
+
+    // MARK: - Heartbeat
+
+    /// Proves the session is alive on a schedule of its own.
+    ///
+    /// Polling the provider is not that proof. `refresh()` runs every couple
+    /// of seconds but returns at the fingerprint guard when the picture has
+    /// not changed, so a system whose agents are all idle never writes to the
+    /// pad at all — and a session that died an hour ago is indistinguishable
+    /// from one with nothing to say. This is the backstop that tells them
+    /// apart, and it catches every wedge, not just the sleep-shaped ones.
+    ///
+    /// A failed round trip drops the handle and hands over to the reopen
+    /// loop, the same route `apply()`'s write failure takes.
+    func heartbeatTick() async {
+        guard isRunning, deviceConnected else { return }
+        // Traffic the bridge sent anyway counts as proof: on a pad that is
+        // being repainted, this never sends a thing.
+        if let last = lastDeviceContact, last + config.heartbeatInterval > .now() { return }
+        await probeLiveness()
+    }
+
+    /// The heartbeat's round trip, without the "has it been quiet long
+    /// enough" question in front of it.
+    func probeLiveness() async {
+        guard deviceConnected else { return }
+        if let reason = await probeFailure() {
+            lastError = "The pad stopped answering (\(reason)). Reconnecting."
+            device.disconnect(reason: "the pad stopped answering")
+        } else {
+            noteDeviceContact()
+        }
+    }
+
+    private func noteDeviceContact() {
+        lastDeviceContact = .now()
     }
 }
