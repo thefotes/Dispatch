@@ -265,14 +265,28 @@ With two or more instances:
 - The `{"action": "herdr.next_instance"}` binding flips between instances by
   hand — the manual override, and the only mechanism when Accessibility is
   off.
+- The **dial crosses machines**. Stepping past the end of the active
+  machine's spaces (or agents) spills onto the next machine in config order
+  and lands on its first entry — stepping backwards off the start walks the
+  other way, landing on the previous machine's last entry — the same
+  machine-scoped navigation Herdr 0.9's sidebar pane does. Tab cycling stays
+  within the active machine's window, since it never raises anything.
 - The active instance's agents take the pad's agent keys first; the rest fill
   the remaining slots. Every agent stays counted in the underglow.
 - A dead remote never blanks the local pad: its agents drop out and the
   panel names the failure, while the local instance keeps working.
 
 A remote instance's socket has to be forwarded locally before the app can
-speak to it — OpenSSH forwards a Unix socket to a Unix socket, giving a local
-path that speaks Herdr's byte-identical protocol:
+speak to it. `scripts/herdr-tunnel.sh` keeps that forward up — reconnecting
+after sleep, restarts, and SSH drops — and installs itself as a LaunchAgent:
+
+```bash
+./scripts/herdr-tunnel.sh --install jarvis
+# forwards jarvis:$HOME/.config/herdr/herdr.sock to $TMPDIR/herdr-jarvis.sock,
+# then prints the "instances" entry to paste into config.json
+```
+
+The one-command alternative, without keepalive:
 
 ```bash
 ssh -f -N -o ExitOnForwardFailure=yes \
@@ -280,9 +294,7 @@ ssh -f -N -o ExitOnForwardFailure=yes \
 ```
 
 Keep forwarded sockets under `$TMPDIR` — macOS caps Unix socket paths at 104
-bytes, so a path under the repo will fail to connect. Run that command from a
-launchd agent (or leave a terminal open) until the app manages the tunnel
-itself.
+bytes, so a path under the repo will fail to connect.
 
 | variable | what it overrides |
 |---|---|

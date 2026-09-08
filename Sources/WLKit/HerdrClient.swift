@@ -444,6 +444,29 @@ public struct HerdrClient: Sendable {
         return agents[wrap(index + step, into: agents.count)]
     }
 
+    /// The agent `step` places from the focused one in sidebar order, or nil
+    /// when the step runs off either end of the list without wrapping — the
+    /// spill signal `RoutingProvider` uses to hand the turn to the next
+    /// machine. Nil too when nothing is focused.
+    public static func steppedAgent(in agents: [HerdrAgent], step: Int) -> HerdrAgent? {
+        guard let index = agents.firstIndex(where: \.focused) else { return nil }
+        let target = index + step
+        guard agents.indices.contains(target) else { return nil }
+        return agents[target]
+    }
+
+    /// The workspace `step` places from the focused one in `number` order,
+    /// or nil when the step runs off either end of the list without
+    /// wrapping — same spill signal as `steppedAgent`. Nil too when nothing
+    /// is focused.
+    public static func steppedWorkspace(in spaces: [HerdrWorkspace], step: Int) -> HerdrWorkspace? {
+        let ordered = spaces.sorted { $0.number < $1.number }
+        guard let index = ordered.firstIndex(where: \.focused) else { return nil }
+        let target = index + step
+        guard ordered.indices.contains(target) else { return nil }
+        return ordered[target]
+    }
+
     /// The workspace `step` places from the focused one in `number` order,
     /// wrapping. Nil when nothing is focused or there is only one workspace.
     public static func adjacentWorkspace(in spaces: [HerdrWorkspace], step: Int) -> HerdrWorkspace? {

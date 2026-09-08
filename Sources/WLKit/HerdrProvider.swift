@@ -128,6 +128,70 @@ public final class HerdrProvider: Provider, @unchecked Sendable {
         }
     }
 
+    /// One dial turn confined to this machine. Returns false when the step
+    /// ran off either end of the machine's list without moving focus — the
+    /// signal `RoutingProvider` uses to spill the turn onto the next
+    /// machine. A machine with nothing focused treats the turn as entering
+    /// it: the first (or last) entity is focused instead.
+    ///
+    /// "tab" and unrecognized modes never cross machines, so they dial and
+    /// report handled, exactly as `dial` would.
+    public func stepWithinMachine(_ step: Int, mode: String) async throws -> Bool {
+        switch mode {
+        case "agent":
+            let agents = try await client.listAgents(timeout: options.statusTimeout)
+            guard agents.first(where: \.focused) != nil else {
+                try await landOnAgent(in: agents, step: step)
+                return true
+            }
+            guard let next = HerdrClient.steppedAgent(in: agents, step: step),
+                  let target = next.focusTarget
+            else { return false }
+            try await client.focusAgent(target)
+            return true
+        case "space", "workspace":
+            let spaces = try await client.listWorkspaces()
+            guard spaces.first(where: \.focused) != nil else {
+                try await landOnWorkspace(in: spaces, step: step)
+                return true
+            }
+            guard let next = HerdrClient.steppedWorkspace(in: spaces, step: step)
+            else { return false }
+            try await client.focusWorkspace(next.workspaceID)
+            return true
+        default:
+            try await dial(step, mode: mode)
+            return true
+        }
+    }
+
+    /// Where a cross-machine step lands: this machine's first entity for
+    /// `mode` when `step` is positive, its last when negative — matching
+    /// which end the previous machine's list was walked off.
+    public func landFromOtherMachine(_ step: Int, mode: String) async throws {
+        switch mode {
+        case "agent":
+            try await landOnAgent(in: try await client.listAgents(timeout: options.statusTimeout), step: step)
+        case "space", "workspace":
+            try await landOnWorkspace(in: try await client.listWorkspaces(), step: step)
+        default:
+            break
+        }
+    }
+
+    private func landOnAgent(in agents: [HerdrAgent], step: Int) async throws {
+        guard let agent = step >= 0 ? agents.first : agents.last,
+              let target = agent.focusTarget
+        else { return }
+        try await client.focusAgent(target)
+    }
+
+    private func landOnWorkspace(in spaces: [HerdrWorkspace], step: Int) async throws {
+        let ordered = spaces.sorted { $0.number < $1.number }
+        guard let space = step >= 0 ? ordered.first : ordered.last else { return }
+        try await client.focusWorkspace(space.workspaceID)
+    }
+
     public func inject(_ text: String) async throws {
         guard let agent = try await client.focusedAgent(), let pane = agent.paneID else {
             throw HerdrError.api("Nothing has focus in Herdr right now.")

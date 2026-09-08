@@ -258,6 +258,111 @@ final class RoutingProviderTests: XCTestCase {
         XCTAssertTrue(local.focusCalls.isEmpty, "the raw id never reaches any child")
     }
 
+    // MARK: - Cross-machine dial
+
+    /// Dial steps stay within the active machine while there is room — the
+    /// turn goes through `stepWithinMachine`, and the neighbour is untouched.
+    func testDialStepsStayWithinTheActiveMachine() async throws {
+        let (routing, local, jarvis) = makeRouting()
+        local.stepResult = true
+        try await routing.dial(1, mode: "space")
+        XCTAssertEqual(local.stepCalls.count, 1)
+        XCTAssertTrue(local.dialCalls.isEmpty, "the routing path never plain-dials the active child")
+        XCTAssertTrue(jarvis.stepCalls.isEmpty)
+        XCTAssertTrue(jarvis.landCalls.isEmpty)
+        XCTAssertEqual(routing.activeInstanceID, "local")
+    }
+
+    /// A step off the end of the active machine's list spills onto the next
+    /// machine in config order, landing on its first entity, raising that
+    /// machine's terminal, and making it the active instance.
+    func testSteppingOffTheEndSpillsOntoTheNextMachine() async throws {
+        let (routing, local, jarvis) = makeRouting()
+        let raisedFor = Box<String>()
+        routing.onFocusInstance = { raisedFor.set($0) }
+        local.stepResult = false
+        try await routing.dial(1, mode: "space")
+        XCTAssertEqual(local.stepCalls.count, 1)
+        XCTAssertEqual(jarvis.landCalls.count, 1)
+        XCTAssertEqual(jarvis.landCalls.first?.step, 1, "the landing end matches the step direction")
+        XCTAssertEqual(routing.activeInstanceID, "jarvis")
+        XCTAssertEqual(raisedFor.current, "jarvis")
+    }
+
+    /// Stepping backwards off the start of the list walks to the previous
+    /// machine and lands on its last entity.
+    func testSteppingBackwardsOffTheStartLandsOnThePreviousMachinesLast() async throws {
+        let (routing, local, jarvis) = makeRouting()
+        routing.setActiveInstance("jarvis")
+        jarvis.stepResult = false
+        try await routing.dial(-1, mode: "space")
+        XCTAssertEqual(local.landCalls.count, 1)
+        XCTAssertEqual(local.landCalls.first?.step, -1)
+        XCTAssertEqual(routing.activeInstanceID, "local")
+    }
+
+    /// Tab cycling is a within-window gesture and must never switch machines.
+    func testTabDialNeverCrossesMachines() async throws {
+        let (routing, local, jarvis) = makeRouting()
+        try await routing.dial(1, mode: "tab")
+        XCTAssertEqual(local.dialCalls.count, 1)
+        XCTAssertTrue(local.stepCalls.isEmpty)
+        XCTAssertTrue(jarvis.landCalls.isEmpty)
+        XCTAssertEqual(routing.activeInstanceID, "local")
+    }
+
+    /// A machine that cannot answer does not eat the turn: the spill walks
+    /// past it to the following machine.
+    func testADeadMachineIsWalkedPast() async throws {
+        let ghost = HerdrInstance(id: "ghost", name: "Ghost", socketPath: "/tmp/ghost.sock")
+        let localFake = FakeProvider()
+        localFake.stepResult = false
+        let jarvisFake = FakeProvider()
+        jarvisFake.landError = HerdrError.timeout("workspace.focus")
+        let ghostFake = FakeProvider()
+        let routing = RoutingProvider(children: [
+            (instance: local, provider: localFake),
+            (instance: jarvis, provider: jarvisFake),
+            (instance: ghost, provider: ghostFake)
+        ])
+        try await routing.dial(1, mode: "agent")
+        XCTAssertEqual(jarvisFake.landCalls.count, 1)
+        XCTAssertEqual(ghostFake.landCalls.count, 1)
+        XCTAssertEqual(routing.activeInstanceID, "ghost")
+    }
+
+    /// If no machine can take the turn, the last failure surfaces instead of
+    /// being swallowed.
+    func testNoMachineLandingRethrowsTheLastError() async throws {
+        let (routing, local, jarvis) = makeRouting()
+        local.stepResult = false
+        jarvis.landError = HerdrError.timeout("workspace.focus")
+        do {
+            try await routing.dial(1, mode: "space")
+            XCTFail("a turn no machine could take must not vanish")
+        } catch {}
+    }
+
+    /// A single instance cannot cross anything: it dials exactly as before.
+    func testASingleInstanceDialsDirectly() async throws {
+        let solo = HerdrInstance(id: "local", name: "Local", socketPath: "/tmp/local.sock")
+        let fake = FakeProvider()
+        let routing = RoutingProvider(children: [(instance: solo, provider: fake)])
+        try await routing.dial(1, mode: "space")
+        XCTAssertEqual(fake.dialCalls.count, 1)
+        XCTAssertTrue(fake.stepCalls.isEmpty)
+    }
+
+    /// When the active machine cannot answer at all, the turn still moves —
+    /// to the next machine, not into an error the user never asked for.
+    func testAnUnanswerableActiveMachineSpillsTheTurn() async throws {
+        let (routing, local, jarvis) = makeRouting()
+        local.stepError = HerdrError.timeout("workspace.list")
+        try await routing.dial(1, mode: "space")
+        XCTAssertEqual(jarvis.landCalls.count, 1)
+        XCTAssertEqual(routing.activeInstanceID, "jarvis")
+    }
+
     // MARK: - Subscribe fan-out
 
     func testAnyChildChangingFiresTheBridge() {

@@ -255,8 +255,69 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
         onFocusInstance?(instanceID)
     }
 
+    /// Dial turns cross machines. Stepping walks the active machine's own
+    /// list first; a turn that runs off either end of it spills onto the
+    /// next machine in config order (previous machine when stepping
+    /// backwards), landing on that machine's first (or last) entity — the
+    /// same machine-scoped navigation Herdr 0.9's sidebar pane does.
+    ///
+    /// "tab" is exempt: cycling tabs is a within-window gesture, and a
+    /// window switcher hiding behind it would raise a terminal you did not
+    /// ask for. A single instance cannot cross anything, so it dials exactly
+    /// as before.
+    ///
+    /// A machine that cannot answer — the tunnel down, the request timing
+    /// out — is walked past the same way an empty list would be: the turn
+    /// tries the following machine rather than dying, because a dead remote
+    /// must not eat dial turns any more than it eats status polls. If no
+    /// machine lands, the last error is rethrown so the panel can say why.
     public func dial(_ step: Int, mode: String) async throws {
-        try await activeChild().provider.dial(step, mode: mode)
+        guard Self.dialCrossesMachines(mode: mode), children.count > 1 else {
+            try await activeChild().provider.dial(step, mode: mode)
+            return
+        }
+
+        let start = lock.withLock { activeIndex }
+        var lastError: Error?
+        for offset in 0..<children.count {
+            let index = Self.wrapIndex(start + (step >= 0 ? offset : -offset), count: children.count)
+            let child = lock.withLock { children[index] }
+            do {
+                if offset == 0 {
+                    if try await child.provider.stepWithinMachine(step, mode: mode) { return }
+                } else {
+                    try await child.provider.landFromOtherMachine(step, mode: mode)
+                    activate(index: index, instanceID: child.instance.id)
+                    return
+                }
+            } catch {
+                lastError = error
+            }
+        }
+        if let lastError { throw lastError }
+    }
+
+    /// Only the entity-level modes cross machines today.
+    private static func dialCrossesMachines(mode: String) -> Bool {
+        mode == "agent" || mode == "space" || mode == "workspace"
+    }
+
+    private static func wrapIndex(_ index: Int, count: Int) -> Int {
+        ((index % count) + count) % count
+    }
+
+    /// Makes `index` the active instance and tells everyone — the change
+    /// notification repaints the keys (the active instance's agents take the
+    /// key slots first), and the focus hook raises the terminal window that
+    /// belongs to the machine just landed on.
+    private func activate(index: Int, instanceID: String) {
+        let changed: Bool = lock.withLock {
+            guard activeIndex != index else { return false }
+            activeIndex = index
+            return true
+        }
+        if changed { changeNotifier.notify() }
+        onFocusInstance?(instanceID)
     }
 
     public func inject(_ text: String) async throws {

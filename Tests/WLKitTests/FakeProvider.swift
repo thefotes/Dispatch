@@ -13,6 +13,12 @@ final class FakeProvider: Provider, @unchecked Sendable {
     var injectError: Error?
     var joystickCalls: [Pad.JoystickDirection] = []
     var performedActions: [String] = []
+    var stepCalls: [(step: Int, mode: String)] = []
+    var landCalls: [(step: Int, mode: String)] = []
+    /// nil = the protocol default: dial and report the turn handled.
+    var stepResult: Bool?
+    var stepError: Error?
+    var landError: Error?
     var descriptionToReturn = ProviderDescription()
     private var onChangeCallback: (@Sendable () -> Void)?
 
@@ -28,6 +34,20 @@ final class FakeProvider: Provider, @unchecked Sendable {
 
     func dial(_ step: Int, mode: String) async throws {
         dialCalls.append((step, mode))
+    }
+
+    func stepWithinMachine(_ step: Int, mode: String) async throws -> Bool {
+        stepCalls.append((step, mode))
+        if let stepError { throw stepError }
+        if let stepResult { return stepResult }
+        try await dial(step, mode: mode)
+        return true
+    }
+
+    func landFromOtherMachine(_ step: Int, mode: String) async throws {
+        landCalls.append((step, mode))
+        if let landError { throw landError }
+        try await dial(step, mode: mode)
     }
 
     func inject(_ text: String) async throws {
