@@ -403,4 +403,57 @@ final class KeyBindingsTests: XCTestCase {
         XCTAssertEqual(HerdrInstance(id: "jarvis", name: "Jarvis", socketPath: "/tmp").calibrationMarker,
                        "⟦wl:jarvis⟧")
     }
+    // MARK: - agent_keys default, and the cross-machine dial gate
+
+    /// One machine keeps sidebar order: it is stable, and keys do not move
+    /// as statuses change.
+    func testAgentKeysDefaultToSidebarOrderWithOneInstance() {
+        XCTAssertFalse(parse("{}").prioritizeAgentKeys)
+        let one = parse(#"{"herdr": {"instances": [{"id": "l", "socket_path": "/tmp/a.sock"}]}}"#)
+        XCTAssertFalse(one.prioritizeAgentKeys)
+    }
+
+    /// Two machines default to priority order. Sidebar order is
+    /// active-instance-first and there are only six agent key slots, so a
+    /// machine with six or more agents would take every one and hide the
+    /// other machine entirely.
+    func testAgentKeysDefaultToPriorityWithMoreThanOneInstance() {
+        let two = parse(#"""
+            {"herdr": {"instances": [
+                {"id": "local",  "socket_path": "/tmp/a.sock"},
+                {"id": "jarvis", "socket_path": "/tmp/b.sock"}
+            ]}}
+        """#)
+        XCTAssertTrue(two.prioritizeAgentKeys)
+    }
+
+    /// An explicit setting always wins over the instance-count default,
+    /// both ways.
+    func testExplicitAgentKeysBeatsTheDefault() {
+        let forced = parse(#"""
+            {"agent_keys": "sidebar", "herdr": {"instances": [
+                {"id": "local",  "socket_path": "/tmp/a.sock"},
+                {"id": "jarvis", "socket_path": "/tmp/b.sock"}
+            ]}}
+        """#)
+        XCTAssertFalse(forced.prioritizeAgentKeys, "explicit sidebar survives two instances")
+        XCTAssertTrue(parse(#"{"agent_keys": "priority"}"#).prioritizeAgentKeys,
+                      "explicit priority survives one instance")
+    }
+
+    func testDialDoesNotCrossMachinesUnlessAsked() {
+        XCTAssertFalse(parse("{}").dialCrossesMachines)
+        XCTAssertFalse(parse(#"{"herdr": {"tools": ["claude"]}}"#).dialCrossesMachines)
+    }
+
+    func testDialCrossesMachinesWhenConfigured() {
+        XCTAssertTrue(parse(#"{"herdr": {"dial_crosses_machines": true}}"#).dialCrossesMachines)
+    }
+
+    /// A non-boolean is not an opt-in — the flag stays off rather than
+    /// being coerced from a truthy-looking string.
+    func testANonBooleanCrossFlagIsIgnored() {
+        XCTAssertFalse(parse(#"{"herdr": {"dial_crosses_machines": "yes"}}"#).dialCrossesMachines)
+    }
+
 }

@@ -27,6 +27,20 @@ public protocol Provider: Sendable {
     /// enum, so a future provider can offer its own without a protocol change.
     func dial(_ step: Int, mode: String) async throws
 
+    /// One dial turn confined to this provider's own machine. Returns false
+    /// when the step ran off either end of the machine's list without moving
+    /// focus — the signal a routing layer uses to spill the turn onto the
+    /// next machine. The default dials and reports the turn as handled,
+    /// which keeps single-provider behaviour exactly as it was.
+    func stepWithinMachine(_ step: Int, mode: String) async throws -> Bool
+
+    /// Where a cross-machine step lands: the first entity for `mode` when
+    /// `step` is positive, the last when negative. Returns false when this
+    /// machine has nothing focusable — the routing layer then walks past it
+    /// as it would a dead machine. The default dials and reports a landing,
+    /// which suits a provider that does no routing of its own.
+    func landFromOtherMachine(_ step: Int, mode: String) async throws -> Bool
+
     /// Injects text into whatever "focused" means for this provider.
     func inject(_ text: String) async throws
 
@@ -48,6 +62,18 @@ public protocol Provider: Sendable {
     /// focus change — debounced by the caller, not here. Call `cancel()` on
     /// the returned token to stop.
     func subscribe(_ onChange: @escaping @Sendable () -> Void) -> ProviderSubscription
+}
+
+public extension Provider {
+    func stepWithinMachine(_ step: Int, mode: String) async throws -> Bool {
+        try await dial(step, mode: mode)
+        return true
+    }
+
+    func landFromOtherMachine(_ step: Int, mode: String) async throws -> Bool {
+        try await dial(step, mode: mode)
+        return true
+    }
 }
 
 /// A provider's static capabilities: its lighting palette and the dial

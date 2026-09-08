@@ -1,5 +1,24 @@
 import Foundation
 
+/// The slice of Herdr's socket API `HerdrProvider` drives. Exists so
+/// `HerdrProvider`'s dial navigation can be tested against a fake — the
+/// boundary math there decides which machine a dial turn lands on, and a
+/// live socket cannot rehearse that. `HerdrClient` is the real thing.
+public protocol HerdrServicing: Sendable {
+    func listAgents(timeout: TimeInterval) async throws -> [HerdrAgent]
+    func listWorkspaces() async throws -> [HerdrWorkspace]
+    func focusAgent(_ target: String) async throws
+    func focusWorkspace(_ workspaceID: String) async throws
+    func focusedAgent() async throws -> HerdrAgent?
+    func focusedPaneID() async throws -> String?
+    func focusPane(direction: HerdrClient.PaneDirection) async throws
+    func createWorkspace() async throws
+    func cycleTabs(_ step: Int) async throws
+    func splitPane(direction: String) async throws
+    func sendText(paneID: String, text: String) async throws
+    func sendKeys(paneID: String, keys: [String]) async throws
+}
+
 /// Client for the Herdr socket API: newline-delimited JSON over a Unix socket.
 ///
 /// The server handles **exactly one request per connection** and then closes,
@@ -178,7 +197,7 @@ public enum HerdrError: LocalizedError {
     }
 }
 
-public struct HerdrClient: Sendable {
+public struct HerdrClient: Sendable, HerdrServicing {
 
     /// The socket this instance talks to. Each `HerdrClient` instance is one
     /// Herdr server; multiple instances (a local one and a forwarded remote
@@ -442,6 +461,29 @@ public struct HerdrClient: Sendable {
               let index = agents.firstIndex(where: \.focused)
         else { return nil }
         return agents[wrap(index + step, into: agents.count)]
+    }
+
+    /// The agent `step` places from the focused one in sidebar order, or nil
+    /// when the step runs off either end of the list without wrapping — the
+    /// spill signal `RoutingProvider` uses to hand the turn to the next
+    /// machine. Nil too when nothing is focused.
+    public static func steppedAgent(in agents: [HerdrAgent], step: Int) -> HerdrAgent? {
+        guard let index = agents.firstIndex(where: \.focused) else { return nil }
+        let target = index + step
+        guard agents.indices.contains(target) else { return nil }
+        return agents[target]
+    }
+
+    /// The workspace `step` places from the focused one in `number` order,
+    /// or nil when the step runs off either end of the list without
+    /// wrapping — same spill signal as `steppedAgent`. Nil too when nothing
+    /// is focused.
+    public static func steppedWorkspace(in spaces: [HerdrWorkspace], step: Int) -> HerdrWorkspace? {
+        let ordered = spaces.sorted { $0.number < $1.number }
+        guard let index = ordered.firstIndex(where: \.focused) else { return nil }
+        let target = index + step
+        guard ordered.indices.contains(target) else { return nil }
+        return ordered[target]
     }
 
     /// The workspace `step` places from the focused one in `number` order,

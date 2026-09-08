@@ -100,6 +100,13 @@ cat > "$INSPECTOR/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# This project lives in an iCloud-synced folder, and the file provider stamps
+# com.apple.FinderInfo on the bundle directories. codesign refuses to seal a
+# bundle carrying one - "resource fork, Finder information, or similar detritus
+# not allowed" - and the failure lands on --verify, after the signing looked
+# like it worked. Strip them immediately before signing.
+xattr -cr "$APP"
+
 echo "==> signing"
 IDENTITY="${WL_SIGN_IDENTITY:-}"
 if [[ -z "$IDENTITY" ]]; then
