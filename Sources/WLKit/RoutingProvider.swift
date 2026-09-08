@@ -73,6 +73,10 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
     private let lock = NSLock()
     private var children: [Child]
     private var activeIndex: Int
+    /// Whether a dial turn may spill onto another machine. Off unless
+    /// `config.json` asks for it — see `KeyBindings.dialCrossesMachines`
+    /// for why the honest default on Herdr 0.9 is off.
+    private let crossesMachines: Bool
     private let changeNotifier = ProviderChangeNotifier()
 
     /// Called after a namespaced focus target routed to a specific instance —
@@ -91,8 +95,13 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
     private var _lastError: String?
 
     /// `children` is config order; the first is the default active instance.
-    public init(children: [(instance: HerdrInstance, provider: Provider)]) {
+    /// `crossesMachines` opts the dial into spilling between machines.
+    public init(
+        children: [(instance: HerdrInstance, provider: Provider)],
+        crossesMachines: Bool = false
+    ) {
         precondition(!children.isEmpty, "RoutingProvider needs at least one instance")
+        self.crossesMachines = crossesMachines
         self.children = children.map {
             Child(instance: $0.instance, provider: $0.provider, backoffUntil: nil,
                   timeoutStreak: 0, lastFailure: nil)
@@ -255,7 +264,15 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
         onFocusInstance?(instanceID)
     }
 
-    /// Dial turns cross machines. Stepping walks the active machine's own
+    /// Dial turns cross machines **when `crossesMachines` is set**; without
+    /// it the turn goes straight to the active machine and this whole path
+    /// is inert, which is the default. The gate is not about the navigation
+    /// being unfinished — it is that Herdr 0.9 cannot show the result. Its
+    /// socket API has no machine concept, so a crossing turn moves focus on
+    /// a server whose view the client never switches to, and the dial reads
+    /// as if it ate the turn. See `docs/herdr-machine-focus-request.md`.
+    ///
+    /// Stepping walks the active machine's own
     /// list first; a turn that runs off either end of it spills onto the
     /// next machine in config order (previous machine when stepping
     /// backwards), landing on that machine's first (or last) entity — the
@@ -276,7 +293,7 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
     /// If no machine lands, the last error is rethrown so the panel can say
     /// why.
     public func dial(_ step: Int, mode: String) async throws {
-        guard Self.dialCrossesMachines(mode: mode), children.count > 1 else {
+        guard crossesMachines, Self.modeCanCrossMachines(mode), children.count > 1 else {
             try await activeChild().provider.dial(step, mode: mode)
             return
         }
@@ -303,7 +320,7 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
     }
 
     /// Only the entity-level modes cross machines today.
-    private static func dialCrossesMachines(mode: String) -> Bool {
+    private static func modeCanCrossMachines(_ mode: String) -> Bool {
         mode == "agent" || mode == "space" || mode == "workspace"
     }
 

@@ -260,25 +260,60 @@ With two or more instances:
   turns it red, no matter which one you are looking at.
 - Pad input (agent keys, dial, joystick, macros, provider actions) goes to
   whichever instance's terminal window is frontmost. Detection uses
-  **Accessibility** (already required for the wide key) to tell the two
-  Ghostty windows apart; without that grant it degrades to manual switching.
+  **Accessibility** (already required for the wide key) to tell two Ghostty
+  windows apart; without that grant it degrades to manual switching. Under
+  Herdr 0.9, which groups every machine into one window, there are no two
+  windows to tell apart — so detection cannot fire and switching is manual.
 - The `{"action": "herdr.next_instance"}` binding flips between instances by
-  hand — the manual override, and the only mechanism when Accessibility is
-  off.
-- The **dial crosses machines**. Stepping past the end of the active
-  machine's spaces (or agents) spills onto the next machine in config order
-  and lands on its first entry — stepping backwards off the start walks the
-  other way, landing on the previous machine's last entry — the same
-  machine-scoped navigation Herdr 0.9's sidebar pane does. Tab cycling stays
-  within the active machine's window, since it never raises anything.
-- The active instance's agents take the pad's agent keys first; the rest fill
-  the remaining slots. Every agent stays counted in the underglow.
+  hand. On 0.9 it is not a fallback but **the** way to change which machine
+  the pad drives, so bind it if you run more than one.
+- `"agent_keys"` defaults to `"priority"` once a second instance is
+  configured, and to `"sidebar"` before that. This matters: the pad has six
+  agent key slots, the merged list is active-instance-first, and a machine
+  with six or more agents would otherwise take every slot and leave the
+  other machine dark. Priority order keeps what needs attention on the keys
+  no matter which box it is on. Set `"agent_keys"` explicitly to override.
+- Six keys is a real ceiling. With two busy machines the **underglow** is
+  the only thing that sees every agent; the keys show the best six.
 - A dead remote never blanks the local pad: its agents drop out and the
   panel names the failure, while the local instance keeps working.
 
+### What does not work on Herdr 0.9
+
+Reading across machines works. **Navigating** to another machine does not,
+and cannot be fixed from this side.
+
+0.9's socket API has no concept of a machine — 111 methods, not one of them
+machine-aware — and the sidebar's machine grouping is client-side state with
+no API surface. Focus is per-server, so both servers report a focused entity
+at once. A remote `agent.focus` or `workspace.focus` succeeds and moves that
+server's focus, but nothing can ask the client to switch the machine it
+displays. The command lands; the window never follows.
+
+That affects two things:
+
+- **Remote agent keys.** A key bound to an agent on another machine lights
+  correctly and issues the right call, but will not bring that agent on
+  screen.
+- **The cross-machine dial**, which is therefore **off by default**. Turn it
+  on with `"herdr": {"dial_crosses_machines": true}` and a turn past the end
+  of the active machine's spaces (or agents) spills onto the next machine in
+  config order, landing on its first entry — backwards walks the other way
+  onto the previous machine's last. Tab cycling never crosses. With it off,
+  the dial stays within the active machine, which is what you want until the
+  view can follow: otherwise the turn changes a machine you cannot see and
+  reads as a dial that did nothing.
+
+`docs/herdr-machine-focus-request.md` is the upstream request that would
+unblock both. When it lands, the flag becomes the default.
+
 A remote instance's socket has to be forwarded locally before the app can
-speak to it. `scripts/herdr-tunnel.sh` keeps that forward up — reconnecting
-after sleep, restarts, and SSH drops — and installs itself as a LaunchAgent:
+speak to it. Herdr 0.9 already forwards one per machine, at
+`$TMPDIR/herdr-ssh-<client-pid>-<machine-id>.sock` (the id is the one
+`herdr machine list` prints) — but the client pid is in the path, so it
+changes every restart and cannot be written into `config.json`.
+`scripts/herdr-tunnel.sh` gives you a **stable** path instead, and keeps it
+up across sleep, restarts, and SSH drops as a LaunchAgent:
 
 ```bash
 ./scripts/herdr-tunnel.sh --install jarvis

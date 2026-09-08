@@ -67,7 +67,8 @@ enum ProviderFactory {
             ))
             return (instance, provider)
         }
-        let routing = RoutingProvider(children: children)
+        let routing = RoutingProvider(children: children,
+                                      crossesMachines: bindings.dialCrossesMachines)
         routingProvider = routing
         return routing
     }

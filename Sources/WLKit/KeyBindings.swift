@@ -145,6 +145,24 @@ public struct KeyBindings: Sendable, Equatable {
     /// on every `start()`.
     public private(set) var prioritizeAgentKeys: Bool
 
+    /// Whether a dial turn that runs off the end of the active machine's
+    /// list spills onto the next machine. Set with `"herdr":
+    /// {"dial_crosses_machines": true}`; **off by default**, and off is the
+    /// honest default on Herdr 0.9.
+    ///
+    /// The navigation itself works — the focus call reaches the other
+    /// machine's server and moves its focus. What is missing is any way to
+    /// make the *client* show it. 0.9's socket API has no concept of a
+    /// machine (111 methods, none of them machine-aware), and machine
+    /// grouping in the sidebar is client-side state with no API surface. So
+    /// a crossing turn changes focus on a machine the window will not
+    /// switch to, and reads as a dial that swallowed the turn.
+    ///
+    /// Kept behind a flag rather than deleted: the logic is correct and
+    /// tested, and the day Herdr exposes a machine focus this becomes a
+    /// one-line default change. See `docs/herdr-machine-focus-request.md`.
+    public private(set) var dialCrossesMachines: Bool
+
     /// Set when `"dial"` was present but the wrong JSON shape (not a string,
     /// or an empty one) — a name that is simply unrecognized by the active
     /// provider is a `BridgeController`-time concern, not this file's.
@@ -168,7 +186,8 @@ public struct KeyBindings: Sendable, Equatable {
         dialSelection: DialSelection = .effort,
         dialWarning: String? = nil,
         providerSpec: ProviderSpec? = nil,
-        prioritizeAgentKeys: Bool = false
+        prioritizeAgentKeys: Bool = false,
+        dialCrossesMachines: Bool = false
     ) {
         self.actions = actions
         self.claudeEfforts = claudeEfforts
@@ -179,6 +198,7 @@ public struct KeyBindings: Sendable, Equatable {
         self.dialWarning = dialWarning
         self.providerSpec = providerSpec
         self.prioritizeAgentKeys = prioritizeAgentKeys
+        self.dialCrossesMachines = dialCrossesMachines
     }
 
     /// The action bound to a key, or nil when the key does whatever it does
@@ -243,15 +263,27 @@ public struct KeyBindings: Sendable, Equatable {
             dialSelection: dialSelection,
             dialWarning: dialWarning,
             providerSpec: providerSpec(from: json["provider"]),
-            prioritizeAgentKeys: agentKeyOrderIsPriority(json["agent_keys"])
+            prioritizeAgentKeys: agentKeyOrderIsPriority(json["agent_keys"],
+                                                          instanceCount: instances.count),
+            dialCrossesMachines: herdr?["dial_crosses_machines"] as? Bool ?? false
         )
     }
 
     /// `"priority"` (case-insensitive) turns on priority ordering for the
-    /// agent keys. Missing, `"sidebar"`, or any other shape means the
-    /// sidebar order the pad has always used.
-    private static func agentKeyOrderIsPriority(_ value: Any?) -> Bool {
-        (value as? String)?.lowercased() == "priority"
+    /// agent keys; `"sidebar"` forces the order the pad has always used.
+    ///
+    /// When the key is absent the default follows the number of machines,
+    /// because the right answer genuinely differs. With one instance,
+    /// sidebar order is stable and predictable — keys stay put as statuses
+    /// change. With two, sidebar order is actively harmful: the merged list
+    /// is active-instance-first, there are only six agent key slots
+    /// (`Pad.agentKeyIDs`), and a machine with six or more agents therefore
+    /// takes every slot and renders the other machine invisible. Priority
+    /// order is what keeps both machines on the keys, so it is the default
+    /// exactly when more than one is configured.
+    private static func agentKeyOrderIsPriority(_ value: Any?, instanceCount: Int) -> Bool {
+        guard let raw = (value as? String)?.lowercased() else { return instanceCount > 1 }
+        return raw == "priority"
     }
 
     /// Shape-level only: is this a non-empty string? Content — whether the
