@@ -1,16 +1,19 @@
-# Cross-machine navigation: where it stands, and what to do next
+# Cross-machine navigation: where it stands, and why it stops here
 
 Written 2026-09-08, after live-testing PR #14 against Herdr 0.9.0
 (protocol 22) with two machines: Local (Mac mini) and Jarvis (Linux).
-Updated the same day: the two things that could be done without upstream
-(retiring `ForegroundInstanceDetector`, dropping idle agents from key
-slots) are done; the cross-machine work still waits on the API answer.
+
+**Closed out 2026-09-09.** The two items that did not need upstream are
+done (§A, §B). The rest is blocked by a decision, not a delay: the API it
+needs was requested upstream and declined as `NOT_PLANNED` the same day —
+see "Status" below. This document is now a record and a resume path, not a
+plan.
 
 ## The one-sentence version
 
 Reading across machines works and is shipped; **navigating** to another
-machine is blocked on a Herdr API that does not exist, so the dial crossing
-is gated off behind a config flag until it does.
+machine needs a client-level Herdr API that upstream has declined to
+expose, so the dial crossing stays gated off behind a config flag.
 
 ## What is true today
 
@@ -63,35 +66,98 @@ than one instance is configured, because sidebar order is
 active-instance-first and six slots mean a busy active machine hides the
 other one entirely.
 
-## Next session
+## Status: blocked upstream, and upstream has answered
 
-### 1. File the upstream request
+**Asked and declined, 2026-09-09.** The client-level API this needs was
+requested in [herdrdev/herdr#3820][3820] — "Expose client-level aggregate
+agent list, events, and focus for multi-machine plugins", filed by
+@edvinasbartkus for the same Creator Micro 2 use case this repo has. It was
+closed the same day as `NOT_PLANNED`:
 
-`docs/herdr-machine-focus-request.md` is written and ready. It asks for
-either `machine.focus` or a `machine_id` parameter on the existing focus
-calls, plus `machine_id` on `workspace.list` / `agent.list` results.
+> The current CLI/API is server-scoped, as documented in Connecting
+> machines. Exposing the TUI's cross-machine agent list, events, and
+> client-targeted focus to plugins would add a new supported interface
+> rather than restore existing behavior. Please continue this proposal in
+> Ideas discussions. Closing as a feature request.
 
-Send it to the Herdr project. Everything downstream waits on the answer.
+So this is not "the API has not shipped yet". It is a deliberate scoping
+decision, and the route back is an Ideas discussion gaining support, not a
+release landing. No such discussion is open as of 2026-09-09.
 
-### 2. When the API lands
+### What upstream *is* building, and why it does not help
 
-Roughly a day's work, in this order:
+Cross-machine work is genuinely active on the 0.9.x line — all of it inside
+Herdr's own TUI, none of it exposed:
 
-1. **Teach `HerdrClient` the new call.** Add it to `HerdrServicing` so the
-   fake in `HerdrProviderStepTests` can exercise it.
-2. **Call it from `HerdrProvider.landFromOtherMachine`**, before the focus.
-   Landing already returns `Bool` — return false if the machine switch
-   fails, and `RoutingProvider` will walk past that machine exactly as it
-   does a dead one. The plumbing for this is already in place.
-3. **Route remote agent keys through it too.** `RoutingProvider.focus`
-   already de-namespaces the target and picks the child; it needs the same
-   machine switch first. This fixes remote agent keys, which are blocked by
-   the same gap and are arguably the more valuable half.
-4. **Flip the default.** `dialCrossesMachines` becomes true, and the flag
-   turns into an escape hatch rather than an opt-in.
-5. **Delete the dead window-raising path** — see below.
+| upstream | state | what it gives |
+|---|---|---|
+| [#3670][3670] manage multiple SSH machines from one client | merged | the foundation |
+| [#3755][3755] navigate and highlight workspaces across machines | merged 2026-09-08 | sidebar navigate mode, Enter activates across machines |
+| [#3781][3781] collapse worktree groups with saved machines | merged | sidebar polish |
+| [#3784][3784] scope agent views to the selected machine | open | makes the client's *own* view correct; exposes nothing |
 
-### 3. Independent of upstream: retire the two-window machinery
+Herdr is building the cross-machine experience for its own sidebar and
+declining to open that surface to plugins. Reading across machines is
+already ours (`agent.list` per server, merged in `RoutingProvider`);
+*navigating* stays theirs.
+
+### Verified against 0.9.0, not assumed
+
+Re-checked on 2026-09-09 against the installed binary rather than from these
+notes, since the last check was a day old:
+
+- `herdr api schema --json` — protocol 22, **111 methods**, zero matches for
+  machine, client, window, view, host, remote, peer, instance, switch or
+  display. Focus is `agent.focus` / `pane.focus` / `tab.focus` /
+  `workspace.focus`, all per-server.
+- The keybinding action list in the binary has **no machine action** — no
+  `next_machine`, no `switch_machine`. There is no keystroke to bind.
+- `herdr machine` is `list/add/rename/remove/enable/disable`: profile
+  management, not selection.
+- Upstream docs for v0.9.0 confirm the design: *"Choose a machine or one of
+  its workspaces in the sidebar"*, and *"Workspace, tab, pane IDs, and agent
+  names are scoped to one server."*
+
+### The workaround, and why it is not taken
+
+Once #3755 ships there is a keyboard path — prefix, navigate across
+machines, Enter — which MicroManager could synthesize, since it already
+posts shortcuts through `onShortcut`.
+
+**Do not.** It is `ForegroundInstanceDetector` again one layer up: it
+depends on sidebar scroll position and which row is highlighted, it cannot
+confirm it landed, and it fails silently. That failure mode — a miss that
+looks like a success — is what cost most of the PR #14 debugging time and is
+exactly what §A below deleted. A blind keystroke sequence is not worth
+re-acquiring it.
+
+### If it unblocks: the resume path
+
+Nothing needs rebuilding. The spill logic is written and fully tested behind
+a gate:
+
+1. `dialCrossesMachines` flips from opt-in to default — one line in
+   `KeyBindings.dropIdleAgentKeys`'s neighbour, `dial_crosses_machines`.
+2. Teach `HerdrClient` the new call, added to `HerdrServicing` so the fake in
+   `HerdrProviderStepTests` can exercise it.
+3. Call it from `HerdrProvider.landFromOtherMachine` before the focus.
+   Landing already returns `Bool`, so a failed switch makes `RoutingProvider`
+   walk past that machine exactly as it does a dead one.
+4. Route remote agent keys through it too — `RoutingProvider.focus` already
+   de-namespaces the target and picks the child, it just needs the switch
+   first. This is arguably the more valuable half.
+
+`RoutingProvider.setActiveInstance` is kept for steps 3 and 4 and says so.
+
+[3670]: https://github.com/herdrdev/herdr/pull/3670
+[3755]: https://github.com/herdrdev/herdr/pull/3755
+[3781]: https://github.com/herdrdev/herdr/pull/3781
+[3784]: https://github.com/herdrdev/herdr/pull/3784
+[3820]: https://github.com/herdrdev/herdr/issues/3820
+
+## Done without upstream
+
+### A. Retire the two-window machinery
 
 **Done 2026-09-08.** `ForegroundInstanceDetector` is deleted.
 
@@ -105,10 +171,12 @@ Removed along with it, all of it existing only to serve the detector:
 - `HerdrInstance.calibrationMarker` (`⟦wl:id⟧`)
 - `RoutingProvider.onFocusInstance` and both call sites
 - `HerdrClient.setWindowTitle` / `clearWindowTitle` (`window_title.set/clear`)
-- The detector wiring in `MicroManagerApp`; `herdr.next_instance` and
-  `setActiveInstance` are the only ways the active instance changes now.
+- The detector wiring in `MicroManagerApp`. The active instance now moves
+  only through `herdr.next_instance` and the dial spill, both via
+  `RoutingProvider.activate(index:)`. `setActiveInstance` has no caller and
+  is kept, documented, for steps 3 and 4 of the resume path above.
 
-### 4. Sharpen the six-key ceiling
+### B. Sharpen the six-key ceiling
 
 **Done 2026-09-08.** Idle agents are dropped from the key slots whenever
 more than one Herdr instance is configured — `"agent_keys_drop_idle": false`
