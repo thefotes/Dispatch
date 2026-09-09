@@ -59,6 +59,48 @@ final class ProviderTests: XCTestCase {
         await bridge.stop()
     }
 
+    /// The panel tells "nothing is running" apart from "everything is
+    /// quiet" with this count, and gets the first message wrong without it.
+    func testTheHiddenIdleCountReportsWhatTheFilterHeldBack() async {
+        let fake = FakeProvider()
+        fake.agentsToReturn = [HerdrAgent(status: "idle", paneID: "a"),
+                               HerdrAgent(status: "idle", paneID: "b"),
+                               HerdrAgent(status: "working", paneID: "c")]
+        let bridge = BridgeController(provider: fake,
+                                      loadBindings: { KeyBindings(dropIdleAgentKeys: true) })
+        await bridge.useEmulator(true)
+        await bridge.start()
+        XCTAssertEqual(bridge.agents.map(\.paneID), ["c"])
+        XCTAssertEqual(bridge.hiddenIdleAgents, 2)
+        await bridge.stop()
+    }
+
+    /// All quiet is the case that read as "No agents running" on a live
+    /// two-machine setup with eleven agents on it.
+    func testEveryAgentIdleLeavesTheSlotsEmptyButTheCountHonest() async {
+        let fake = FakeProvider()
+        fake.agentsToReturn = [HerdrAgent(status: "idle", paneID: "a"),
+                               HerdrAgent(status: "idle", paneID: "b")]
+        let bridge = BridgeController(provider: fake,
+                                      loadBindings: { KeyBindings(dropIdleAgentKeys: true) })
+        await bridge.useEmulator(true)
+        await bridge.start()
+        XCTAssertTrue(bridge.agents.isEmpty)
+        XCTAssertEqual(bridge.hiddenIdleAgents, 2)
+        await bridge.stop()
+    }
+
+    /// With the filter off nothing is hidden, so the panel keeps its plain
+    /// "No agents running" for the case that really is empty.
+    func testNothingIsHiddenWithTheFilterOff() async {
+        let fake = FakeProvider()
+        fake.agentsToReturn = [HerdrAgent(status: "idle", paneID: "a")]
+        let bridge = await makeBridge(fake)
+        await bridge.start()
+        XCTAssertEqual(bridge.hiddenIdleAgents, 0)
+        await bridge.stop()
+    }
+
     func testTheTabsKeyCallsProviderDialOneStepForward() async {
         let fake = FakeProvider()
         let bridge = await makeBridge(fake)

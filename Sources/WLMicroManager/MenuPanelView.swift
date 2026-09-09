@@ -169,7 +169,12 @@ struct MenuPanelView: View {
     private var agentSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             if bridge.agents.isEmpty {
-                Text("No agents running")
+                // "No agents running" is a lie when eleven are running and
+                // every one of them is idle, which is the ordinary state of
+                // a two-machine setup with `agent_keys_drop_idle` on.
+                Text(bridge.hiddenIdleAgents > 0
+                     ? "\(bridge.hiddenIdleAgents) agents, all idle — no keys lit"
+                     : "No agents running")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 14).padding(.vertical, 10)
@@ -197,6 +202,14 @@ struct MenuPanelView: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.vertical, 4)
+                // Otherwise the missing agents read as agents that went
+                // away, rather than agents the key filter is holding back.
+                if bridge.hiddenIdleAgents > 0 {
+                    Text("\(bridge.hiddenIdleAgents) idle, not on the keys")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 14).padding(.bottom, 8)
+                }
             }
         }
     }

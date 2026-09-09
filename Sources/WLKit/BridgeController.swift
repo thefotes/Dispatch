@@ -27,7 +27,14 @@ public final class BridgeController: ObservableObject {
     @Published public private(set) var deviceName = "—"
     @Published public private(set) var firmware = "—"
     @Published public private(set) var battery: String?
+    /// The agents the keys hold, in key order — filtered by
+    /// `config.dropIdleAgentKeys`, so not every agent Herdr reported.
     @Published public private(set) var agents: [HerdrAgent] = []
+    /// How many agents `dropIdleAgentKeys` kept out of `agents` on the last
+    /// refresh. The panel needs it to tell "nothing is running" apart from
+    /// "eleven agents, all of them quiet" — the second read as the first
+    /// when the panel only had the filtered list to go on.
+    @Published public private(set) var hiddenIdleAgents = 0
     @Published public private(set) var keyColors: [Int: Color] = [:]
     @Published public private(set) var keyEffects: [Int: OAI.Effect] = [:]
     @Published public private(set) var aggregateState: String?
@@ -355,6 +362,7 @@ public final class BridgeController: ObservableObject {
         // key. The aggregate below still runs over the whole set, so the
         // underglow is unaffected either way.
         agents = StatusMapper.agentsInKeyOrder(fetched, config)
+        hiddenIdleAgents = fetched.count - agents.count
 
         let state = StatusMapper.aggregate(fetched, config)
         // Every overridable key shares this light: a binding (text or
