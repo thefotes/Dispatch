@@ -60,7 +60,15 @@ public final class BridgeController: ObservableObject {
     public var config: BridgeConfig
     /// Text macros for the spare keys, reloaded on every bridge start so a
     /// config edit only needs an off/on toggle, not a relaunch.
-    public private(set) var keyBindings = KeyBindings.load()
+    public private(set) var keyBindings: KeyBindings
+
+    /// How `keyBindings` is loaded, on init and on every `start()`.
+    /// `KeyBindings.load` — the real `config.json` — in the app; tests
+    /// inject a fixed set instead, so the suite does not answer to whatever
+    /// the developer happens to have configured. A real two-machine
+    /// config.json otherwise turns on `dropIdleAgentKeys` and changes what
+    /// the keys point at underneath a test that never mentioned agent keys.
+    private let loadBindings: @Sendable () -> KeyBindings
 
     /// Overrides `keyBindings` without going through `start()`'s config-file
     /// reload — tests only, so a binding can be exercised without a real
@@ -70,6 +78,7 @@ public final class BridgeController: ObservableObject {
     /// described, so a test doesn't need a second `start()`/`stop()` cycle.
     func setKeyBindingsForTesting(_ bindings: KeyBindings) {
         keyBindings = bindings
+        applyKeyOrderConfig()
         let (resolved, warning) = Self.resolveDialSelection(bindings.dialSelection, offeredBy: dialModes)
         resolvedDialMode = resolved
         if let warning { lastError = warning }
@@ -134,10 +143,25 @@ public final class BridgeController: ObservableObject {
     /// to collapse its two switches' notifications into one logical press.
     private var lastVoiceKeyPress: DispatchTime?
 
-    public init(config: BridgeConfig = BridgeConfig(), provider: Provider = HerdrProvider()) {
+    public init(config: BridgeConfig = BridgeConfig(),
+                provider: Provider = HerdrProvider(),
+                loadBindings: @escaping @Sendable () -> KeyBindings = { KeyBindings.load() }) {
         self.config = config
         self.provider = provider
+        self.loadBindings = loadBindings
+        self.keyBindings = loadBindings()
         wire(device)
+        applyKeyOrderConfig()
+    }
+
+    /// The two agent-key ordering settings are parsed into `KeyBindings` but
+    /// read out of `BridgeConfig`, because `StatusMapper.agentsInKeyOrder`
+    /// takes the config. Copied wherever `keyBindings` changes so the two
+    /// cannot drift — a stale `dropIdleAgentKeys` would leave keys lit for
+    /// agents `focusSlot` no longer indexes the same way.
+    private func applyKeyOrderConfig() {
+        config.prioritizeAgentKeys = keyBindings.prioritizeAgentKeys
+        config.dropIdleAgentKeys = keyBindings.dropIdleAgentKeys
     }
 
     /// Swap the hardware for a virtual pad, or back. The device is rebuilt
@@ -194,9 +218,8 @@ public final class BridgeController: ObservableObject {
         isRunning = true
         lastError = nil
         contendingClient = false
-        keyBindings = KeyBindings.load()
-        config.prioritizeAgentKeys = keyBindings.prioritizeAgentKeys
-        config.dropIdleAgentKeys = keyBindings.dropIdleAgentKeys
+        keyBindings = loadBindings()
+        applyKeyOrderConfig()
         // A mistyped "dial" keeps its fallback; say so where the panel shows
         // the bridge's other errors, the same way an unrecognized shortcut does.
         if let warning = keyBindings.dialWarning { lastError = warning }

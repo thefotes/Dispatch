@@ -310,13 +310,15 @@ public struct KeyBindings: Sendable, Equatable {
     /// the default follows the instance count for the same reason
     /// `agentKeyOrderIsPriority` does: on one machine the keys mirroring the
     /// sidebar is the point, but on several, idle agents crowd out the
-    /// machines that actually need attention. A non-boolean is ignored, like
-    /// the cross-machine dial's flag.
+    /// machines that actually need attention.
+    ///
+    /// Anything `as? Bool` refuses — a string, an object — falls back to
+    /// that default, exactly like the cross-machine dial's flag. JSON `1`
+    /// and `0` do bridge to booleans and are taken at face value; that is
+    /// `JSONSerialization`'s doing, not a decision made here, and pinned by
+    /// `testANumericDropIdleFlagIsTakenAsABoolean` so it stays deliberate.
     private static func dropIdleAgentKeys(_ value: Any?, instanceCount: Int) -> Bool {
-        guard let flag = value as? Bool,
-              CFGetTypeID(flag as CFTypeRef) == CFBooleanGetTypeID()
-        else { return instanceCount > 1 }
-        return flag
+        value as? Bool ?? (instanceCount > 1)
     }
 
     /// Shape-level only: is this a non-empty string? Content — whether the

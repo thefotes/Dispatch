@@ -473,9 +473,34 @@ final class KeyBindingsTests: XCTestCase {
                       "explicit drop survives one instance")
     }
 
-    /// A non-boolean is ignored, like the cross-machine dial's flag.
-    func testANonBooleanDropIdleIsIgnored() {
+    /// A non-boolean falls back to the instance-count default, like the
+    /// cross-machine dial's flag — both ways, so a typo on a two-machine
+    /// setup does not quietly put five idle shells back on the pad.
+    func testANonBooleanDropIdleFallsBackToTheDefault() {
         XCTAssertFalse(parse(#"{"agent_keys_drop_idle": "yes"}"#).dropIdleAgentKeys)
+        XCTAssertFalse(parse(#"{"agent_keys_drop_idle": {"on": true}}"#).dropIdleAgentKeys)
+        let two = parse(#"""
+            {"agent_keys_drop_idle": "no", "herdr": {"instances": [
+                {"id": "local",  "socket_path": "/tmp/a.sock"},
+                {"id": "jarvis", "socket_path": "/tmp/b.sock"}
+            ]}}
+        """#)
+        XCTAssertTrue(two.dropIdleAgentKeys, "a typo keeps the two-machine default")
+    }
+
+    /// `JSONSerialization` hands back one `NSNumber` for both `true` and
+    /// `1`, so `1`/`0` read as booleans here. Pinned rather than guarded
+    /// against: someone writing `1` means true, and pretending otherwise
+    /// would cost a type check that cannot actually tell the two apart.
+    func testANumericDropIdleFlagIsTakenAsABoolean() {
+        XCTAssertTrue(parse(#"{"agent_keys_drop_idle": 1}"#).dropIdleAgentKeys)
+        let two = parse(#"""
+            {"agent_keys_drop_idle": 0, "herdr": {"instances": [
+                {"id": "local",  "socket_path": "/tmp/a.sock"},
+                {"id": "jarvis", "socket_path": "/tmp/b.sock"}
+            ]}}
+        """#)
+        XCTAssertFalse(two.dropIdleAgentKeys)
     }
 
     func testDialDoesNotCrossMachinesUnlessAsked() {

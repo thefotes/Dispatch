@@ -26,7 +26,7 @@ final class ReconnectTests: XCTestCase {
     private func startedBridge(
         pollInterval: TimeInterval = 2.5
     ) async -> (BridgeController, PadEmulator) {
-        let bridge = BridgeController(provider: FakeProvider())
+        let bridge = BridgeController(provider: FakeProvider(), loadBindings: { KeyBindings() })
         await bridge.useEmulator(true)
         guard let emulator = bridge.emulator else {
             fatalError("useEmulator(true) should have installed a virtual pad")
@@ -235,7 +235,7 @@ final class ReconnectTests: XCTestCase {
     /// time, and the probe that would have caught it was a `try?` whose
     /// result went in the bin.
     func testAnInterfaceThatOpensButNeverAnswersIsNotAConnection() async {
-        let bridge = BridgeController(provider: FakeProvider())
+        let bridge = BridgeController(provider: FakeProvider(), loadBindings: { KeyBindings() })
         await bridge.useEmulator(true)
         bridge.emulator?.failEveryCall = wedged
 

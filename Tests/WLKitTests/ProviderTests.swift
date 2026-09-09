@@ -7,9 +7,56 @@ import XCTest
 final class ProviderTests: XCTestCase {
 
     private func makeBridge(_ provider: FakeProvider) async -> BridgeController {
-        let bridge = BridgeController(provider: provider)
+        // Fixed bindings, not the developer's config.json: a real
+        // two-machine config would flip `dropIdleAgentKeys` on and change
+        // what the key slots hold under tests that never mention them.
+        let bridge = BridgeController(provider: provider, loadBindings: { KeyBindings() })
         await bridge.useEmulator(true)
         return bridge
+    }
+
+    /// The two agent-key settings are parsed in `KeyBindings` but read out
+    /// of `BridgeConfig`; `start()` is the only thing that carries them
+    /// across. Untested, a config edit could stop reaching the pad without
+    /// a single parsing test noticing.
+    func testStartCarriesTheAgentKeySettingsIntoTheConfig() async {
+        let bindings = KeyBindings(prioritizeAgentKeys: true, dropIdleAgentKeys: true)
+        let bridge = BridgeController(provider: FakeProvider(), loadBindings: { bindings })
+        await bridge.useEmulator(true)
+        XCTAssertTrue(bridge.config.prioritizeAgentKeys, "applied at init, before any start()")
+        XCTAssertTrue(bridge.config.dropIdleAgentKeys)
+        await bridge.start()
+        XCTAssertTrue(bridge.config.prioritizeAgentKeys)
+        XCTAssertTrue(bridge.config.dropIdleAgentKeys)
+        await bridge.stop()
+    }
+
+    /// The same seam the other way: nothing turns the key filters on by
+    /// itself. This is what the rest of the suite leans on when it puts an
+    /// `idle` agent in a key slot.
+    func testStartLeavesTheAgentKeySettingsOffWithoutConfig() async {
+        let fake = FakeProvider()
+        fake.agentsToReturn = [HerdrAgent(status: "idle", paneID: "pane-1")]
+        let bridge = await makeBridge(fake)
+        await bridge.start()
+        XCTAssertFalse(bridge.config.dropIdleAgentKeys)
+        XCTAssertEqual(bridge.agents.map(\.paneID), ["pane-1"],
+                       "an idle agent still holds its slot with the flag off")
+        await bridge.stop()
+    }
+
+    /// And with the flag on, the idle agent is gone from the slots before a
+    /// press can land on it — the multi-machine default, end to end.
+    func testDropIdleBindingRemovesIdleAgentsFromTheSlots() async {
+        let fake = FakeProvider()
+        fake.agentsToReturn = [HerdrAgent(status: "idle", paneID: "quiet"),
+                               HerdrAgent(status: "blocked", paneID: "loud")]
+        let bridge = BridgeController(provider: fake,
+                                      loadBindings: { KeyBindings(dropIdleAgentKeys: true) })
+        await bridge.useEmulator(true)
+        await bridge.start()
+        XCTAssertEqual(bridge.agents.map(\.paneID), ["loud"])
+        await bridge.stop()
     }
 
     func testTheTabsKeyCallsProviderDialOneStepForward() async {
@@ -97,10 +144,7 @@ final class ProviderTests: XCTestCase {
     /// target `status()` reported for it.
     func testFocusSlotCallsProviderFocusWithTheEntitysTarget() async {
         let fake = FakeProvider()
-        // Not "idle": `start()` reads the real config.json, and on a
-        // multi-instance machine its `agent_keys_drop_idle` default would
-        // drop an idle agent from the slots before this press.
-        fake.agentsToReturn = [HerdrAgent(status: "working", paneID: "pane-1")]
+        fake.agentsToReturn = [HerdrAgent(status: "idle", paneID: "pane-1")]
         let bridge = await makeBridge(fake)
         await bridge.start()
         await bridge.focusSlot(0)

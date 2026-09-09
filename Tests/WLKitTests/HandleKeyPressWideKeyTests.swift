@@ -9,7 +9,7 @@ import XCTest
 final class HandleKeyPressWideKeyTests: XCTestCase {
 
     func testPressingBothHalvesOfTheWideKeyFiresTheVoiceCallbackOnce() {
-        let bridge = BridgeController()
+        let bridge = BridgeController(loadBindings: { KeyBindings() })
         // Explicit defaults, not whatever config.json happens to be on this
         // machine — the built-in voice tap only fires when 10/11 are
         // unbound.
@@ -28,7 +28,7 @@ final class HandleKeyPressWideKeyTests: XCTestCase {
     /// Two genuinely separate presses — a real double-tap — must still both
     /// register once the debounce window has passed.
     func testTwoDeliberatePressesFarApartBothFire() {
-        let bridge = BridgeController()
+        let bridge = BridgeController(loadBindings: { KeyBindings() })
         bridge.setKeyBindingsForTesting(KeyBindings())
         var fireCount = 0
         bridge.onVoiceKey = { fireCount += 1 }
@@ -47,7 +47,7 @@ final class HandleKeyPressWideKeyTests: XCTestCase {
         var bindings: [Int: KeyBindings.KeyAction] = KeyBindings.defaults
         bindings[Pad.voiceKeyIDs[0]] = .shortcut("ctrl+t")
         bindings[Pad.voiceKeyIDs[1]] = .shortcut("ctrl+t")
-        let bridge = BridgeController()
+        let bridge = BridgeController(loadBindings: { KeyBindings() })
         bridge.setKeyBindingsForTesting(KeyBindings(actions: bindings))
         var fireCount = 0
         bridge.onShortcut = { _ in fireCount += 1 }

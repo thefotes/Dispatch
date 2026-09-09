@@ -110,6 +110,14 @@ public final class RoutingProvider: Provider, @unchecked Sendable {
 
     /// Switches the instance pad input drives. Unknown ids are ignored —
     /// silently retargeting the pad on a typo would be worse than no-op.
+    ///
+    /// Nothing in the app calls this today: with the foreground detector
+    /// retired, the active instance moves through `herdr.next_instance` and
+    /// the dial spill, both of which go via `activate(index:)`. It is kept
+    /// deliberately, not by oversight — steps 2 and 3 of
+    /// `docs/machine-focus-next-steps.md` switch the machine before a routed
+    /// focus, and this is the switch they call. Delete it only if that plan
+    /// is abandoned.
     public func setActiveInstance(_ id: String) {
         let changed: Bool = lock.withLock {
             guard let index = children.firstIndex(where: { $0.instance.id == id }),
