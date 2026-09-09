@@ -406,17 +406,6 @@ public struct HerdrClient: Sendable, HerdrServicing {
         try await focusTab(next.tabID)
     }
 
-    /// Sets the focused client's window title — how `ForegroundInstanceDetector`
-    /// calibrates which Ghostty window belongs to which instance.
-    public func setWindowTitle(_ title: String) async throws {
-        _ = try await request("window_title.set", params: ["title": title])
-    }
-
-    /// Undoes `setWindowTitle`, letting Herdr's own titles back.
-    public func clearWindowTitle() async throws {
-        _ = try await request("window_title.clear")
-    }
-
     // MARK: - Pure helpers
 
     /// Herdr's own pane-focus vocabulary — the four directions its
@@ -570,14 +559,6 @@ public struct HerdrClient: Sendable, HerdrServicing {
 
     public static func cycleTabs(_ step: Int = 1) async throws {
         try await shared.cycleTabs(step)
-    }
-
-    public static func setWindowTitle(_ title: String) async throws {
-        try await shared.setWindowTitle(title)
-    }
-
-    public static func clearWindowTitle() async throws {
-        try await shared.clearWindowTitle()
     }
 
     private static let counter = Counter()

@@ -128,6 +128,52 @@ final class StatusMapperTests: XCTestCase {
                        ["b", "i", "m"])
     }
 
+    // MARK: - Dropping idle agents from key slots
+
+    func testIdleAgentsAreKeptByDefault() {
+        let input = [named("idle", "a"), named("blocked", "b")]
+        XCTAssertEqual(StatusMapper.agentsInKeyOrder(input).map(\.paneID), ["a", "b"])
+    }
+
+    func testDropIdleRemovesIdleAgentsFromKeySlots() {
+        var cfg = BridgeConfig()
+        cfg.dropIdleAgentKeys = true
+        // The shape the multi-instance problem takes: five idle remote
+        // shells and one agent that actually needs a look.
+        let input = [
+            named("idle", "r0"), named("idle", "r1"), named("idle", "r2"),
+            named("idle", "r3"), named("idle", "r4"), named("blocked", "b")
+        ]
+        XCTAssertEqual(StatusMapper.agentsInKeyOrder(input, cfg).map(\.paneID), ["b"])
+    }
+
+    func testDropIdleWorksAlongsidePriorityOrdering() {
+        var cfg = BridgeConfig()
+        cfg.prioritizeAgentKeys = true
+        cfg.dropIdleAgentKeys = true
+        let input = [named("idle", "i"), named("working", "w"), named("idle", "j"), named("blocked", "b")]
+        XCTAssertEqual(StatusMapper.agentsInKeyOrder(input, cfg).map(\.paneID),
+                       ["b", "w"], "idle agents are gone; the rest sort by priority")
+    }
+
+    func testDropIdleLeavesNonIdleStatusesAlone() {
+        var cfg = BridgeConfig()
+        cfg.dropIdleAgentKeys = true
+        // Only "idle" is quiet-by-definition; "unknown" and anything else
+        // still earns a key.
+        let input = [named("unknown", "u"), named("mystery", "m")]
+        XCTAssertEqual(StatusMapper.agentsInKeyOrder(input, cfg).map(\.paneID), ["u", "m"])
+    }
+
+    func testDropIdleCanEmptyTheKeyList() {
+        var cfg = BridgeConfig()
+        cfg.dropIdleAgentKeys = true
+        XCTAssertTrue(StatusMapper.agentsInKeyOrder([named("idle", "i")], cfg).isEmpty,
+                      "all-idle means dark keys, which is the point")
+        // The underglow is computed from the unfiltered list upstream, so
+        // this only concerns the key order.
+    }
+
     func testConfigOverridesAreHonored() {
         var cfg = BridgeConfig()
         cfg.colors["working"] = 0x123456

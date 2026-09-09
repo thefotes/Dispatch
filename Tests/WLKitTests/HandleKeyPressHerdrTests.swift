@@ -9,7 +9,7 @@ final class HandleKeyPressHerdrTests: XCTestCase {
 
     private func makeBridge(_ action: String, key: Int) -> (BridgeController, FakeProvider) {
         let provider = FakeProvider()
-        let bridge = BridgeController(provider: provider)
+        let bridge = BridgeController(provider: provider, loadBindings: { KeyBindings() })
         bridge.setKeyBindingsForTesting(KeyBindings(actions: [key: .action(action)]))
         return (bridge, provider)
     }
@@ -43,7 +43,7 @@ final class HandleKeyPressHerdrTests: XCTestCase {
         provider.descriptionToReturn = ProviderDescription(actions: [
             ProviderAction(id: "new_workspace", label: "New workspace", raisesHost: true)
         ])
-        let bridge = BridgeController(provider: provider)
+        let bridge = BridgeController(provider: provider, loadBindings: { KeyBindings() })
         bridge.setKeyBindingsForTesting(KeyBindings(actions: [Pad.stackKeyID: .action("explode")]))
         bridge.applyDescriptionForTesting(provider.descriptionToReturn)
 

@@ -34,6 +34,11 @@ import Foundation
 /// trade-off is that a key then points at a different agent as statuses
 /// change, so it is opt-in. Any other value falls back to `"sidebar"`.
 ///
+/// `"agent_keys_drop_idle"` (boolean) drops idle agents from the key slots
+/// so only agents that want attention light a key. With more than one
+/// Herdr instance configured it defaults to on — five idle remote shells
+/// otherwise eat the whole pad — and off with a single instance.
+///
 /// A bound string is injected into the focused agent's prompt, unsubmitted.
 /// A key can also be bound to a system-wide keyboard shortcut instead —
 /// `{"shortcut": "cmd+shift+5"}` — synthesised regardless of what Herdr is
@@ -145,6 +150,16 @@ public struct KeyBindings: Sendable, Equatable {
     /// on every `start()`.
     public private(set) var prioritizeAgentKeys: Bool
 
+    /// Whether idle agents are dropped from the six agent key slots entirely,
+    /// so a key only ever lights an agent that wants attention. Set with
+    /// `"agent_keys_drop_idle": false` to keep idle agents on keys;
+    /// unmentioned, it follows the instance count — **on** with more than one
+    /// machine, where five idle remote shells can otherwise eat the whole
+    /// pad, and off with one, where the keys mirroring the sidebar is the
+    /// whole point. `BridgeController` copies this into
+    /// `BridgeConfig.dropIdleAgentKeys` on every `start()`.
+    public private(set) var dropIdleAgentKeys: Bool
+
     /// Whether a dial turn that runs off the end of the active machine's
     /// list spills onto the next machine. Set with `"herdr":
     /// {"dial_crosses_machines": true}`; **off by default**, and off is the
@@ -187,6 +202,7 @@ public struct KeyBindings: Sendable, Equatable {
         dialWarning: String? = nil,
         providerSpec: ProviderSpec? = nil,
         prioritizeAgentKeys: Bool = false,
+        dropIdleAgentKeys: Bool = false,
         dialCrossesMachines: Bool = false
     ) {
         self.actions = actions
@@ -198,6 +214,7 @@ public struct KeyBindings: Sendable, Equatable {
         self.dialWarning = dialWarning
         self.providerSpec = providerSpec
         self.prioritizeAgentKeys = prioritizeAgentKeys
+        self.dropIdleAgentKeys = dropIdleAgentKeys
         self.dialCrossesMachines = dialCrossesMachines
     }
 
@@ -264,7 +281,9 @@ public struct KeyBindings: Sendable, Equatable {
             dialWarning: dialWarning,
             providerSpec: providerSpec(from: json["provider"]),
             prioritizeAgentKeys: agentKeyOrderIsPriority(json["agent_keys"],
-                                                          instanceCount: instances.count),
+                                                           instanceCount: instances.count),
+            dropIdleAgentKeys: dropIdleAgentKeys(json["agent_keys_drop_idle"],
+                                                  instanceCount: instances.count),
             dialCrossesMachines: herdr?["dial_crosses_machines"] as? Bool ?? false
         )
     }
@@ -284,6 +303,22 @@ public struct KeyBindings: Sendable, Equatable {
     private static func agentKeyOrderIsPriority(_ value: Any?, instanceCount: Int) -> Bool {
         guard let raw = (value as? String)?.lowercased() else { return instanceCount > 1 }
         return raw == "priority"
+    }
+
+    /// `"agent_keys_drop_idle": false` keeps idle agents on the keys even on
+    /// a multi-machine setup; `true` drops them on a single one too. Absent,
+    /// the default follows the instance count for the same reason
+    /// `agentKeyOrderIsPriority` does: on one machine the keys mirroring the
+    /// sidebar is the point, but on several, idle agents crowd out the
+    /// machines that actually need attention.
+    ///
+    /// Anything `as? Bool` refuses — a string, an object — falls back to
+    /// that default, exactly like the cross-machine dial's flag. JSON `1`
+    /// and `0` do bridge to booleans and are taken at face value; that is
+    /// `JSONSerialization`'s doing, not a decision made here, and pinned by
+    /// `testANumericDropIdleFlagIsTakenAsABoolean` so it stays deliberate.
+    private static func dropIdleAgentKeys(_ value: Any?, instanceCount: Int) -> Bool {
+        value as? Bool ?? (instanceCount > 1)
     }
 
     /// Shape-level only: is this a non-empty string? Content — whether the

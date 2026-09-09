@@ -15,10 +15,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ProviderFactory.terminateLaunchedProcess()
     }
 
-    /// Kept alive for the app's lifetime: the detector watching which
-    /// Herdr instance's terminal window is frontmost. nil unless
-    /// config.json configured two or more Herdr instances.
-    nonisolated(unsafe) static var foregroundDetector: ForegroundInstanceDetector?
 }
 
 @main
@@ -105,23 +101,7 @@ struct MicroManagerApp: App {
                     // connection we just made.
                     await bridge.useEmulator(BridgeSettings.emulate)
 
-                    // With two or more Herdr instances configured, the
-                    // detector makes the active instance follow the frontmost
-                    // terminal window, and a routed focus raises that
-                    // instance's window in return. Single-instance setups
-                    // never see any of this.
                     if let routing = ProviderFactory.routingProvider {
-                        let detector = ForegroundInstanceDetector()
-                        detector.onActiveInstanceChange = { routing.setActiveInstance($0) }
-                        detector.onWarning = { [weak bridge] message in
-                            bridge?.noteError(message)
-                        }
-                        routing.onFocusInstance = { instanceID in
-                            Task { @MainActor in detector.activate(instanceID: instanceID) }
-                        }
-                        detector.start(instances: routing.instances)
-                        AppDelegate.foregroundDetector = detector
-
                         // A child that fails is isolated inside the routing
                         // provider — it never throws to the bridge — so its
                         // reason has to be relayed where the panel shows
