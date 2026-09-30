@@ -1,0 +1,53 @@
+name: Bug report
+description: Report a reproducible Dispatch problem
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the expected behavior and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the configuration or action that triggers the problem, with secrets removed.
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: e.g. 14.7
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Creator Micro 2 firmware version
+      description: Run `swift run dispatch-probe version`; write "not available" if the device is disconnected.
+    validations:
+      required: true
+  - type: input
+    id: herdr
+    attributes:
+      label: Herdr version
+      description: Write "not applicable" if Herdr is not involved.
+    validations:
+      required: true
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal app and version
+      description: Include the app that runs Herdr, or write "not applicable".
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: 'Capture with `log stream --predicate ''subsystem == "dev.dispatch"'' --info`. Redact secrets and personal data before posting; write "not available" if you cannot capture logs.'
+      render: text
+    validations:
+      required: true

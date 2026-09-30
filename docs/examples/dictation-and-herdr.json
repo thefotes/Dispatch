@@ -1,0 +1,267 @@
+{
+  "version": 1,
+  "agentLabel": "terminalTitle",
+  "bindings": [
+    {
+      "when": {
+        "control": { "type": "key", "index": 0 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        {
+          "id": "herdr.agent.focusSlot",
+          "arguments": { "slot": 1 }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "key", "index": 1 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        {
+          "id": "herdr.agent.focusSlot",
+          "arguments": { "slot": 2 }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "key", "index": 2 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        {
+          "id": "herdr.agent.focusSlot",
+          "arguments": { "slot": 3 }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "key", "index": 3 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        {
+          "id": "herdr.agent.focusSlot",
+          "arguments": { "slot": 4 }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "key", "index": 4 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        {
+          "id": "herdr.agent.focusSlot",
+          "arguments": { "slot": 5 }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "key", "index": 5 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        {
+          "id": "herdr.agent.focusSlot",
+          "arguments": { "slot": 6 }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "dial" },
+        "gesture": { "type": "rotated", "direction": "clockwise" }
+      },
+      "actions": [
+        {
+          "id": "herdr.workspace.cycle",
+          "arguments": { "delta": 1 }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "dial" },
+        "gesture": { "type": "rotated", "direction": "counterclockwise" }
+      },
+      "actions": [
+        {
+          "id": "herdr.workspace.cycle",
+          "arguments": { "delta": -1 }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "joystick" },
+        "gesture": { "type": "moved", "direction": "up" }
+      },
+      "actions": [
+        {
+          "id": "herdr.pane.focusDirection",
+          "arguments": { "direction": "up" }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "joystick" },
+        "gesture": { "type": "moved", "direction": "down" }
+      },
+      "actions": [
+        {
+          "id": "herdr.pane.focusDirection",
+          "arguments": { "direction": "down" }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "joystick" },
+        "gesture": { "type": "moved", "direction": "left" }
+      },
+      "actions": [
+        {
+          "id": "herdr.pane.focusDirection",
+          "arguments": { "direction": "left" }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "joystick" },
+        "gesture": { "type": "moved", "direction": "right" }
+      },
+      "actions": [
+        {
+          "id": "herdr.pane.focusDirection",
+          "arguments": { "direction": "right" }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "key", "index": 6 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        { "id": "herdr.workspace.create" }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "key", "index": 7 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        {
+          "id": "herdr.pane.splitFocused",
+          "arguments": { "direction": "right" }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "key", "index": 8 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        {
+          "id": "herdr.pane.cycleText",
+          "arguments": {
+            "options": ["claude", "codex", "opencode"]
+          }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "key", "index": 9 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        { "id": "herdr.pane.closeFocused" }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "key", "index": 10 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        {
+          "id": "keyboard.shortcut",
+          "arguments": {
+            "key": "rightCommand"
+          }
+        }
+      ]
+    },
+    {
+      "when": {
+        "control": { "type": "key", "index": 12 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        {
+          "id": "keyboard.shortcut",
+          "arguments": {
+            "key": "f13"
+          }
+        }
+      ]
+    }
+  ],
+  "statusPalette": {
+    "appearances": {
+      "blocked": {
+        "color": { "red": 255, "green": 45, "blue": 65 },
+        "brightness": 1,
+        "effect": "breath",
+        "speed": 0.4
+      },
+      "working": {
+        "color": { "red": 30, "green": 145, "blue": 255 },
+        "brightness": 0.8,
+        "effect": "shallowBreath",
+        "speed": 0.25
+      },
+      "done": {
+        "color": { "red": 25, "green": 200, "blue": 90 },
+        "brightness": 0.7
+      },
+      "idle": {
+        "color": { "red": 90, "green": 90, "blue": 100 },
+        "brightness": 0.3
+      },
+      "unknown": {
+        "color": { "red": 255, "green": 175, "blue": 35 },
+        "brightness": 0.7
+      }
+    },
+    "ambientPriority": ["blocked", "done", "working", "unknown", "idle"]
+  },
+  "lights": [
+    {
+      "control": { "type": "key", "index": 9 },
+      "appearance": {
+        "color": { "red": 210, "green": 55, "blue": 70 },
+        "brightness": 0.45
+      }
+    },
+    {
+      "control": { "type": "key", "index": 10 },
+      "appearance": {
+        "color": { "red": 145, "green": 90, "blue": 255 },
+        "brightness": 0.55
+      }
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+# SwiftLint configuration for Dispatch.
+
+included:
+  - Sources
+  - Tests
+
+opt_in_rules:
+  - empty_count
+  - fatal_error_message
+  - first_where
+  - modifier_order
+  - overridden_super_call
+  - unowned_variable_capture
+  - yoda_condition
+
+identifier_name:
+  min_length: 2
+  excluded:
+    - i
+    - x
+    - y
+
+# Length limits are backstops against runaway growth, not targets. Split
+# files and types along conceptual boundaries, never just to pass these.
+type_body_length:
+  warning: 700
+
+file_length:
+  warning: 1000
+
+function_body_length:
+  warning: 60
+
+cyclomatic_complexity:
+  warning: 12
+
+large_tuple:
+  warning: 3
+
+function_parameter_count:
+  warning: 6
+
+line_length:
+  warning: 120
+  ignores_comments: true
+  ignores_urls: true
+
+excluded:
+  - .build
+  - build
+  - docs
