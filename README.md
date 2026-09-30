@@ -1,6 +1,6 @@
 # Dispatch
 
-![Dispatch: a Creator Micro 2 with lit agent keys in front of a Herdr window](docs/images/dispatch-walkthrough-thumbnail.png)
+[![Dispatch: a Creator Micro 2 with lit agent keys in front of a Herdr window](docs/images/dispatch-walkthrough-thumbnail.png)](https://x.com/peterjfoti/status/2105362766945304677)
 
 Dispatch turns a [Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) into a control surface for
 [Herdr](https://herdr.dev) on macOS: each key shows one agent's status in
