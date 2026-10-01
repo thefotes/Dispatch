@@ -18,7 +18,7 @@ actions, or several in a row:
 
 - **Herdr:** focus an agent by slot or name, cycle through agents, workspaces,
   or tabs, move between panes by direction, create a workspace, split or close
-  a pane, and type text into the focused pane.
+  a pane, type text into the focused pane, and send keys to a pane over the socket.
 - **macOS:** press a keyboard shortcut, type text, open or switch to an app, or
   bring a specific window forward.
 

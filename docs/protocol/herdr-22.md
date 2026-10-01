@@ -43,6 +43,13 @@ resolves against it before encoding one of the concrete API methods above.
 They remain in the `herdr.*` action namespace because their semantics have not
 been generalized to other providers.
 
+The configurable `herdr.pane.sendKeys` action encodes `pane.send_keys` with
+`pane_id` and the ordered `keys` array. Its optional `paneID` is resolved from a
+fresh snapshot's focused pane when omitted; an explicit ID is sent directly.
+Keys use Herdr's key-combo syntax (for example `esc`, `ctrl+z`, or `shift+tab`),
+validated by Herdr. Key sending controls terminal input and provides no
+agent-independent pause or resume operation.
+
 Observed with Herdr 0.9.1: the snapshot's `workspaces` entries carry
 `workspace_id` and a display `label`, and each `agents` entry carries its
 `workspace_id`, its `agent` kind (such as `claude`, `codex`, or `opencode`),
