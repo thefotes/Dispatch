@@ -70,6 +70,10 @@ snapshot:
   `statusPalette.ambientPriority` order (see [Status colors](#status-colors))
 - `herdr.pane.closeFocused` — no arguments
 - `herdr.pane.focusDirection` — string `direction`; optional string `paneID`
+- `herdr.pane.sendKeys` — non-empty array of non-empty strings `keys`; optional
+  string `paneID`. Sends the keys in order over Herdr's socket. Without `paneID`,
+  takes a fresh snapshot at press time and targets Herdr's focused pane. An
+  explicit `paneID` targets that pane without changing focus.
 - `herdr.tab.cycle` — signed integer `delta`
 - `herdr.workspace.create` — no arguments; creates a workspace and focuses it
 - `herdr.pane.splitFocused` — string `direction`: `right` (side by side) or
@@ -176,6 +180,62 @@ macOS actions are:
 Shortcut modifiers are `command`, `option`, `control`, `shift`, and `function`.
 Keys include letters, number words such as `one`, navigation keys, `return`,
 `rightCommand`, and `f13` through `f19`. Text and macro contents are never written to normal logs.
+
+## Send terminal keys over the Herdr socket
+
+`herdr.pane.sendKeys` uses Herdr's terminal key syntax, including `esc`, `enter`,
+`ctrl+c`, `ctrl+z`, `shift+tab`, and `f1`. Herdr validates the key names; invalid
+names fail the action. These are keys for the program inside the pane, not
+Herdr's `prefix+` bindings or macOS `keyboard.shortcut` key names. The terminal
+window does not need to be in front, and this action needs no Accessibility
+permission.
+
+For example, bind key 9 to send `Ctrl+Z` to Herdr's focused pane:
+
+```json
+{
+  "version": 1,
+  "bindings": [
+    {
+      "when": {
+        "control": { "type": "key", "index": 9 },
+        "gesture": { "type": "pressed" }
+      },
+      "actions": [
+        {
+          "id": "herdr.pane.sendKeys",
+          "arguments": { "keys": ["ctrl+z"] }
+        }
+      ]
+    }
+  ]
+}
+```
+
+Merge the binding into your existing file, replacing any existing binding for
+that event. `Ctrl+Z` suspends Claude Code on macOS/Linux, where `fg` at the shell
+resumes it; other programs can handle it differently. Sending a key does not
+promise that an agent, its child processes, or its background tasks have all
+paused. See the [Claude Code keyboard reference](https://code.claude.com/docs/en/interactive-mode).
+
+To target specific panes, use one action per pane in the binding's `actions`:
+
+```json
+[
+  { "id": "herdr.pane.sendKeys", "arguments": { "paneID": "w1:p1", "keys": ["ctrl+z"] } },
+  { "id": "herdr.pane.sendKeys", "arguments": { "paneID": "w1:p2", "keys": ["ctrl+z"] } }
+]
+```
+
+Read live pane IDs from `herdr pane list`; they can change when panes are closed,
+recreated, or moved. IDs belong to the machine Herdr currently shows, which
+Dispatch selects before each request. The macro executes in order and stops
+if an action fails; it does not discover all working agents or broadcast across
+machines. If Herdr has no focused pane, a binding without `paneID` fails without
+sending keys. Herdr reports a missing explicit pane as an action error.
+
+See [Herdr's socket API](https://herdr.dev/docs/socket-api/) for supported key
+syntax and input semantics.
 
 ## Agent row labels
 

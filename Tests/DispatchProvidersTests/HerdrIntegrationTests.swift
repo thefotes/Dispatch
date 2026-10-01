@@ -21,7 +21,8 @@ final class HerdrIntegrationTests: XCTestCase {
                 "herdr.workspace.cycle",
                 "herdr.workspace.create",
                 "herdr.pane.splitFocused",
-                "herdr.pane.cycleText"
+                "herdr.pane.cycleText",
+                "herdr.pane.sendKeys"
             ]
         )
     }

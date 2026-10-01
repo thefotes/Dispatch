@@ -22,6 +22,8 @@ public enum HerdrAction: Sendable, Equatable {
     /// option when it is still at the end of the pane's prompt.
     case cycleText(options: [String])
     case sendText(paneID: String, text: String)
+    /// Resolves Herdr's focused pane from a fresh snapshot before sending keys.
+    case sendFocusedKeys(keys: [String])
     case sendKeys(paneID: String, keys: [String])
 
     public var identifier: String {
@@ -40,7 +42,7 @@ public enum HerdrAction: Sendable, Equatable {
         case .splitPane: "herdr.pane.split"
         case .cycleText: "herdr.pane.cycleText"
         case .sendText: "herdr.pane.sendText"
-        case .sendKeys: "herdr.pane.sendKeys"
+        case .sendFocusedKeys, .sendKeys: "herdr.pane.sendKeys"
         }
     }
 }
@@ -285,6 +287,7 @@ public enum HerdrActions {
     public static let createWorkspace: ActionID = "herdr.workspace.create"
     public static let splitFocusedPane: ActionID = "herdr.pane.splitFocused"
     public static let cycleText: ActionID = "herdr.pane.cycleText"
+    public static let sendKeys: ActionID = "herdr.pane.sendKeys"
 
     public static let definitions: [ActionDefinition] = [
         ActionDefinition(
@@ -359,6 +362,15 @@ public enum HerdrActions {
             title: "Cycle Text in Focused Herdr Pane",
             summary: "Types the next option into the focused pane, replacing the option typed by the previous press.",
             arguments: [.init(name: "options", type: .array, summary: "Non-empty array of strings to cycle through.")]
+        ),
+        ActionDefinition(
+            id: sendKeys,
+            title: "Send Keys to Herdr Pane",
+            summary: "Sends terminal keys over Herdr's socket to an explicit pane or the currently focused pane.",
+            arguments: [
+                .init(name: "keys", type: .array, summary: "Non-empty array of Herdr key-combo strings, in order."),
+                .init(name: "paneID", type: .string, required: false, summary: "Omit to use Herdr's focused pane.")
+            ]
         )
     ]
 
@@ -402,6 +414,15 @@ public enum HerdrActions {
             return .splitFocusedPane(direction: direction)
         case cycleText:
             return .cycleText(options: try nonEmptyStrings("options", in: invocation))
+        case sendKeys:
+            let keys = try nonEmptyStrings("keys", in: invocation)
+            if let paneID = try optionalString("paneID", in: invocation) {
+                guard !paneID.isEmpty else {
+                    throw HerdrIntegrationError.invalidArgument(action: invocation.id, name: "paneID")
+                }
+                return .sendKeys(paneID: paneID, keys: keys)
+            }
+            return .sendFocusedKeys(keys: keys)
         default:
             throw HerdrIntegrationError.unsupportedAction(invocation.id)
         }
