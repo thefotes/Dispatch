@@ -87,9 +87,8 @@ Plug the pad into your Mac. There's nothing else to set up.
    pad's three Bluetooth channels pairs as its own device (`#1` to `#3`); tap
    the sensor to switch between them.
 
-Plugging in USB-C, even just to charge, switches the pad to wired mode, and it
-stays wired after you unplug it. Hold the sensor for three seconds to go back
-to Bluetooth.
+Once paired, you can plug in USB-C at any time: the pad switches to the cable
+while it's plugged in and back to Bluetooth when you unplug it.
 
 ## Permissions
 

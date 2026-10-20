@@ -62,8 +62,10 @@ Bluetooth Low Energy:
   received `v.oai.hid` notifications.
 - The pad advertises a separate identity for each of its three BLE channels,
   named `Creator Micro 2 #1` through `#3`; each is paired separately.
-- Plugging in USB switches the pad to wired mode, and it stays wired after the
-  cable is unplugged, until BLE mode is selected again on the pad.
+- With the pad paired and connected over BLE, plugging in USB switched it to
+  USB: the BLE device disappeared and the USB device appeared. Unplugging USB
+  brought the BLE device back within about three seconds, without touching
+  the sensor. Dispatch reconnected after each switch.
 
 ## Vendor methods
 
