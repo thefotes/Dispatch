@@ -34,7 +34,8 @@ first, so you can restore it (see [The keymap](#the-keymap)).
 
 ## Requirements
 
-- A Creator Micro 2 (tested with firmware 0.6.2).
+- A Creator Micro 2 (tested with firmware 0.6.2), connected with USB-C or, on
+  the wireless model, Bluetooth.
 - macOS 14 or later.
 - [Herdr](https://herdr.dev) 0.9.1 or later, running in
   [Ghostty](https://ghostty.org) or [iTerm2](https://iterm2.com). Terminal.app works for everything except moving through Herdr's
@@ -69,13 +70,33 @@ first, so you can restore it (see [The keymap](#the-keymap)).
 Dispatch lives in the menu bar. To start it when you log in, add it under
 **System Settings → General → Login Items**.
 
+## Connect the pad
+
+Dispatch works with the pad over USB-C or, on the wireless model, Bluetooth,
+and finds it on either connection by itself within 30 seconds.
+
+### USB-C
+
+Plug the pad into your Mac. There's nothing else to set up.
+
+### Bluetooth
+
+1. Hold the touch sensor at the bottom left for three seconds, until the
+   underglow turns blue and the pad starts blinking.
+2. Choose **Creator Micro 2 #1** in **System Settings → Bluetooth**. Each of the
+   pad's three Bluetooth channels pairs as its own device (`#1` to `#3`); tap
+   the sensor to switch between them.
+
+Once paired, you can plug in USB-C at any time: the pad switches to the cable
+while it's plugged in and back to Bluetooth when you unplug it.
+
 ## Permissions
 
 Dispatch asks for two permissions. The menu-bar panel shows a button for each
 until it is granted.
 
 - **Input Monitoring** lets Dispatch talk to the pad. The pad's control channel
-  shares a USB interface with its keyboard, so macOS treats opening it like
+  shares an interface with its keyboard, so macOS treats opening it like
   reading a keyboard.
 - **Accessibility** lets Dispatch press keys on your behalf, for keyboard
   shortcut actions and to bring your terminal forward for Herdr's window keys.

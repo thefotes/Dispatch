@@ -46,6 +46,27 @@ and unlocking the screen cleared it and the pad reconnected without a relaunch.
 
 Input Monitoring grants are tied to the code signature.
 
+### Bluetooth
+
+Observed on 2026-10-20 on the wireless model, paired with macOS over
+Bluetooth Low Energy:
+
+- The pad presents the same HID device over BLE: vendor ID `0x303A`
+  (`VendorIDSource` 2, USB), product ID `0x8298`, and the same serial number
+  as over USB. IOKit reports `Transport` as `Bluetooth Low Energy`.
+- Its device usage pairs include the vendor collection `0xFF00`/`0x01`, and
+  the report descriptor gives it report identifier `0x06` with 63-byte input,
+  output, and feature reports, the same 64-byte reports as over USB. Matching
+  needs no transport filter.
+- Channel 2 JSON RPC works unchanged over BLE: Dispatch read the keymap and
+  received `v.oai.hid` notifications.
+- The pad advertises a separate identity for each of its three BLE channels,
+  named `Creator Micro 2 #1` through `#3`; each is paired separately.
+- With the pad paired and connected over BLE, plugging in USB switched it to
+  USB: the BLE device disappeared and the USB device appeared. Unplugging USB
+  brought the BLE device back within about three seconds, without touching
+  the sensor. Dispatch reconnected after each switch.
+
 ## Vendor methods
 
 | Method | Form | Purpose |
