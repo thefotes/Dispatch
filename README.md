@@ -72,7 +72,14 @@ Dispatch lives in the menu bar. To start it when you log in, add it under
 
 ## Connect the pad
 
-Plug the pad in with USB-C, or pair the wireless model over Bluetooth:
+Dispatch works with the pad over USB-C or, on the wireless model, Bluetooth,
+and finds it on either connection by itself within 30 seconds.
+
+### USB-C
+
+Plug the pad into your Mac. There's nothing else to set up.
+
+### Bluetooth
 
 1. Hold the touch sensor at the bottom left for three seconds, until the
    underglow turns blue and the pad starts blinking.
@@ -80,9 +87,9 @@ Plug the pad in with USB-C, or pair the wireless model over Bluetooth:
    pad's three Bluetooth channels pairs as its own device (`#1` to `#3`); tap
    the sensor to switch between them.
 
-Plugging in USB-C switches the pad to wired mode, and it stays wired after you
-unplug it; hold the sensor again to go back to Bluetooth. Dispatch finds the
-pad on either connection by itself, within 30 seconds.
+Plugging in USB-C, even just to charge, switches the pad to wired mode, and it
+stays wired after you unplug it. Hold the sensor for three seconds to go back
+to Bluetooth.
 
 ## Permissions
 
