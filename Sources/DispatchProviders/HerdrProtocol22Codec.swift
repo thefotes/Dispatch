@@ -7,7 +7,7 @@ public struct HerdrProtocol22Codec: HerdrWireActionEncoding {
 
     public func request(for action: HerdrAction) throws -> [String: JSONValue] {
         switch action {
-        case .focusAgentSlot, .closeFocusedPane, .cycleTab, .splitFocusedPane, .cycleText:
+        case .focusAgentSlot, .closeFocusedPane, .cycleTab, .splitFocusedPane, .cycleText, .sendFocusedKeys:
             throw HerdrProtocol22Error.semanticActionRequiresState
         case .cycleAgent, .cycleWorkspace:
             throw HerdrProtocol22Error.clientActionHasNoRequest

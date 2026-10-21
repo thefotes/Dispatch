@@ -55,10 +55,15 @@ public actor HerdrAdapter: HerdrControlling {
         case let .fromCurrentState(resolve):
             try await refresh()
             concrete = try resolve(state)
-            Log.logger.notice("""
-                Resolved \(String(describing: action), privacy: .public) \
-                to \(String(describing: concrete), privacy: .public).
-                """)
+            if case .sendFocusedKeys = action {
+                // Key sequences can contain user text; keep them out of logs.
+                Log.logger.notice("Resolved socket key input to Herdr's focused pane.")
+            } else {
+                Log.logger.notice("""
+                    Resolved \(String(describing: action), privacy: .public) \
+                    to \(String(describing: concrete), privacy: .public).
+                    """)
+            }
         case let .cycleText(options):
             try await cycleText(options)
             return
@@ -167,6 +172,8 @@ public enum HerdrSemanticResolver {
             .fromCurrentState { try cycleTab(delta: delta, state: $0) }
         case let .splitFocusedPane(direction):
             .fromCurrentState { .splitPane(id: try focusedPaneID(in: $0), direction: direction) }
+        case let .sendFocusedKeys(keys):
+            .fromCurrentState { .sendKeys(paneID: try focusedPaneID(in: $0), keys: keys) }
         case let .cycleText(options):
             .cycleText(options: options)
         case let .cycleAgent(delta):
